@@ -159,14 +159,14 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
   const subtitleFontSize = isKidsEdition ? 18 : 14;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       {/* Header */}
       <View
         style={{
           paddingHorizontal,
           paddingVertical: theme.spacing.md,
           borderBottomWidth: 1,
-          borderBottomColor: theme.colors.neutral.lightGray,
+          borderBottomColor: theme.neutralColors.lightGray,
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -177,7 +177,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
             style={{
               fontSize: headerFontSize,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               fontWeight: '700',
             }}
           >
@@ -187,7 +187,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
             style={{
               fontSize: subtitleFontSize,
               fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: theme.colors.neutral.mediumGray,
+              color: theme.neutralColors.mediumGray,
               marginTop: 4,
               fontWeight: '400',
             }}
@@ -225,8 +225,8 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
               >
                 <View
                   style={{
-                    backgroundColor: theme.colors.neutral.white,
-                    borderColor: theme.colors.neutral.lightGray,
+                    backgroundColor: theme.neutralColors.white,
+                    borderColor: theme.neutralColors.lightGray,
                     borderWidth: 1,
                     borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
                     padding: theme.spacing.md,
@@ -242,7 +242,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                     style={{
                       fontSize: isKidsEdition ? 22 : 18,
                       fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-                      color: theme.colors.neutral.dark,
+                      color: theme.neutralColors.dark,
                       fontWeight: '700',
                       marginBottom: 4,
                     }}
@@ -255,7 +255,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                     style={{
                       fontSize: isKidsEdition ? 16 : 13,
                       fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                      color: theme.colors.neutral.mediumGray,
+                      color: theme.neutralColors.mediumGray,
                       marginBottom: theme.spacing.sm,
                       fontWeight: '400',
                     }}
@@ -268,7 +268,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                     style={{
                       fontSize: isKidsEdition ? 13 : 11,
                       fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                      color: theme.colors.neutral.mediumGray,
+                      color: theme.neutralColors.mediumGray,
                       marginBottom: theme.spacing.md,
                       fontWeight: '400',
                     }}
@@ -284,19 +284,19 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                       alignItems: 'center',
                       paddingTop: theme.spacing.sm,
                       borderTopWidth: 1,
-                      borderTopColor: theme.colors.neutral.lightGray,
+                      borderTopColor: theme.neutralColors.lightGray,
                     }}
                   >
                     {/* Status Indicator */}
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       {giftStatus === 'pending' && (
                         <>
-                          <Ionicons name="videocam" size={18} color={theme.colors.brand.coral} />
+                          <Ionicons name="videocam" size={18} color={theme.brandColors.coral} />
                           <Text
                             style={{
                               fontSize: isKidsEdition ? 14 : 12,
                               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                              color: theme.colors.brand.coral,
+                              color: theme.brandColors.coral,
                               marginLeft: 6,
                               fontWeight: '600',
                             }}
@@ -360,7 +360,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                       <TouchableOpacity
                         onPress={() => handleRecordGift(item)}
                         style={{
-                          backgroundColor: theme.colors.brand.coral,
+                          backgroundColor: theme.brandColors.coral,
                           paddingHorizontal: theme.spacing.md,
                           paddingVertical: theme.spacing.sm,
                           borderRadius: 6,
@@ -406,13 +406,13 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                 <Ionicons
                   name="gift-outline"
                   size={64}
-                  color={theme.colors.neutral.lightGray}
+                  color={theme.neutralColors.lightGray}
                   style={{ marginBottom: theme.spacing.md }}
                 />
                 <Text
                   style={{
                     fontSize: isKidsEdition ? 18 : 14,
-                    color: theme.colors.neutral.mediumGray,
+                    color: theme.neutralColors.mediumGray,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     textAlign: 'center',
                     fontWeight: '400',

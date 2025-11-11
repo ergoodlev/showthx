@@ -51,7 +51,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -74,7 +74,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
               width: isKidsEdition ? 120 : 100,
               height: isKidsEdition ? 120 : 100,
               borderRadius: isKidsEdition ? 60 : 50,
-              backgroundColor: theme.colors.brand.coral,
+              backgroundColor: theme.brandColors.coral,
               justifyContent: 'center',
               alignItems: 'center',
             }}
@@ -88,7 +88,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
           style={{
             fontSize: isKidsEdition ? 28 : 24,
             fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-            color: theme.colors.neutral.dark,
+            color: theme.neutralColors.dark,
             textAlign: 'center',
             marginBottom: theme.spacing.md,
             fontWeight: '700',
@@ -101,7 +101,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
           style={{
             fontSize: isKidsEdition ? 18 : 16,
             fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-            color: theme.colors.neutral.mediumGray,
+            color: theme.neutralColors.mediumGray,
             textAlign: 'center',
             marginBottom: theme.spacing.lg,
           }}
@@ -112,7 +112,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
         {/* Info Section */}
         <View
           style={{
-            backgroundColor: theme.colors.neutral.lightGray,
+            backgroundColor: theme.neutralColors.lightGray,
             borderRadius: 12,
             padding: theme.spacing.lg,
             marginBottom: theme.spacing.xl,
@@ -121,12 +121,12 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
         >
           <View style={{ marginBottom: theme.spacing.md }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm }}>
-              <Ionicons name="checkmark-circle" size={20} color={theme.colors.brand.coral} />
+              <Ionicons name="checkmark-circle" size={20} color={theme.brandColors.coral} />
               <Text
                 style={{
                   fontSize: isKidsEdition ? 14 : 12,
                   fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                  color: theme.colors.neutral.dark,
+                  color: theme.neutralColors.dark,
                   marginLeft: theme.spacing.sm,
                   flex: 1,
                 }}
@@ -136,12 +136,12 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm }}>
-              <Ionicons name="eye" size={20} color={theme.colors.brand.teal} />
+              <Ionicons name="eye" size={20} color={theme.brandColors.teal} />
               <Text
                 style={{
                   fontSize: isKidsEdition ? 14 : 12,
                   fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                  color: theme.colors.neutral.dark,
+                  color: theme.neutralColors.dark,
                   marginLeft: theme.spacing.sm,
                   flex: 1,
                 }}
@@ -151,12 +151,12 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="mail" size={20} color={theme.colors.brand.coral} />
+              <Ionicons name="mail" size={20} color={theme.brandColors.coral} />
               <Text
                 style={{
                   fontSize: isKidsEdition ? 14 : 12,
                   fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                  color: theme.colors.neutral.dark,
+                  color: theme.neutralColors.dark,
                   marginLeft: theme.spacing.sm,
                   flex: 1,
                 }}
@@ -172,7 +172,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
           style={{
             backgroundColor: 'rgba(255, 107, 107, 0.05)',
             borderLeftWidth: 4,
-            borderLeftColor: theme.colors.brand.coral,
+            borderLeftColor: theme.brandColors.coral,
             borderRadius: 8,
             padding: theme.spacing.md,
             marginBottom: theme.spacing.xl,
@@ -183,7 +183,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 14 : 12,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               marginBottom: theme.spacing.sm,
             }}
           >
@@ -193,7 +193,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 13 : 11,
               fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: theme.colors.neutral.mediumGray,
+              color: theme.neutralColors.mediumGray,
               lineHeight: 20,
             }}
           >
@@ -206,7 +206,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
           style={{
             fontSize: isKidsEdition ? 14 : 12,
             fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-            color: theme.colors.neutral.mediumGray,
+            color: theme.neutralColors.mediumGray,
             textAlign: 'center',
             marginBottom: theme.spacing.xl,
           }}
@@ -218,11 +218,11 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
       {/* Action Buttons */}
       <View
         style={{
-          backgroundColor: theme.colors.neutral.white,
+          backgroundColor: theme.neutralColors.white,
           paddingVertical: theme.spacing.lg,
           paddingHorizontal: theme.spacing.md,
           borderTopWidth: 1,
-          borderTopColor: theme.colors.neutral.lightGray,
+          borderTopColor: theme.neutralColors.lightGray,
         }}
       >
         <ThankCastButton
@@ -242,7 +242,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 14 : 12,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.brand.teal,
+              color: theme.brandColors.teal,
             }}
           >
             View Dashboard

@@ -143,7 +143,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   // Permission not granted
   if (!permission?.granted) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
         <AppBar
           title="Record Thank You"
           onBackPress={() => navigation?.goBack()}
@@ -153,14 +153,14 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
           <Ionicons
             name="camera-outline"
             size={64}
-            color={theme.colors.neutral.lightGray}
+            color={theme.neutralColors.lightGray}
             style={{ marginBottom: 20 }}
           />
           <Text
             style={{
               fontSize: isKidsEdition ? 18 : 16,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               marginBottom: 12,
               textAlign: 'center',
             }}
@@ -171,7 +171,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 14 : 12,
               fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: theme.colors.neutral.mediumGray,
+              color: theme.neutralColors.mediumGray,
               textAlign: 'center',
               marginBottom: 24,
             }}
@@ -181,7 +181,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
           <TouchableOpacity
             onPress={requestPermission}
             style={{
-              backgroundColor: theme.colors.brand.coral,
+              backgroundColor: theme.brandColors.coral,
               paddingHorizontal: 32,
               paddingVertical: 12,
               borderRadius: 8,
@@ -203,7 +203,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title={recordedUri ? 'Review Video' : 'Record Thank You'}
         onBackPress={() => {
@@ -304,7 +304,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       {/* Controls - Bottom */}
       <View
         style={{
-          backgroundColor: theme.colors.neutral.white,
+          backgroundColor: theme.neutralColors.white,
           paddingVertical: theme.spacing.lg,
           paddingHorizontal: theme.spacing.md,
         }}
@@ -334,7 +334,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 width: isKidsEdition ? 56 : 48,
                 height: isKidsEdition ? 56 : 48,
                 borderRadius: isKidsEdition ? 28 : 24,
-                backgroundColor: isRecording ? theme.colors.neutral.lightGray : theme.colors.brand.teal,
+                backgroundColor: isRecording ? theme.neutralColors.lightGray : theme.brandColors.teal,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
@@ -354,7 +354,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 width: isKidsEdition ? 80 : 72,
                 height: isKidsEdition ? 80 : 72,
                 borderRadius: isKidsEdition ? 40 : 36,
-                backgroundColor: isRecording ? theme.colors.semantic.error : theme.colors.brand.coral,
+                backgroundColor: isRecording ? theme.colors.semantic.error : theme.brandColors.coral,
                 justifyContent: 'center',
                 alignItems: 'center',
                 shadowColor: '#000',
@@ -392,7 +392,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 width: isKidsEdition ? 56 : 48,
                 height: isKidsEdition ? 56 : 48,
                 borderRadius: isKidsEdition ? 28 : 24,
-                backgroundColor: theme.colors.neutral.lightGray,
+                backgroundColor: theme.neutralColors.lightGray,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
@@ -400,7 +400,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
               <Ionicons
                 name="settings"
                 size={isKidsEdition ? 24 : 20}
-                color={theme.colors.neutral.mediumGray}
+                color={theme.neutralColors.mediumGray}
               />
             </TouchableOpacity>
           </View>
@@ -417,7 +417,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             <TouchableOpacity
               onPress={handleDeleteRecording}
               style={{
-                backgroundColor: theme.colors.brand.teal,
+                backgroundColor: theme.brandColors.teal,
                 paddingHorizontal: theme.spacing.md,
                 paddingVertical: theme.spacing.sm,
                 borderRadius: 8,
@@ -444,7 +444,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             <TouchableOpacity
               onPress={handleProceed}
               style={{
-                backgroundColor: theme.colors.brand.coral,
+                backgroundColor: theme.brandColors.coral,
                 paddingHorizontal: theme.spacing.md,
                 paddingVertical: theme.spacing.sm,
                 borderRadius: 8,

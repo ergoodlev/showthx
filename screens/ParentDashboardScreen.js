@@ -217,7 +217,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
           >
             <Text
               style={{
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
                 fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
                 fontSize: isKidsEdition ? 16 : 14,
                 fontWeight: '600',
@@ -234,13 +234,13 @@ export const ParentDashboardScreen = ({ navigation }) => {
             <Ionicons
               name="calendar-outline"
               size={64}
-              color={theme.colors.neutral.lightGray}
+              color={theme.neutralColors.lightGray}
               style={{ marginBottom: theme.spacing.md }}
             />
             <Text
               style={{
                 fontSize: isKidsEdition ? 16 : 14,
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                 textAlign: 'center',
               }}
@@ -265,8 +265,8 @@ export const ParentDashboardScreen = ({ navigation }) => {
           style={{
             marginHorizontal: theme.spacing.md,
             marginVertical: theme.spacing.sm,
-            backgroundColor: theme.colors.neutral.white,
-            borderColor: theme.colors.neutral.lightGray,
+            backgroundColor: theme.neutralColors.white,
+            borderColor: theme.neutralColors.lightGray,
             borderWidth: 1,
             borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
             padding: theme.spacing.md,
@@ -278,7 +278,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
                 style={{
                   fontSize: isKidsEdition ? 16 : 14,
                   fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-                  color: theme.colors.neutral.dark,
+                  color: theme.neutralColors.dark,
                 }}
               >
                 {item.kid?.name || 'Unknown'} - {item.gift?.name || 'Unknown Gift'}
@@ -287,20 +287,20 @@ export const ParentDashboardScreen = ({ navigation }) => {
                 style={{
                   fontSize: isKidsEdition ? 12 : 11,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                  color: theme.colors.neutral.mediumGray,
+                  color: theme.neutralColors.mediumGray,
                   marginTop: 4,
                 }}
               >
                 From: {item.gift?.giver_name || 'Unknown'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={24} color={theme.colors.brand.coral} />
+            <Ionicons name="chevron-forward" size={24} color={theme.brandColors.coral} />
           </View>
           <View
             style={{
               marginTop: theme.spacing.sm,
               paddingTop: theme.spacing.sm,
-              borderTopColor: theme.colors.neutral.lightGray,
+              borderTopColor: theme.neutralColors.lightGray,
               borderTopWidth: 1,
               flexDirection: 'row',
               alignItems: 'center',
@@ -337,7 +337,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
           >
             <Text
               style={{
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
                 fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
                 fontSize: isKidsEdition ? 16 : 14,
                 fontWeight: '600',
@@ -356,13 +356,13 @@ export const ParentDashboardScreen = ({ navigation }) => {
             <Ionicons
               name="film-outline"
               size={64}
-              color={theme.colors.neutral.lightGray}
+              color={theme.neutralColors.lightGray}
               style={{ marginBottom: theme.spacing.md }}
             />
             <Text
               style={{
                 fontSize: isKidsEdition ? 16 : 14,
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                 textAlign: 'center',
               }}
@@ -385,21 +385,21 @@ export const ParentDashboardScreen = ({ navigation }) => {
       <View
         style={{
           marginBottom: theme.spacing.lg,
-          backgroundColor: theme.colors.neutral.white,
-          borderColor: theme.colors.neutral.lightGray,
+          backgroundColor: theme.neutralColors.white,
+          borderColor: theme.neutralColors.lightGray,
           borderWidth: 1,
           borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
           padding: theme.spacing.md,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="person-circle" size={32} color={theme.colors.brand.coral} />
+          <Ionicons name="person-circle" size={32} color={theme.brandColors.coral} />
           <View style={{ marginLeft: theme.spacing.md, flex: 1 }}>
             <Text
               style={{
                 fontSize: isKidsEdition ? 16 : 14,
                 fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
               }}
             >
               {parentData?.full_name || 'Parent'}
@@ -408,7 +408,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
                 marginTop: 4,
               }}
             >
@@ -445,7 +445,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
       <Text
         style={{
           fontSize: isKidsEdition ? 12 : 10,
-          color: theme.colors.neutral.mediumGray,
+          color: theme.neutralColors.mediumGray,
           fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
           textAlign: 'center',
         }}
@@ -456,13 +456,13 @@ export const ParentDashboardScreen = ({ navigation }) => {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title={'Hi, ' + (parentData?.full_name?.split(' ')[0] || 'Parent') + '!'}
         showBack={false}
         rightButton={{
           onPress: () => navigation?.navigate('KidPINLogin'),
-          icon: <Ionicons name="people" size={24} color={theme.colors.brand.coral} />,
+          icon: <Ionicons name="people" size={24} color={theme.brandColors.coral} />,
         }}
       />
 
@@ -474,8 +474,8 @@ export const ParentDashboardScreen = ({ navigation }) => {
             style={{
               flexDirection: 'row',
               height: tabHeight,
-              borderBottomColor: theme.colors.neutral.lightGray,
-              backgroundColor: theme.colors.neutral.white,
+              borderBottomColor: theme.neutralColors.lightGray,
+              backgroundColor: theme.neutralColors.white,
               borderBottomWidth: 1,
             }}
           >
@@ -488,14 +488,14 @@ export const ParentDashboardScreen = ({ navigation }) => {
                   justifyContent: 'center',
                   alignItems: 'center',
                   borderBottomWidth: activeTab === tab ? 3 : 0,
-                  borderBottomColor: activeTab === tab ? theme.colors.brand.coral : 'transparent',
+                  borderBottomColor: activeTab === tab ? theme.brandColors.coral : 'transparent',
                 }}
               >
                 <Text
                   style={{
                     fontSize: tabFontSize,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: activeTab === tab ? theme.colors.brand.coral : theme.colors.neutral.mediumGray,
+                    color: activeTab === tab ? theme.brandColors.coral : theme.neutralColors.mediumGray,
                     textTransform: 'capitalize',
                   }}
                 >
@@ -517,7 +517,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
             position: 'absolute',
             bottom: theme.spacing.lg,
             right: theme.spacing.lg,
-            backgroundColor: theme.colors.brand.coral,
+            backgroundColor: theme.brandColors.coral,
             width: isKidsEdition ? 64 : 56,
             height: isKidsEdition ? 64 : 56,
             borderRadius: isKidsEdition ? 32 : 28,

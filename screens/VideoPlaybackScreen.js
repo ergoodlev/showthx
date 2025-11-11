@@ -72,7 +72,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title="Review Your Video"
         onBackPress={() => navigation?.goBack()}
@@ -113,7 +113,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
 
       <View
         style={{
-          backgroundColor: theme.colors.neutral.white,
+          backgroundColor: theme.neutralColors.white,
           paddingVertical: theme.spacing.lg,
           paddingHorizontal: theme.spacing.md,
         }}
@@ -122,7 +122,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
           <View
             style={{
               height: 4,
-              backgroundColor: theme.colors.neutral.lightGray,
+              backgroundColor: theme.neutralColors.lightGray,
               borderRadius: 2,
               overflow: 'hidden',
               marginBottom: theme.spacing.sm,
@@ -132,7 +132,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
               style={{
                 height: '100%',
                 width: duration > 0 ? (position / duration) * 100 + '%' : '0%',
-                backgroundColor: theme.colors.brand.coral,
+                backgroundColor: theme.brandColors.coral,
               }}
             />
           </View>
@@ -147,7 +147,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
             <Text
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
               }}
             >
@@ -156,7 +156,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
             <Text
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
               }}
             >
@@ -168,7 +168,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
         <TouchableOpacity
           onPress={handlePlayPause}
           style={{
-            backgroundColor: isPlaying ? theme.colors.semantic.error : theme.colors.brand.coral,
+            backgroundColor: isPlaying ? theme.colors.semantic.error : theme.brandColors.coral,
             paddingVertical: theme.spacing.md,
             borderRadius: 8,
             marginBottom: theme.spacing.md,
@@ -206,7 +206,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
           <TouchableOpacity
             onPress={handleReRecord}
             style={{
-              backgroundColor: theme.colors.brand.teal,
+              backgroundColor: theme.brandColors.teal,
               paddingHorizontal: theme.spacing.md,
               paddingVertical: theme.spacing.sm,
               borderRadius: 8,
@@ -231,7 +231,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
           <TouchableOpacity
             onPress={handleProceed}
             style={{
-              backgroundColor: theme.colors.brand.coral,
+              backgroundColor: theme.brandColors.coral,
               paddingHorizontal: theme.spacing.md,
               paddingVertical: theme.spacing.sm,
               borderRadius: 8,

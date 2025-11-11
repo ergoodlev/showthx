@@ -77,7 +77,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title="Customize Your Video"
         onBackPress={() => navigation?.goBack()}
@@ -141,7 +141,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 16 : 14,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               marginBottom: theme.spacing.sm,
             }}
           >
@@ -154,18 +154,18 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             onChangeText={setOverlayText}
             style={{
               borderWidth: 1,
-              borderColor: theme.colors.neutral.lightGray,
+              borderColor: theme.neutralColors.lightGray,
               borderRadius: 8,
               paddingHorizontal: theme.spacing.sm,
               paddingVertical: theme.spacing.sm,
               fontSize: isKidsEdition ? 14 : 12,
               fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               marginBottom: theme.spacing.sm,
               maxHeight: 80,
             }}
             multiline
-            placeholderTextColor={theme.colors.neutral.mediumGray}
+            placeholderTextColor={theme.neutralColors.mediumGray}
           />
 
           {/* Text Position Selection */}
@@ -173,7 +173,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 12 : 11,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.neutral.mediumGray,
+              color: theme.neutralColors.mediumGray,
               marginBottom: theme.spacing.sm,
               marginTop: theme.spacing.sm,
             }}
@@ -189,7 +189,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                   flex: 1,
                   paddingVertical: theme.spacing.sm,
                   borderRadius: 8,
-                  backgroundColor: textPosition === position ? theme.colors.brand.coral : theme.colors.neutral.lightGray,
+                  backgroundColor: textPosition === position ? theme.brandColors.coral : theme.neutralColors.lightGray,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
@@ -198,7 +198,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                   style={{
                     fontSize: isKidsEdition ? 12 : 11,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: textPosition === position ? '#FFFFFF' : theme.colors.neutral.mediumGray,
+                    color: textPosition === position ? '#FFFFFF' : theme.neutralColors.mediumGray,
                     textTransform: 'capitalize',
                   }}
                 >
@@ -213,7 +213,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 12 : 11,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.neutral.mediumGray,
+              color: theme.neutralColors.mediumGray,
               marginBottom: theme.spacing.sm,
             }}
           >
@@ -230,7 +230,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                   borderRadius: 20,
                   backgroundColor: color.hex,
                   borderWidth: selectedTextColor === color.id ? 3 : 0,
-                  borderColor: theme.colors.brand.coral,
+                  borderColor: theme.brandColors.coral,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
@@ -249,7 +249,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 16 : 14,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               marginBottom: theme.spacing.md,
             }}
           >
@@ -266,7 +266,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                   minWidth: '48%',
                   paddingVertical: theme.spacing.md,
                   borderRadius: 8,
-                  backgroundColor: selectedTransition === transition.id ? theme.colors.brand.coral : theme.colors.neutral.lightGray,
+                  backgroundColor: selectedTransition === transition.id ? theme.brandColors.coral : theme.neutralColors.lightGray,
                   justifyContent: 'center',
                   alignItems: 'center',
                   gap: theme.spacing.xs,
@@ -275,13 +275,13 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                 <Ionicons
                   name={transition.icon}
                   size={24}
-                  color={selectedTransition === transition.id ? '#FFFFFF' : theme.colors.neutral.mediumGray}
+                  color={selectedTransition === transition.id ? '#FFFFFF' : theme.neutralColors.mediumGray}
                 />
                 <Text
                   style={{
                     fontSize: isKidsEdition ? 12 : 11,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: selectedTransition === transition.id ? '#FFFFFF' : theme.colors.neutral.mediumGray,
+                    color: selectedTransition === transition.id ? '#FFFFFF' : theme.neutralColors.mediumGray,
                   }}
                 >
                   {transition.label}
@@ -297,19 +297,19 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             style={{
               marginHorizontal: theme.spacing.md,
               marginBottom: theme.spacing.lg,
-              backgroundColor: theme.colors.neutral.lightGray,
+              backgroundColor: theme.neutralColors.lightGray,
               borderRadius: 8,
               padding: theme.spacing.md,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-              <Ionicons name="musical-notes" size={20} color={theme.colors.brand.coral} />
+              <Ionicons name="musical-notes" size={20} color={theme.brandColors.coral} />
               <View style={{ flex: 1 }}>
                 <Text
                   style={{
                     fontSize: isKidsEdition ? 12 : 11,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                    color: theme.colors.neutral.mediumGray,
+                    color: theme.neutralColors.mediumGray,
                   }}
                 >
                   Music Selected
@@ -318,7 +318,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                   style={{
                     fontSize: isKidsEdition ? 14 : 12,
                     fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                    color: theme.colors.neutral.dark,
+                    color: theme.neutralColors.dark,
                     marginTop: 2,
                   }}
                 >
@@ -333,11 +333,11 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
       {/* Action Buttons */}
       <View
         style={{
-          backgroundColor: theme.colors.neutral.white,
+          backgroundColor: theme.neutralColors.white,
           paddingVertical: theme.spacing.lg,
           paddingHorizontal: theme.spacing.md,
           borderTopWidth: 1,
-          borderTopColor: theme.colors.neutral.lightGray,
+          borderTopColor: theme.neutralColors.lightGray,
         }}
       >
         <ThankCastButton
@@ -359,7 +359,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 14 : 12,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.brand.teal,
+              color: theme.brandColors.teal,
             }}
           >
             Back

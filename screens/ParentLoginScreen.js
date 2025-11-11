@@ -124,7 +124,7 @@ export const ParentLoginScreen = ({ navigation }) => {
   const paddingHorizontal = isKidsEdition ? theme.spacing.lg : theme.spacing.md;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.neutral.white }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.neutralColors.white }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -146,7 +146,7 @@ export const ParentLoginScreen = ({ navigation }) => {
                 styles.title,
                 {
                   fontSize: isKidsEdition ? 28 : 24,
-                  color: theme.colors.neutral.dark,
+                  color: theme.neutralColors.dark,
                   fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
                   marginBottom: theme.spacing.sm,
                 },
@@ -159,7 +159,7 @@ export const ParentLoginScreen = ({ navigation }) => {
                 styles.subtitle,
                 {
                   fontSize: isKidsEdition ? 16 : 14,
-                  color: theme.colors.neutral.mediumGray,
+                  color: theme.neutralColors.mediumGray,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                 },
               ]}
@@ -221,9 +221,9 @@ export const ParentLoginScreen = ({ navigation }) => {
                     width: checkboxSize,
                     height: checkboxSize,
                     borderRadius: checkboxSize / 4,
-                    borderColor: theme.colors.brand.coral,
+                    borderColor: theme.brandColors.coral,
                     backgroundColor: rememberMe
-                      ? theme.colors.brand.coral
+                      ? theme.brandColors.coral
                       : 'transparent',
                   },
                 ]}
@@ -240,7 +240,7 @@ export const ParentLoginScreen = ({ navigation }) => {
                 style={[
                   {
                     fontSize,
-                    color: theme.colors.neutral.dark,
+                    color: theme.neutralColors.dark,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: theme.spacing.xs,
                   },
@@ -256,7 +256,7 @@ export const ParentLoginScreen = ({ navigation }) => {
                 style={[
                   {
                     fontSize,
-                    color: theme.colors.brand.coral,
+                    color: theme.brandColors.coral,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
                   },
                 ]}
@@ -281,7 +281,7 @@ export const ParentLoginScreen = ({ navigation }) => {
               style={[
                 {
                   fontSize,
-                  color: theme.colors.neutral.mediumGray,
+                  color: theme.neutralColors.mediumGray,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                 },
               ]}
@@ -293,7 +293,7 @@ export const ParentLoginScreen = ({ navigation }) => {
                 style={[
                   {
                     fontSize,
-                    color: theme.colors.brand.coral,
+                    color: theme.brandColors.coral,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
                   },
                 ]}

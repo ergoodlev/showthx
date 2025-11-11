@@ -93,7 +93,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title="Review Your Video"
         onBackPress={() => navigation?.goBack()}
@@ -146,7 +146,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 18 : 16,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               marginBottom: theme.spacing.md,
             }}
           >
@@ -156,19 +156,19 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           {/* Gift Info */}
           <View
             style={{
-              backgroundColor: theme.colors.neutral.lightGray,
+              backgroundColor: theme.neutralColors.lightGray,
               borderRadius: 8,
               padding: theme.spacing.md,
               marginBottom: theme.spacing.md,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm }}>
-              <Ionicons name="gift" size={20} color={theme.colors.brand.coral} />
+              <Ionicons name="gift" size={20} color={theme.brandColors.coral} />
               <Text
                 style={{
                   fontSize: isKidsEdition ? 14 : 12,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                  color: theme.colors.neutral.mediumGray,
+                  color: theme.neutralColors.mediumGray,
                   marginLeft: theme.spacing.sm,
                 }}
               >
@@ -178,7 +178,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                 style={{
                   fontSize: isKidsEdition ? 16 : 14,
                   fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                  color: theme.colors.neutral.dark,
+                  color: theme.neutralColors.dark,
                   marginLeft: theme.spacing.sm,
                   flex: 1,
                 }}
@@ -192,7 +192,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           {musicTitle && (
             <View
               style={{
-                backgroundColor: theme.colors.neutral.lightGray,
+                backgroundColor: theme.neutralColors.lightGray,
                 borderRadius: 8,
                 padding: theme.spacing.md,
                 marginBottom: theme.spacing.md,
@@ -200,13 +200,13 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                 alignItems: 'center',
               }}
             >
-              <Ionicons name="musical-notes" size={20} color={theme.colors.brand.teal} />
+              <Ionicons name="musical-notes" size={20} color={theme.brandColors.teal} />
               <View style={{ marginLeft: theme.spacing.sm, flex: 1 }}>
                 <Text
                   style={{
                     fontSize: isKidsEdition ? 12 : 11,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                    color: theme.colors.neutral.mediumGray,
+                    color: theme.neutralColors.mediumGray,
                   }}
                 >
                   Music
@@ -215,7 +215,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                   style={{
                     fontSize: isKidsEdition ? 14 : 12,
                     fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                    color: theme.colors.neutral.dark,
+                    color: theme.neutralColors.dark,
                     marginTop: 2,
                   }}
                 >
@@ -229,7 +229,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           {(overlayText || transition !== 'none') && (
             <View
               style={{
-                backgroundColor: theme.colors.neutral.lightGray,
+                backgroundColor: theme.neutralColors.lightGray,
                 borderRadius: 8,
                 padding: theme.spacing.md,
                 marginBottom: theme.spacing.md,
@@ -239,7 +239,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                 style={{
                   fontSize: isKidsEdition ? 14 : 12,
                   fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                  color: theme.colors.neutral.dark,
+                  color: theme.neutralColors.dark,
                   marginBottom: theme.spacing.sm,
                 }}
               >
@@ -252,7 +252,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                     style={{
                       fontSize: isKidsEdition ? 12 : 11,
                       fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                      color: theme.colors.neutral.mediumGray,
+                      color: theme.neutralColors.mediumGray,
                     }}
                   >
                     Text
@@ -261,7 +261,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                     style={{
                       fontSize: isKidsEdition ? 13 : 11,
                       fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                      color: theme.colors.neutral.dark,
+                      color: theme.neutralColors.dark,
                       marginTop: 2,
                     }}
                   >
@@ -276,7 +276,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                     style={{
                       fontSize: isKidsEdition ? 12 : 11,
                       fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                      color: theme.colors.neutral.mediumGray,
+                      color: theme.neutralColors.mediumGray,
                     }}
                   >
                     Transition
@@ -285,7 +285,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                     style={{
                       fontSize: isKidsEdition ? 13 : 11,
                       fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                      color: theme.colors.neutral.dark,
+                      color: theme.neutralColors.dark,
                       marginTop: 2,
                       textTransform: 'capitalize',
                     }}
@@ -307,12 +307,12 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
               gap: theme.spacing.sm,
             }}
           >
-            <Ionicons name="information-circle" size={20} color={theme.colors.brand.coral} />
+            <Ionicons name="information-circle" size={20} color={theme.brandColors.coral} />
             <Text
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
                 flex: 1,
               }}
             >
@@ -325,11 +325,11 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       {/* Action Buttons */}
       <View
         style={{
-          backgroundColor: theme.colors.neutral.white,
+          backgroundColor: theme.neutralColors.white,
           paddingVertical: theme.spacing.lg,
           paddingHorizontal: theme.spacing.md,
           borderTopWidth: 1,
-          borderTopColor: theme.colors.neutral.lightGray,
+          borderTopColor: theme.neutralColors.lightGray,
         }}
       >
         <ThankCastButton
@@ -351,7 +351,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 14 : 12,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.brand.teal,
+              color: theme.brandColors.teal,
             }}
           >
             Back

@@ -131,8 +131,8 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
       <TouchableOpacity
         onPress={() => toggleGuestSelection(item.id)}
         style={{
-          backgroundColor: isSelected ? theme.colors.brand.coral : theme.colors.neutral.white,
-          borderColor: isSelected ? theme.colors.brand.coral : theme.colors.neutral.lightGray,
+          backgroundColor: isSelected ? theme.brandColors.coral : theme.neutralColors.white,
+          borderColor: isSelected ? theme.brandColors.coral : theme.neutralColors.lightGray,
           borderWidth: 2,
           borderRadius: 8,
           padding: theme.spacing.md,
@@ -147,14 +147,14 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           <Ionicons
             name="person-circle"
             size={40}
-            color={isSelected ? '#FFFFFF' : theme.colors.brand.teal}
+            color={isSelected ? '#FFFFFF' : theme.brandColors.teal}
           />
           <View style={{ flex: 1 }}>
             <Text
               style={{
                 fontSize: isKidsEdition ? 14 : 12,
                 fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                color: isSelected ? '#FFFFFF' : theme.colors.neutral.dark,
+                color: isSelected ? '#FFFFFF' : theme.neutralColors.dark,
               }}
             >
               {item.name}
@@ -163,7 +163,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
               style={{
                 fontSize: isKidsEdition ? 12 : 10,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: isSelected ? 'rgba(255,255,255,0.8)' : theme.colors.neutral.mediumGray,
+                color: isSelected ? 'rgba(255,255,255,0.8)' : theme.neutralColors.mediumGray,
                 marginTop: 2,
               }}
             >
@@ -177,13 +177,13 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             width: 24,
             height: 24,
             borderRadius: 12,
-            backgroundColor: isSelected ? '#FFFFFF' : theme.colors.neutral.lightGray,
+            backgroundColor: isSelected ? '#FFFFFF' : theme.neutralColors.lightGray,
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
           {isSelected && (
-            <Ionicons name="checkmark" size={16} color={theme.colors.brand.coral} />
+            <Ionicons name="checkmark" size={16} color={theme.brandColors.coral} />
           )}
         </View>
       </TouchableOpacity>
@@ -191,7 +191,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title="Share with Guests"
         onBackPress={() => navigation?.goBack()}
@@ -205,7 +205,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 16 : 14,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.neutral.mediumGray,
+              color: theme.neutralColors.mediumGray,
               marginBottom: theme.spacing.sm,
             }}
           >
@@ -215,7 +215,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 24 : 20,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
             }}
           >
             {giftName}
@@ -225,7 +225,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         {/* Select All Option */}
         <View
           style={{
-            backgroundColor: theme.colors.neutral.lightGray,
+            backgroundColor: theme.neutralColors.lightGray,
             marginHorizontal: theme.spacing.md,
             marginBottom: theme.spacing.lg,
             borderRadius: 8,
@@ -241,7 +241,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
               style={{
                 fontSize: isKidsEdition ? 14 : 12,
                 fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
               }}
             >
               Select All Guests
@@ -250,7 +250,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
               style={{
                 fontSize: isKidsEdition ? 12 : 10,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
               }}
             >
               {selectedGuests.size} of {guests.length} selected
@@ -262,9 +262,9 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
               width: 24,
               height: 24,
               borderRadius: 12,
-              backgroundColor: selectedGuests.size === guests.length ? theme.colors.brand.coral : '#FFFFFF',
+              backgroundColor: selectedGuests.size === guests.length ? theme.brandColors.coral : '#FFFFFF',
               borderWidth: 2,
-              borderColor: theme.colors.brand.coral,
+              borderColor: theme.brandColors.coral,
               justifyContent: 'center',
               alignItems: 'center',
             }}
@@ -290,12 +290,12 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           />
         ) : (
           <View style={{ paddingVertical: theme.spacing.xl, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name="people" size={40} color={theme.colors.neutral.lightGray} />
+            <Ionicons name="people" size={40} color={theme.neutralColors.lightGray} />
             <Text
               style={{
                 fontSize: isKidsEdition ? 14 : 12,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
                 marginTop: theme.spacing.md,
               }}
             >
@@ -317,12 +317,12 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
               gap: theme.spacing.sm,
             }}
           >
-            <Ionicons name="mail" size={20} color={theme.colors.brand.teal} />
+            <Ionicons name="mail" size={20} color={theme.brandColors.teal} />
             <Text
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: theme.colors.neutral.mediumGray,
+                color: theme.neutralColors.mediumGray,
                 flex: 1,
               }}
             >
@@ -336,11 +336,11 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
       {guests.length > 0 && (
         <View
           style={{
-            backgroundColor: theme.colors.neutral.white,
+            backgroundColor: theme.neutralColors.white,
             paddingVertical: theme.spacing.lg,
             paddingHorizontal: theme.spacing.md,
             borderTopWidth: 1,
-            borderTopColor: theme.colors.neutral.lightGray,
+            borderTopColor: theme.neutralColors.lightGray,
           }}
         >
           <ThankCastButton
@@ -362,7 +362,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
               style={{
                 fontSize: isKidsEdition ? 14 : 12,
                 fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                color: theme.colors.brand.teal,
+                color: theme.brandColors.teal,
               }}
             >
               Back

@@ -229,7 +229,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
   const paddingHorizontal = isKidsEdition ? theme.spacing.lg : theme.spacing.md;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title={'Gifts - ' + eventName}
         onBackPress={() => navigation?.goBack()}
@@ -268,7 +268,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
                   style={{
                     fontSize: isKidsEdition ? 16 : 14,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: theme.colors.neutral.dark,
+                    color: theme.neutralColors.dark,
                     fontWeight: '600',
                   }}
                 >
@@ -280,11 +280,11 @@ export const GiftManagementScreen = ({ navigation, route }) => {
           ListEmptyComponent={
             !loading ? (
               <View style={{ paddingHorizontal, paddingVertical: 60, alignItems: 'center' }}>
-                <Ionicons name="gift-outline" size={64} color={theme.colors.neutral.lightGray} style={{ marginBottom: theme.spacing.md }} />
+                <Ionicons name="gift-outline" size={64} color={theme.neutralColors.lightGray} style={{ marginBottom: theme.spacing.md }} />
                 <Text
                   style={{
                     fontSize: isKidsEdition ? 16 : 14,
-                    color: theme.colors.neutral.mediumGray,
+                    color: theme.neutralColors.mediumGray,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     textAlign: 'center',
                   }}
@@ -305,7 +305,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
             position: 'absolute',
             bottom: theme.spacing.lg,
             right: theme.spacing.lg,
-            backgroundColor: theme.colors.brand.coral,
+            backgroundColor: theme.brandColors.coral,
             width: isKidsEdition ? 64 : 56,
             height: isKidsEdition ? 64 : 56,
             borderRadius: isKidsEdition ? 32 : 28,
@@ -372,7 +372,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
               style={{
                 fontSize: isKidsEdition ? 14 : 12,
                 fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
                 marginBottom: theme.spacing.sm,
               }}
             >
@@ -402,14 +402,14 @@ export const GiftManagementScreen = ({ navigation, route }) => {
                   <Ionicons
                     name={selectedKids.includes(kid.id) ? 'checkbox' : 'square-outline'}
                     size={22}
-                    color={selectedKids.includes(kid.id) ? theme.colors.brand.coral : theme.colors.neutral.mediumGray}
+                    color={selectedKids.includes(kid.id) ? theme.brandColors.coral : theme.neutralColors.mediumGray}
                   />
                   <Text
                     style={{
                       marginLeft: theme.spacing.sm,
                       fontSize: isKidsEdition ? 14 : 12,
                       fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                      color: theme.colors.neutral.dark,
+                      color: theme.neutralColors.dark,
                     }}
                   >
                     {kid.name}

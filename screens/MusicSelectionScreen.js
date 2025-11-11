@@ -129,8 +129,8 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
       <TouchableOpacity
         onPress={() => handleSelectMusic(item)}
         style={{
-          backgroundColor: isSelected ? theme.colors.brand.coral : theme.colors.neutral.white,
-          borderColor: isSelected ? theme.colors.brand.coral : theme.colors.neutral.lightGray,
+          backgroundColor: isSelected ? theme.brandColors.coral : theme.neutralColors.white,
+          borderColor: isSelected ? theme.brandColors.coral : theme.neutralColors.lightGray,
           borderWidth: 2,
           borderRadius: 12,
           padding: theme.spacing.md,
@@ -146,7 +146,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 16 : 14,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-              color: isSelected ? '#FFFFFF' : theme.colors.neutral.dark,
+              color: isSelected ? '#FFFFFF' : theme.neutralColors.dark,
               marginBottom: theme.spacing.xs,
             }}
           >
@@ -157,7 +157,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: isSelected ? 'rgba(255,255,255,0.8)' : theme.colors.neutral.mediumGray,
+                color: isSelected ? 'rgba(255,255,255,0.8)' : theme.neutralColors.mediumGray,
               }}
             >
               {item.artist}
@@ -166,7 +166,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: isSelected ? 'rgba(255,255,255,0.8)' : theme.colors.neutral.mediumGray,
+                color: isSelected ? 'rgba(255,255,255,0.8)' : theme.neutralColors.mediumGray,
               }}
             >
               {item.duration}s
@@ -181,7 +181,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
             width: 48,
             height: 48,
             borderRadius: 24,
-            backgroundColor: isSelected ? 'rgba(255,255,255,0.3)' : theme.colors.brand.coral,
+            backgroundColor: isSelected ? 'rgba(255,255,255,0.3)' : theme.brandColors.coral,
             justifyContent: 'center',
             alignItems: 'center',
           }}
@@ -197,7 +197,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title="Choose Music"
         onBackPress={() => navigation?.goBack()}
@@ -211,7 +211,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 14 : 12,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               marginBottom: theme.spacing.md,
               marginLeft: theme.spacing.md,
             }}
@@ -228,14 +228,14 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
                     paddingHorizontal: theme.spacing.md,
                     paddingVertical: theme.spacing.sm,
                     borderRadius: 20,
-                    backgroundColor: selectedMood === mood ? theme.colors.brand.coral : theme.colors.neutral.lightGray,
+                    backgroundColor: selectedMood === mood ? theme.brandColors.coral : theme.neutralColors.lightGray,
                   }}
                 >
                   <Text
                     style={{
                       fontSize: isKidsEdition ? 13 : 12,
                       fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                      color: selectedMood === mood ? '#FFFFFF' : theme.colors.neutral.mediumGray,
+                      color: selectedMood === mood ? '#FFFFFF' : theme.neutralColors.mediumGray,
                     }}
                   >
                     {mood}
@@ -250,8 +250,8 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
         <TouchableOpacity
           onPress={handleNoMusic}
           style={{
-            backgroundColor: selectedMusic === null ? theme.colors.brand.coral : theme.colors.neutral.white,
-            borderColor: selectedMusic === null ? theme.colors.brand.coral : theme.colors.neutral.lightGray,
+            backgroundColor: selectedMusic === null ? theme.brandColors.coral : theme.neutralColors.white,
+            borderColor: selectedMusic === null ? theme.brandColors.coral : theme.neutralColors.lightGray,
             borderWidth: 2,
             borderRadius: 12,
             padding: theme.spacing.md,
@@ -265,7 +265,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 16 : 14,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-              color: selectedMusic === null ? '#FFFFFF' : theme.colors.neutral.dark,
+              color: selectedMusic === null ? '#FFFFFF' : theme.neutralColors.dark,
             }}
           >
             No Music
@@ -285,11 +285,11 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
       {/* Action Buttons */}
       <View
         style={{
-          backgroundColor: theme.colors.neutral.white,
+          backgroundColor: theme.neutralColors.white,
           paddingVertical: theme.spacing.lg,
           paddingHorizontal: theme.spacing.md,
           borderTopWidth: 1,
-          borderTopColor: theme.colors.neutral.lightGray,
+          borderTopColor: theme.neutralColors.lightGray,
         }}
       >
         <ThankCastButton
@@ -311,7 +311,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
             style={{
               fontSize: isKidsEdition ? 14 : 12,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.brand.teal,
+              color: theme.brandColors.teal,
             }}
           >
             Back

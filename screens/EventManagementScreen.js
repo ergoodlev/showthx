@@ -113,7 +113,7 @@ export const EventManagementScreen = ({ navigation, route }) => {
   const title = mode === 'create' ? 'Create Event' : 'Edit Event';
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
         title={title}
         onBackPress={() => navigation?.goBack()}

@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEdition } from '../context/EditionContext';
@@ -156,7 +157,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         {/* Header */}
         <View style={{ marginBottom: 40, alignItems: 'center' }}>
@@ -164,7 +165,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
             style={{
               fontSize: isKidsEdition ? 28 : 24,
               fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
               marginBottom: 8,
               fontWeight: '700',
             }}
@@ -175,7 +176,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
             style={{
               fontSize: isKidsEdition ? 16 : 14,
               fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: theme.colors.neutral.mediumGray,
+              color: theme.neutralColors.mediumGray,
               fontWeight: '400',
             }}
           >
@@ -199,11 +200,11 @@ export const KidPINLoginScreen = ({ navigation }) => {
                 width: pinDisplaySize * 2,
                 height: pinDisplaySize * 2,
                 borderRadius: pinDisplaySize,
-                backgroundColor: i < pin.length ? theme.colors.brand.coral : theme.colors.neutral.lightGray,
+                backgroundColor: i < pin.length ? theme.brandColors.coral : theme.neutralColors.lightGray,
                 justifyContent: 'center',
                 alignItems: 'center',
                 borderWidth: 2,
-                borderColor: i < pin.length ? theme.colors.brand.coral : theme.colors.neutral.mediumGray,
+                borderColor: i < pin.length ? theme.brandColors.coral : theme.neutralColors.mediumGray,
               }}
             />
           ))}
@@ -247,7 +248,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
           >
             <Text
               style={{
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
                 fontSize: isKidsEdition ? 16 : 14,
                 fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
                 marginBottom: 8,
@@ -258,7 +259,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
             </Text>
             <Text
               style={{
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
                 fontSize: isKidsEdition ? 14 : 12,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                 textAlign: 'center',
@@ -286,8 +287,8 @@ export const KidPINLoginScreen = ({ navigation }) => {
                       digit === ''
                         ? 'transparent'
                         : locked || (pin.length === 4 && digit !== '')
-                        ? theme.colors.neutral.lightGray
-                        : theme.colors.brand.coral,
+                        ? theme.neutralColors.lightGray
+                        : theme.brandColors.coral,
                     justifyContent: 'center',
                     alignItems: 'center',
                     shadowColor: digit === '' ? 'transparent' : '#000',
@@ -325,7 +326,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
               height: buttonSize,
               borderRadius: 12,
               backgroundColor:
-                locked || pin.length === 0 ? theme.colors.neutral.lightGray : theme.colors.brand.teal,
+                locked || pin.length === 0 ? theme.neutralColors.lightGray : theme.brandColors.teal,
               justifyContent: 'center',
               alignItems: 'center',
               shadowColor: '#000',
@@ -350,7 +351,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
               height: buttonSize,
               borderRadius: 12,
               backgroundColor:
-                locked || pin.length !== 4 ? theme.colors.neutral.lightGray : theme.colors.semantic.success,
+                locked || pin.length !== 4 ? theme.neutralColors.lightGray : theme.colors.semantic.success,
               justifyContent: 'center',
               alignItems: 'center',
               shadowColor: '#000',
