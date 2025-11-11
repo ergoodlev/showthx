@@ -15,15 +15,23 @@ The app needs a Supabase project configured with database tables, authentication
    - Go to https://app.supabase.com
    - Select your project
 
-2. **Run SQL Script**
+2. **Run SQL Script (USE THE FIXED VERSION)**
    - Go to **SQL Editor** (left sidebar)
    - Click **"New Query"**
-   - Open `SUPABASE_SCHEMA.sql` from your project folder
+   - Open `SUPABASE_SCHEMA_FIXED.sql` from your project folder (NOT the original)
    - Copy the entire contents
    - Paste into the Supabase SQL editor
    - Click **"Run"**
 
-3. **Verify Tables Created**
+3. **If you get errors:**
+   - Copy just **STEP 1** (parents table creation)
+   - Run it
+   - Then copy **STEP 2** (children table)
+   - Run it
+   - Continue through all STEPS
+   - The FIXED version is structured to run all at once
+
+4. **Verify Tables Created**
    - Go to **Database** → **Tables**
    - You should see these tables:
      - ✓ parents
