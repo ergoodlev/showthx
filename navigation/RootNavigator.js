@@ -158,7 +158,6 @@ export const RootNavigator = () => {
           <Stack.Screen
             name="AuthChoice"
             component={AuthChoiceScreen}
-            options={{ animationEnabled: false }}
           />
           <Stack.Screen name="ParentAuth" component={ParentAuthStack} />
           <Stack.Screen name="KidAuth" component={KidAuthStack} />
