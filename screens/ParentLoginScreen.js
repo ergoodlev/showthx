@@ -1,372 +1,368 @@
 /**
- * Parent Login Screen
- * Authenticates parent with PIN to access dashboard
- * Manages session and security
+ * ParentLoginScreen
+ * Parent login with email and password
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { loginParent } from '../services/sessionService';
-import { getParentEmail } from '../services/secureStorageService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEdition } from '../context/EditionContext';
+import { TextField } from '../components/TextField';
+import { ThankCastButton } from '../components/ThankCastButton';
+import { ErrorMessage } from '../components/ErrorMessage';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { supabase } from '../supabaseClient';
 
-export default function ParentLoginScreen({ onLoginSuccess, parentEmail, onCancel }) {
-  const [pin, setPin] = useState('');
+export const ParentLoginScreen = ({ navigation }) => {
+  const { edition, theme } = useEdition();
+  const isKidsEdition = edition === 'kids';
+
+  // Form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // UI state
   const [loading, setLoading] = useState(false);
-  const [attemptCount, setAttemptCount] = useState(0);
-  const [locked, setLocked] = useState(false);
+  const [error, setError] = useState(null);
+  const [validationErrors, setValidationErrors] = useState({});
 
-  const handleLogin = async () => {
-    if (!pin || pin.length < 4) {
-      Alert.alert('Invalid PIN', 'PIN must be at least 4 digits');
-      return;
-    }
+  // Load saved email on mount
+  useEffect(() => {
+    loadSavedEmail();
+  }, []);
 
-    setLoading(true);
-
+  const loadSavedEmail = async () => {
     try {
-      const session = await loginParent(pin);
-      setLoading(false);
-
-      // Success - pass PIN to parent component for login
-      Alert.alert('Success', 'Logged in successfully', [
-        {
-          text: 'Continue',
-          onPress: () => onLoginSuccess(pin),
-        },
-      ]);
-    } catch (error) {
-      setLoading(false);
-
-      // Failed login attempt
-      const newAttemptCount = attemptCount + 1;
-      setAttemptCount(newAttemptCount);
-
-      if (newAttemptCount >= 5) {
-        setLocked(true);
-        Alert.alert(
-          'Too Many Attempts',
-          'Account locked for 15 minutes for security. Please try again later.'
-        );
-      } else {
-        Alert.alert(
-          'Invalid PIN',
-          `Incorrect PIN. ${5 - newAttemptCount} attempts remaining.`
-        );
+      const savedEmail = await AsyncStorage.getItem('parentEmail');
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
       }
-
-      setPin('');
+    } catch (err) {
+      console.error('Error loading saved email:', err);
     }
   };
 
-  if (locked) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.lockScreen}>
-          <Ionicons name="lock-closed" size={80} color="#EF4444" />
-          <Text style={styles.lockedTitle}>Account Temporarily Locked</Text>
-          <Text style={styles.lockedText}>
-            Too many failed login attempts. Please try again in 15 minutes.
-          </Text>
-          <Text style={styles.lockedEmail}>Email: {parentEmail}</Text>
-        </View>
-      </View>
-    );
-  }
+  // Validation
+  const validateForm = () => {
+    const errors = {};
+
+    if (!email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (!password) {
+      errors.password = 'Password is required';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Handle login
+  const handleLogin = async () => {
+    setError(null);
+
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Authenticate with Supabase
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (data?.user?.id) {
+        // Save email if "Remember Me" is checked
+        if (rememberMe) {
+          await AsyncStorage.setItem('parentEmail', email);
+        } else {
+          await AsyncStorage.removeItem('parentEmail');
+        }
+
+        // Store session info
+        await AsyncStorage.setItem('parentSessionId', data.user.id);
+
+        // Navigate to parent dashboard
+        navigation?.replace('ParentDashboard');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+
+      // User-friendly error messages
+      if (
+        err.message?.includes('Invalid login') ||
+        err.message?.includes('incorrect')
+      ) {
+        setError('Invalid email or password. Please try again.');
+      } else if (err.message?.includes('not confirmed')) {
+        setError('Please confirm your email address before logging in.');
+      } else {
+        setError(err.message || 'An error occurred during login. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkboxSize = isKidsEdition ? 22 : 18;
+  const fontSize = isKidsEdition ? 14 : 12;
+  const paddingHorizontal = isKidsEdition ? theme.spacing.lg : theme.spacing.md;
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header with Back Button */}
-        <View style={styles.headerWithBack}>
-          {onCancel ? (
-            <TouchableOpacity style={styles.backButton} onPress={onCancel}>
-              <Ionicons name="chevron-back" size={24} color="#14B8A6" />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.backButton} />
-          )}
-          <View style={styles.header}>
-            <Ionicons name="shield-checkmark" size={60} color="#14B8A6" />
-            <Text style={styles.title}>Parent Dashboard</Text>
-            <Text style={styles.subtitle}>Enter your PIN to continue</Text>
-          </View>
-        </View>
-
-        {/* Email Display */}
-        <View style={styles.emailBox}>
-          <Ionicons name="mail" size={20} color="#14B8A6" />
-          <Text style={styles.emailText}>{parentEmail}</Text>
-        </View>
-
-        {/* PIN Input */}
-        <View style={styles.inputSection}>
-          <Text style={styles.label}>Parental PIN</Text>
-          <TextInput
-            style={styles.pinInput}
-            placeholder="••••"
-            keyboardType="number-pad"
-            secureTextEntry
-            value={pin}
-            onChangeText={setPin}
-            maxLength={6}
-            editable={!loading}
-            textAlign="center"
-          />
-          <Text style={styles.helperText}>
-            4-6 digits set during account setup
-          </Text>
-        </View>
-
-        {/* Attempt Counter */}
-        {attemptCount > 0 && attemptCount < 5 && (
-          <View style={styles.warningBox}>
-            <Ionicons name="warning" size={20} color="#D97706" />
-            <Text style={styles.warningText}>
-              {5 - attemptCount} attempts remaining
-            </Text>
-          </View>
-        )}
-
-        {/* Login Button */}
-        <TouchableOpacity
-          style={[styles.loginButton, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.neutral.white }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingHorizontal,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
         >
-          {loading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <>
-              <Ionicons name="log-in" size={20} color="white" />
-              <Text style={styles.loginButtonText}>Sign In</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Help Section */}
-        <View style={styles.helpSection}>
-          <Text style={styles.helpTitle}>Need Help?</Text>
-          <TouchableOpacity style={styles.helpItem}>
-            <Ionicons name="help-circle" size={16} color="#14B8A6" />
-            <Text style={styles.helpText}>Forgot your PIN?</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.helpItem}>
-            <Ionicons name="shield" size={16} color="#14B8A6" />
-            <Text style={styles.helpText}>View Security Tips</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Security Info */}
-        <View style={styles.securityBox}>
-          <Ionicons name="lock-closed" size={20} color="#10B981" />
-          <View style={styles.securityContent}>
-            <Text style={styles.securityTitle}>Your PIN is secure</Text>
-            <Text style={styles.securityText}>
-              Stored encrypted on your device. Never shared with anyone.
+          {/* Header */}
+          <View style={[styles.header, { marginBottom: theme.spacing.lg }]}>
+            <Text
+              style={[
+                styles.title,
+                {
+                  fontSize: isKidsEdition ? 28 : 24,
+                  color: theme.colors.neutral.dark,
+                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                  marginBottom: theme.spacing.sm,
+                },
+              ]}
+            >
+              Welcome Back
+            </Text>
+            <Text
+              style={[
+                styles.subtitle,
+                {
+                  fontSize: isKidsEdition ? 16 : 14,
+                  color: theme.colors.neutral.mediumGray,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                },
+              ]}
+            >
+              Sign in to your account
             </Text>
           </View>
-        </View>
-      </ScrollView>
-    </View>
+
+          {/* Error Message */}
+          {error && (
+            <ErrorMessage
+              message={error}
+              onDismiss={() => setError(null)}
+              autoDismiss={false}
+              style={{ marginBottom: theme.spacing.md }}
+            />
+          )}
+
+          {/* Form Fields */}
+          <TextField
+            label="Email Address"
+            placeholder="your@email.com"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            error={validationErrors.email}
+            required
+          />
+
+          <TextField
+            label="Password"
+            placeholder="Enter your password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            showPasswordToggle
+            error={validationErrors.password}
+            required
+          />
+
+          {/* Remember Me & Forgot Password */}
+          <View
+            style={[
+              styles.optionsRow,
+              {
+                marginBottom: theme.spacing.lg,
+              },
+            ]}
+          >
+            {/* Remember Me */}
+            <TouchableOpacity
+              style={styles.rememberMeRow}
+              onPress={() => setRememberMe(!rememberMe)}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  {
+                    width: checkboxSize,
+                    height: checkboxSize,
+                    borderRadius: checkboxSize / 4,
+                    borderColor: theme.colors.brand.coral,
+                    backgroundColor: rememberMe
+                      ? theme.colors.brand.coral
+                      : 'transparent',
+                  },
+                ]}
+              >
+                {rememberMe && (
+                  <Ionicons
+                    name="checkmark"
+                    size={checkboxSize - 4}
+                    color="#FFFFFF"
+                  />
+                )}
+              </View>
+              <Text
+                style={[
+                  {
+                    fontSize,
+                    color: theme.colors.neutral.dark,
+                    fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                    marginLeft: theme.spacing.xs,
+                  },
+                ]}
+              >
+                Remember me
+              </Text>
+            </TouchableOpacity>
+
+            {/* Forgot Password Link */}
+            <TouchableOpacity onPress={() => navigation?.navigate('ForgotPassword')}>
+              <Text
+                style={[
+                  {
+                    fontSize,
+                    color: theme.colors.brand.coral,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  },
+                ]}
+              >
+                Forgot Password?
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Login Button */}
+          <ThankCastButton
+            title="Log In"
+            onPress={handleLogin}
+            loading={loading}
+            disabled={loading}
+            style={{ marginBottom: theme.spacing.md }}
+          />
+
+          {/* Signup Link */}
+          <View style={[styles.signupLinkContainer, { marginBottom: theme.spacing.lg }]}>
+            <Text
+              style={[
+                {
+                  fontSize,
+                  color: theme.colors.neutral.mediumGray,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                },
+              ]}
+            >
+              Don't have an account?{' '}
+            </Text>
+            <TouchableOpacity onPress={() => navigation?.navigate('ParentSignup')}>
+              <Text
+                style={[
+                  {
+                    fontSize,
+                    color: theme.colors.brand.coral,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  },
+                ]}
+              >
+                Sign Up
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Loading Overlay */}
+      <LoadingSpinner
+        visible={loading}
+        message="Signing in..."
+        fullScreen
+      />
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFB',
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 20,
+  scrollView: {
+    flex: 1,
+  },
+  content: {
     paddingTop: 40,
-  },
-  headerWithBack: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 24,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
-    flex: 1,
   },
   title: {
-    fontSize: 28,
     fontWeight: '700',
-    color: '#1F2937',
-    marginTop: 16,
-    marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontWeight: '400',
+    textAlign: 'center',
   },
-  emailBox: {
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rememberMeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
-  emailText: {
-    marginLeft: 12,
-    fontSize: 14,
-    color: '#1F2937',
-    fontWeight: '600',
-    flex: 1,
-  },
-  inputSection: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 12,
-  },
-  pinInput: {
-    backgroundColor: 'white',
+  checkbox: {
     borderWidth: 2,
-    borderColor: '#14B8A6',
-    borderRadius: 12,
-    fontSize: 48,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    textAlign: 'center',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'center',
-  },
-  warningBox: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
   },
-  warningText: {
-    marginLeft: 12,
-    color: '#D97706',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  loginButton: {
-    backgroundColor: '#14B8A6',
-    borderRadius: 12,
-    paddingVertical: 14,
+  signupLinkContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 24,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  helpSection: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  helpTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 12,
-  },
-  helpItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  helpText: {
-    marginLeft: 12,
-    color: '#14B8A6',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  securityBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#ECFDF5',
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#10B981',
-  },
-  securityContent: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  securityTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#065F46',
-    marginBottom: 4,
-  },
-  securityText: {
-    fontSize: 12,
-    color: '#0D7545',
-    lineHeight: 18,
-  },
-  lockScreen: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  lockedTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginTop: 20,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  lockedText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 21,
-    marginBottom: 16,
-  },
-  lockedEmail: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'center',
   },
 });
+
+export default ParentLoginScreen;
