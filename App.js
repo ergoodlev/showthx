@@ -83,7 +83,7 @@ const AppContent = () => {
   // Show splash screen while loading
   if (!isReady) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.neutral.white }]}>
+      <View style={[styles.container, { backgroundColor: theme.neutralColors.white }]}>
         <SplashScreen />
       </View>
     );
@@ -95,7 +95,7 @@ const AppContent = () => {
     <View style={styles.container}>
       <StatusBar
         barStyle={edition === 'kids' ? 'dark-content' : 'dark-content'}
-        backgroundColor={theme.colors.neutral.white}
+        backgroundColor={theme.neutralColors.white}
       />
       <ExpoStatusBar style="dark" />
 
