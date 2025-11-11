@@ -1,951 +1,541 @@
 /**
- * Parent Dashboard Screen
- * Manage videos, approve/reject, send to recipients
- * View audit logs and manage settings
+ * ParentDashboardScreen
+ * Main parent hub with tabs: Events, Pending Videos, Settings
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
+  SafeAreaView,
   FlatList,
-  Modal,
-  TextInput,
+  RefreshControl,
+  Alert,
 } from 'react-native';
-import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
-import { getParentEmail } from '../services/secureStorageService';
-import { sendVideoShareEmail } from '../services/emailService';
-import { logoutParent } from '../services/sessionService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { useEdition } from '../context/EditionContext';
+import { AppBar } from '../components/AppBar';
+import { EventCard } from '../components/EventCard';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { ErrorMessage } from '../components/ErrorMessage';
+import { supabase } from '../supabaseClient';
 
-export default function ParentDashboardScreen({
-  guests = [],
-  pendingVideos = [],
-  draftVideos = [],
-  approvedVideos = [],
-  onApproveVideo,
-  onRejectVideo,
-  onLogout,
-  onClose,
-}) {
-  const [activeTab, setActiveTab] = useState('pending'); // pending, approved, settings
-  const [selectedVideo, setSelectedVideo] = useState(null);
-  const [showVideoModal, setShowVideoModal] = useState(false);
-  const [showSendModal, setShowSendModal] = useState(false);
-  const [parentEmail, setParentEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [sendEmail, setSendEmail] = useState('');
-  const [auditLogs, setAuditLogs] = useState([]);
+const TABS = {
+  EVENTS: 'events',
+  VIDEOS: 'videos',
+  SETTINGS: 'settings',
+};
 
-  useEffect(() => {
-    loadParentEmail();
-    loadAuditLogs();
-  }, []);
+export const ParentDashboardScreen = ({ navigation }) => {
+  const { edition, theme } = useEdition();
+  const isKidsEdition = edition === 'kids';
 
-  const loadParentEmail = async () => {
-    const email = await getParentEmail();
-    setParentEmail(email || 'parent@example.com');
-  };
+  // State
+  const [activeTab, setActiveTab] = useState(TABS.EVENTS);
+  const [parentData, setParentData] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [pendingVideos, setPendingVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const loadAuditLogs = () => {
-    // TODO: Fetch from auditLogService
-    // For now, mock data
-    setAuditLogs([
-      {
-        id: '1',
-        event: 'video_created',
-        child: 'Emma',
-        guest: 'Grandma',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      },
-      {
-        id: '2',
-        event: 'video_approved',
-        child: 'Emma',
-        guest: 'Uncle Bob',
-        timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      },
-    ]);
-  };
+  // Load parent data on focus
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [])
+  );
 
-  const handleApproveVideo = async (video) => {
-    Alert.alert('Approve Video?', `Approve thank you from ${video.guestName}?`, [
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Approve',
-        style: 'default',
-        onPress: async () => {
-          setLoading(true);
-          try {
-            if (onApproveVideo) {
-              await onApproveVideo(video.id);
-            }
-            Alert.alert('Success', 'Video approved');
-            setShowVideoModal(false);
-            setSelectedVideo(null);
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleRejectVideo = (video) => {
-    Alert.alert('Reject Video?', 'Are you sure? This will delete the draft.', [
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setLoading(true);
-          try {
-            if (onRejectVideo) {
-              await onRejectVideo(video.id);
-            }
-            Alert.alert('Deleted', 'Video has been deleted');
-            setShowVideoModal(false);
-            setSelectedVideo(null);
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleSendVideo = async () => {
-    if (!sendEmail.includes('@')) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address');
-      return;
-    }
-
-    setLoading(true);
+  const loadDashboardData = async () => {
     try {
-      await sendVideoShareEmail(
-        {
-          id: selectedVideo.id,
-          userId: 'parent_id',
-          giftName: selectedVideo.giftName,
-        },
-        sendEmail,
-        'Parent',
-        'Child'
-      );
+      setLoading(true);
+      setError(null);
 
-      Alert.alert('Success', `Video link sent to ${sendEmail}`);
-      setSendEmail('');
-      setShowSendModal(false);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send video');
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        navigation?.replace('ParentSignup');
+        return;
+      }
+
+      // Load parent profile
+      const { data: parent, error: parentError } = await supabase
+        .from('parents')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (parentError) throw parentError;
+      setParentData(parent);
+
+      // Load events
+      const { data: eventList, error: eventsError } = await supabase
+        .from('events')
+        .select('*, gifts:gifts(count)')
+        .eq('parent_id', user.id)
+        .order('event_date', { ascending: true });
+
+      if (eventsError) throw eventsError;
+      setEvents(eventList || []);
+
+      // Load pending videos
+      const { data: videoList, error: videosError } = await supabase
+        .from('videos')
+        .select(`
+          id,
+          status,
+          recorded_at,
+          kid:children(name),
+          gift:gifts(name, giver_name)
+        `)
+        .eq('parent_id', user.id)
+        .eq('status', 'pending_approval')
+        .order('recorded_at', { ascending: false });
+
+      if (videosError) throw videosError;
+      setPendingVideos(videoList || []);
+    } catch (err) {
+      console.error('Error loading dashboard:', err);
+      setError(err.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadDashboardData();
+    setRefreshing(false);
+  };
+
   const handleLogout = () => {
-    Alert.alert('Sign Out?', 'Are you sure you want to sign out?', [
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
+        text: 'Log Out',
         onPress: async () => {
           try {
-            await logoutParent();
-            if (onLogout) {
-              onLogout();
-            }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to sign out');
+            await supabase.auth.signOut();
+            await AsyncStorage.removeItem('parentSessionId');
+            await AsyncStorage.removeItem('parentEmail');
+            navigation?.replace('ParentSignup');
+          } catch (err) {
+            setError('Error logging out: ' + err.message);
           }
         },
+        style: 'destructive',
       },
     ]);
   };
 
-  const renderPendingVideos = () => {
-    // Combine guest videos with draft videos
-    let videosToShow = [...(draftVideos || [])];
+  const handleCreateEvent = () => {
+    navigation?.navigate('EventManagement', { mode: 'create' });
+  };
 
-    // Add completed guest videos (recorded videos)
-    if (guests && guests.length > 0) {
-      const guestVideos = guests
-        .filter(g => g.completed && g.video) // Only show recorded videos
-        .map(g => ({
-          id: g.id,
-          guestName: g.name,
-          guest_name: g.name,
-          gift: g.gift,
-          giftName: g.gift,
-          video: g.video,
-          video_url: g.video_url || g.video,
-          approved: g.approved || false,
-          sent: g.sent || false,
-          recordedAt: g.recorded_at,
-          email: g.email,
-          video_type: 'thank_you',
-        }));
-      videosToShow = [...videosToShow, ...guestVideos];
-    }
+  const handleEventPress = (event) => {
+    navigation?.navigate('GiftManagement', { eventId: event.id, eventName: event.name });
+  };
 
-    if (!videosToShow || videosToShow.length === 0) {
-      return (
-        <View style={styles.emptyState}>
-          <Ionicons name="checkmark-circle" size={60} color="#D1D5DB" />
-          <Text style={styles.emptyTitle}>No Pending Videos</Text>
-          <Text style={styles.emptyText}>
-            All videos have been reviewed. Nice work!
-          </Text>
-        </View>
-      );
-    }
+  const handleEventEdit = (event) => {
+    navigation?.navigate('EventManagement', { mode: 'edit', event });
+  };
 
-    return (
-      <FlatList
-        data={videosToShow}
-        keyExtractor={(item) => item.id}
-        scrollEnabled={false}
-        renderItem={({ item }) => {
-          const isGiftOpening = item.video_type === 'gift_opening';
-          const displayTitle = isGiftOpening
-            ? `${item.guest_name || item.guestName} - Gift Opening`
-            : item.guest_name || item.guestName;
-          const displaySubtitle = isGiftOpening
-            ? `Gift: ${item.gift || item.giftName}`
-            : `Gift: ${item.gift || item.giftName}`;
+  const handleEventDelete = (event) => {
+    Alert.alert(
+      'Delete Event',
+      'Are you sure you want to delete this event? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('events')
+                .delete()
+                .eq('id', event.id);
 
-          return (
-            <TouchableOpacity
-              style={styles.videoCard}
-              onPress={() => {
-                setSelectedVideo(item);
-                setShowVideoModal(true);
+              if (error) throw error;
+              setEvents(events.filter((e) => e.id !== event.id));
+            } catch (err) {
+              setError('Error deleting event: ' + err.message);
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
+
+  const handleVideoPress = (video) => {
+    navigation?.navigate('VideoReview', { videoId: video.id });
+  };
+
+  const tabHeight = isKidsEdition ? 56 : 48;
+  const tabFontSize = isKidsEdition ? 16 : 14;
+
+  const renderEventsTab = () => (
+    <FlatList
+      data={events}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <EventCard
+          eventName={item.name}
+          eventType={item.event_type}
+          eventDate={item.event_date}
+          giftCount={item.gifts?.[0]?.count || 0}
+          kidCount={0}
+          onPress={() => handleEventPress(item)}
+          onEdit={() => handleEventEdit(item)}
+          onDelete={() => handleEventDelete(item)}
+          style={{ marginHorizontal: theme.spacing.md }}
+        />
+      )}
+      ListHeaderComponent={
+        <>
+          {error && (
+            <ErrorMessage
+              message={error}
+              onDismiss={() => setError(null)}
+              style={{ margin: theme.spacing.md }}
+            />
+          )}
+          <View
+            style={{
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: theme.spacing.md,
+              marginBottom: theme.spacing.sm,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.neutral.dark,
+                fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                fontSize: isKidsEdition ? 16 : 14,
+                fontWeight: '600',
               }}
             >
-              <View style={styles.videoThumbnail}>
-                <Ionicons
-                  name={isGiftOpening ? "gift" : "play-circle"}
-                  size={40}
-                  color="white"
-                />
-              </View>
-              <View style={styles.videoInfo}>
-                <Text style={styles.videoTitle}>{displayTitle}</Text>
-                <Text style={styles.videoSubtitle}>{displaySubtitle}</Text>
-                <Text style={styles.videoTime}>
-                  {item.recordedAt ? new Date(item.recordedAt).toLocaleDateString() : 'Today'}
-                </Text>
-                {isGiftOpening && (
-                  <Text style={styles.videoType}>Gift Opening Video</Text>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          );
-        }}
-      />
-    );
-  };
+              {events.length === 0 ? 'No events yet' : events.length + ' event' + (events.length !== 1 ? 's' : '')}
+            </Text>
+          </View>
+        </>
+      }
+      ListEmptyComponent={
+        !loading ? (
+          <View style={{ paddingHorizontal: theme.spacing.md, paddingVertical: 60, alignItems: 'center' }}>
+            <Ionicons
+              name="calendar-outline"
+              size={64}
+              color={theme.colors.neutral.lightGray}
+              style={{ marginBottom: theme.spacing.md }}
+            />
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 16 : 14,
+                color: theme.colors.neutral.mediumGray,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                textAlign: 'center',
+              }}
+            >
+              No events yet. Create one to get started!
+            </Text>
+          </View>
+        ) : null
+      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={{ paddingTop: theme.spacing.md }}
+    />
+  );
 
-  const renderSettings = () => {
-    return (
-      <ScrollView style={styles.settingsContainer}>
-        <View style={styles.settingsSection}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLabel}>
-              <Ionicons name="mail" size={20} color="#14B8A6" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingName}>Parent Email</Text>
-                <Text style={styles.settingValue}>{parentEmail}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.settingsSection}>
-          <Text style={styles.sectionTitle}>Video Retention</Text>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLabel}>
-              <Ionicons name="trash" size={20} color="#14B8A6" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingName}>Draft Videos</Text>
-                <Text style={styles.settingValue}>Delete after 7 days</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLabel}>
-              <Ionicons name="calendar" size={20} color="#14B8A6" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingName}>Approved Videos</Text>
-                <Text style={styles.settingValue}>Keep for 90 days</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.settingsSection}>
-          <Text style={styles.sectionTitle}>Security</Text>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLabel}>
-              <Ionicons name="lock-closed" size={20} color="#14B8A6" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingName}>Encryption</Text>
-                <Text style={styles.settingValue}>Optional E2E enabled</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLabel}>
-              <Ionicons name="eye" size={20} color="#14B8A6" />
-              <View style={styles.settingText}>
-                <Text style={styles.settingName}>Audit Logs</Text>
-                <Text style={styles.settingValue}>All actions tracked</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
+  const renderVideosTab = () => (
+    <FlatList
+      data={pendingVideos}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
         <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
+          onPress={() => handleVideoPress(item)}
+          style={{
+            marginHorizontal: theme.spacing.md,
+            marginVertical: theme.spacing.sm,
+            backgroundColor: theme.colors.neutral.white,
+            borderColor: theme.colors.neutral.lightGray,
+            borderWidth: 1,
+            borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+            padding: theme.spacing.md,
+          }}
         >
-          <Ionicons name="log-out" size={20} color="white" />
-          <Text style={styles.logoutButtonText}>Sign Out</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    );
-  };
-
-  const renderAuditLogs = () => {
-    return (
-      <FlatList
-        data={auditLogs}
-        keyExtractor={(item) => item.id}
-        scrollEnabled={false}
-        renderItem={({ item }) => (
-          <View style={styles.logItem}>
-            <View style={styles.logIcon}>
-              <Ionicons
-                name={
-                  item.event === 'video_created'
-                    ? 'camera'
-                    : 'checkmark-circle'
-                }
-                size={20}
-                color="#14B8A6"
-              />
-            </View>
-            <View style={styles.logContent}>
-              <Text style={styles.logTitle}>
-                {item.event === 'video_created'
-                  ? 'Video Recorded'
-                  : 'Video Approved'}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 16 : 14,
+                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                  color: theme.colors.neutral.dark,
+                }}
+              >
+                {item.kid?.name || 'Unknown'} - {item.gift?.name || 'Unknown Gift'}
               </Text>
-              <Text style={styles.logDescription}>
-                {item.child} thanking {item.guest}
-              </Text>
-              <Text style={styles.logTime}>
-                {item.timestamp.toLocaleDateString()} at{' '}
-                {item.timestamp.toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 12 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.colors.neutral.mediumGray,
+                  marginTop: 4,
+                }}
+              >
+                From: {item.gift?.giver_name || 'Unknown'}
               </Text>
             </View>
+            <Ionicons name="chevron-forward" size={24} color={theme.colors.brand.coral} />
           </View>
-        )}
-      />
-    );
-  };
+          <View
+            style={{
+              marginTop: theme.spacing.sm,
+              paddingTop: theme.spacing.sm,
+              borderTopColor: theme.colors.neutral.lightGray,
+              borderTopWidth: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="alert-circle" size={16} color={theme.colors.semantic.warning} style={{ marginRight: 6 }} />
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.colors.semantic.warning,
+              }}
+            >
+              Awaiting your review
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
+      ListHeaderComponent={
+        <>
+          {error && (
+            <ErrorMessage
+              message={error}
+              onDismiss={() => setError(null)}
+              style={{ margin: theme.spacing.md }}
+            />
+          )}
+          <View
+            style={{
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: theme.spacing.md,
+              marginBottom: theme.spacing.sm,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.neutral.dark,
+                fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                fontSize: isKidsEdition ? 16 : 14,
+                fontWeight: '600',
+              }}
+            >
+              {pendingVideos.length === 0
+                ? 'No pending videos'
+                : pendingVideos.length + ' pending review' + (pendingVideos.length !== 1 ? 's' : '')}
+            </Text>
+          </View>
+        </>
+      }
+      ListEmptyComponent={
+        !loading ? (
+          <View style={{ paddingHorizontal: theme.spacing.md, paddingVertical: 60, alignItems: 'center' }}>
+            <Ionicons
+              name="film-outline"
+              size={64}
+              color={theme.colors.neutral.lightGray}
+              style={{ marginBottom: theme.spacing.md }}
+            />
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 16 : 14,
+                color: theme.colors.neutral.mediumGray,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                textAlign: 'center',
+              }}
+            >
+              No videos awaiting review
+            </Text>
+          </View>
+        ) : null
+      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={{ paddingTop: theme.spacing.md }}
+    />
+  );
+
+  const renderSettingsTab = () => (
+    <ScrollView
+      contentContainerStyle={{ padding: theme.spacing.md, paddingBottom: 40 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <View
+        style={{
+          marginBottom: theme.spacing.lg,
+          backgroundColor: theme.colors.neutral.white,
+          borderColor: theme.colors.neutral.lightGray,
+          borderWidth: 1,
+          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+          padding: theme.spacing.md,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Ionicons name="person-circle" size={32} color={theme.colors.brand.coral} />
+          <View style={{ marginLeft: theme.spacing.md, flex: 1 }}>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 16 : 14,
+                fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                color: theme.colors.neutral.dark,
+              }}
+            >
+              {parentData?.full_name || 'Parent'}
+            </Text>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.colors.neutral.mediumGray,
+                marginTop: 4,
+              }}
+            >
+              {parentData?.email}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={{
+          backgroundColor: theme.colors.semantic.error,
+          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+          paddingVertical: theme.spacing.md,
+          marginBottom: theme.spacing.lg,
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+        onPress={handleLogout}
+      >
+        <Ionicons name="log-out-outline" size={20} color="#FFFFFF" style={{ marginRight: theme.spacing.sm }} />
+        <Text
+          style={{
+            color: '#FFFFFF',
+            fontSize: isKidsEdition ? 16 : 14,
+            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+          }}
+        >
+          Log Out
+        </Text>
+      </TouchableOpacity>
+
+      <Text
+        style={{
+          fontSize: isKidsEdition ? 12 : 10,
+          color: theme.colors.neutral.mediumGray,
+          fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+          textAlign: 'center',
+        }}
+      >
+        ThankCast v1.0.0
+      </Text>
+    </ScrollView>
+  );
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onClose}
-        >
-          <Ionicons name="chevron-back" size={28} color="#14B8A6" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Dashboard</Text>
-        <Ionicons
-          name="person-circle"
-          size={40}
-          color="#14B8A6"
-        />
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+      <AppBar
+        title={'Hi, ' + (parentData?.full_name?.split(' ')[0] || 'Parent') + '!'}
+        showBack={false}
+        rightButton={{
+          onPress: () => navigation?.navigate('KidPINLogin'),
+          icon: <Ionicons name="people" size={24} color={theme.colors.brand.coral} />,
+        }}
+      />
 
-      {/* Tabs */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
-          onPress={() => setActiveTab('pending')}
-        >
-          <Ionicons
-            name="eye"
-            size={20}
-            color={activeTab === 'pending' ? '#14B8A6' : '#9CA3AF'}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'pending' && styles.activeTabText,
-            ]}
+      {loading ? (
+        <LoadingSpinner visible message="Loading dashboard..." />
+      ) : (
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              height: tabHeight,
+              borderBottomColor: theme.colors.neutral.lightGray,
+              backgroundColor: theme.colors.neutral.white,
+              borderBottomWidth: 1,
+            }}
           >
-            Pending ({pendingVideos?.length || 0})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'logs' && styles.activeTab]}
-          onPress={() => setActiveTab('logs')}
-        >
-          <Ionicons
-            name="document-text"
-            size={20}
-            color={activeTab === 'logs' ? '#14B8A6' : '#9CA3AF'}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'logs' && styles.activeTabText,
-            ]}
-          >
-            Audit Log
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'settings' && styles.activeTab]}
-          onPress={() => setActiveTab('settings')}
-        >
-          <Ionicons
-            name="settings"
-            size={20}
-            color={activeTab === 'settings' ? '#14B8A6' : '#9CA3AF'}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'settings' && styles.activeTabText,
-            ]}
-          >
-            Settings
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
-      <ScrollView style={styles.content}>
-        {activeTab === 'pending' && renderPendingVideos()}
-        {activeTab === 'logs' && renderAuditLogs()}
-        {activeTab === 'settings' && renderSettings()}
-      </ScrollView>
-
-      {/* Video Modal */}
-      <Modal
-        visible={showVideoModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowVideoModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowVideoModal(false)}>
-              <Ionicons name="close" size={28} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Review Video</Text>
-            <View style={{ width: 28 }} />
-          </View>
-
-          {selectedVideo && (
-            <ScrollView style={styles.modalContent}>
-              {/* Video Player Placeholder */}
-              <View style={styles.videoPlayer}>
-                <Ionicons name="play-circle" size={80} color="#14B8A6" />
-                <Text style={styles.videoPlayerText}>
-                  Video Preview: {selectedVideo.guestName}
+            {Object.values(TABS).map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setActiveTab(tab)}
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderBottomWidth: activeTab === tab ? 3 : 0,
+                  borderBottomColor: activeTab === tab ? theme.colors.brand.coral : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: tabFontSize,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: activeTab === tab ? theme.colors.brand.coral : theme.colors.neutral.mediumGray,
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {tab}
                 </Text>
-              </View>
-
-              {/* Video Details */}
-              <View style={styles.detailsBox}>
-                <Text style={styles.detailLabel}>From:</Text>
-                <Text style={styles.detailValue}>{selectedVideo.guestName}</Text>
-
-                <Text style={styles.detailLabel}>For Gift:</Text>
-                <Text style={styles.detailValue}>{selectedVideo.giftName}</Text>
-
-                {selectedVideo.duration && (
-                  <>
-                    <Text style={styles.detailLabel}>Duration:</Text>
-                    <Text style={styles.detailValue}>
-                      {Math.floor(selectedVideo.duration / 60)}:
-                      {String(selectedVideo.duration % 60).padStart(2, '0')}
-                    </Text>
-                  </>
-                )}
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.approveButton]}
-                  onPress={() => handleApproveVideo(selectedVideo)}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <>
-                      <Ionicons name="checkmark" size={20} color="white" />
-                      <Text style={styles.actionButtonText}>Approve</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.sendButton]}
-                  onPress={() => setShowSendModal(true)}
-                  disabled={loading}
-                >
-                  <Ionicons name="mail" size={20} color="white" />
-                  <Text style={styles.actionButtonText}>Send</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.rejectButton]}
-                  onPress={() => handleRejectVideo(selectedVideo)}
-                  disabled={loading}
-                >
-                  <Ionicons name="trash" size={20} color="white" />
-                  <Text style={styles.actionButtonText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </Modal>
-
-      {/* Send Email Modal */}
-      <Modal
-        visible={showSendModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSendModal(false)}
-      >
-        <View style={styles.sendModalOverlay}>
-          <View style={styles.sendModalContent}>
-            <Text style={styles.sendModalTitle}>Send Video</Text>
-            <Text style={styles.sendModalSubtitle}>
-              Enter recipient's email address
-            </Text>
-
-            <TextInput
-              style={styles.sendModalInput}
-              placeholder="recipient@example.com"
-              keyboardType="email-address"
-              value={sendEmail}
-              onChangeText={setSendEmail}
-              editable={!loading}
-            />
-
-            <View style={styles.sendModalButtons}>
-              <TouchableOpacity
-                style={styles.sendModalCancel}
-                onPress={() => setShowSendModal(false)}
-                disabled={loading}
-              >
-                <Text style={styles.sendModalCancelText}>Cancel</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.sendModalSend}
-                onPress={handleSendVideo}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.sendModalSendText}>Send</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
-        </View>
-      </Modal>
-    </View>
-  );
-}
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#1E293B',
-    paddingTop: 48,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#E0F2FE',
-    flex: 1,
-    textAlign: 'center',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#1A2332',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 6,
-  },
-  activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#06B6D4',
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  activeTabText: {
-    color: '#06B6D4',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#0F172A',
-  },
-  videoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A2332',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  videoThumbnail: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: '#06B6D4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  videoInfo: {
-    flex: 1,
-  },
-  videoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E0F2FE',
-    marginBottom: 4,
-  },
-  videoSubtitle: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginBottom: 4,
-  },
-  videoTime: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  videoType: {
-    fontSize: 11,
-    color: '#06B6D4',
-    fontWeight: '600',
-    marginTop: 6,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#E0F2FE',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#94A3B8',
-  },
-  settingsContainer: {
-    paddingVertical: 8,
-  },
-  settingsSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#E0F2FE',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  settingItem: {
-    backgroundColor: '#1A2332',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  settingLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  settingText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  settingName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#E0F2FE',
-    marginBottom: 2,
-  },
-  settingValue: {
-    fontSize: 13,
-    color: '#94A3B8',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EF4444',
-    borderRadius: 12,
-    paddingVertical: 14,
-    marginTop: 24,
-    gap: 8,
-  },
-  logoutButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  logItem: {
-    flexDirection: 'row',
-    backgroundColor: '#1A2332',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  logIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#064E3B',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  logContent: {
-    flex: 1,
-  },
-  logTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#E0F2FE',
-    marginBottom: 2,
-  },
-  logDescription: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginBottom: 4,
-  },
-  logTime: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingTop: 48,
-    backgroundColor: '#1E293B',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#E0F2FE',
-  },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#0F172A',
-  },
-  videoPlayer: {
-    backgroundColor: '#1A2332',
-    borderRadius: 12,
-    paddingVertical: 60,
-    alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  videoPlayerText: {
-    marginTop: 12,
-    color: '#94A3B8',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  detailsBox: {
-    backgroundColor: '#1A2332',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 4,
-    marginTop: 12,
-  },
-  detailValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E0F2FE',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 6,
-  },
-  approveButton: {
-    backgroundColor: '#06B6D4',
-  },
-  sendButton: {
-    backgroundColor: '#0891B2',
-  },
-  rejectButton: {
-    backgroundColor: '#EF4444',
-  },
-  actionButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  sendModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  sendModalContent: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-  },
-  sendModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  sendModalSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  sendModalInput: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  sendModalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  sendModalCancel: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  sendModalCancelText: {
-    color: '#6B7280',
-    fontWeight: '600',
-  },
-  sendModalSend: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#14B8A6',
-    alignItems: 'center',
-  },
-  sendModalSendText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-});
+          {activeTab === TABS.EVENTS && renderEventsTab()}
+          {activeTab === TABS.VIDEOS && renderVideosTab()}
+          {activeTab === TABS.SETTINGS && renderSettingsTab()}
+        </View>
+      )}
+
+      {activeTab === TABS.EVENTS && !loading && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            bottom: theme.spacing.lg,
+            right: theme.spacing.lg,
+            backgroundColor: theme.colors.brand.coral,
+            width: isKidsEdition ? 64 : 56,
+            height: isKidsEdition ? 64 : 56,
+            borderRadius: isKidsEdition ? 32 : 28,
+            justifyContent: 'center',
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 8,
+          }}
+          onPress={handleCreateEvent}
+        >
+          <Ionicons name="add" size={isKidsEdition ? 32 : 28} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+    </SafeAreaView>
+  );
+};
+
+export default ParentDashboardScreen;
