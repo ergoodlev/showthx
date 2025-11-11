@@ -134,8 +134,8 @@ export const RootNavigator = () => {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.neutral.white }}>
-        <ActivityIndicator size="large" color={theme.colors.brand.coral} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.neutralColors.white }}>
+        <ActivityIndicator size="large" color={theme.brandColors.coral} />
       </View>
     );
   }
@@ -170,14 +170,13 @@ export const RootNavigator = () => {
 
 // Auth Choice Screen - Let user choose parent or kid login
 const AuthChoiceScreen = ({ navigation }) => {
-  const { theme } = useEdition();
-  const isKidsEdition = true; // This would come from context
+  const { theme, isKidsEdition } = useEdition();
 
   return (
     <View
       style={{
         flex: 1,
-        backgroundColor: theme.colors.neutral.white,
+        backgroundColor: theme.neutralColors.white,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: theme.spacing.lg,
@@ -187,14 +186,14 @@ const AuthChoiceScreen = ({ navigation }) => {
         <Ionicons
           name="gift"
           size={60}
-          color={theme.colors.brand.coral}
+          color={theme.brandColors.coral}
           style={{ textAlign: 'center', marginBottom: theme.spacing.md }}
         />
         <Text
           style={{
             fontSize: isKidsEdition ? 28 : 24,
             fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-            color: theme.colors.neutral.dark,
+            color: theme.neutralColors.charcoal,
             textAlign: 'center',
             marginBottom: theme.spacing.md,
           }}
@@ -205,7 +204,7 @@ const AuthChoiceScreen = ({ navigation }) => {
           style={{
             fontSize: isKidsEdition ? 14 : 12,
             fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-            color: theme.colors.neutral.mediumGray,
+            color: theme.neutralColors.gray,
             textAlign: 'center',
           }}
         >
@@ -217,7 +216,7 @@ const AuthChoiceScreen = ({ navigation }) => {
         <TouchableOpacity
           onPress={() => navigation?.navigate('ParentAuth', { screen: 'ParentLogin' })}
           style={{
-            backgroundColor: theme.colors.brand.coral,
+            backgroundColor: theme.brandColors.coral,
             paddingVertical: theme.spacing.lg,
             borderRadius: 8,
             justifyContent: 'center',
@@ -240,7 +239,7 @@ const AuthChoiceScreen = ({ navigation }) => {
         <TouchableOpacity
           onPress={() => navigation?.navigate('KidAuth', { screen: 'KidPINLogin' })}
           style={{
-            backgroundColor: theme.colors.brand.teal,
+            backgroundColor: theme.brandColors.teal,
             paddingVertical: theme.spacing.lg,
             borderRadius: 8,
             justifyContent: 'center',
@@ -265,7 +264,7 @@ const AuthChoiceScreen = ({ navigation }) => {
         style={{
           fontSize: isKidsEdition ? 11 : 10,
           fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-          color: theme.colors.neutral.mediumGray,
+          color: theme.neutralColors.gray,
           textAlign: 'center',
         }}
       >
