@@ -21,7 +21,7 @@ import { TextField } from '../components/TextField';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { supabase } from '../supabaseClient';
+import { parentLogin } from '../services/authService';
 
 export const ParentLoginScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
@@ -83,37 +83,30 @@ export const ParentLoginScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      // Authenticate with Supabase
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Use auth service for login
+      const result = await parentLogin(email, password);
 
-      if (authError) {
-        throw authError;
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
-      if (data?.user?.id) {
-        // Save email if "Remember Me" is checked
-        if (rememberMe) {
-          await AsyncStorage.setItem('parentEmail', email);
-        } else {
-          await AsyncStorage.removeItem('parentEmail');
-        }
-
-        // Store session info
-        await AsyncStorage.setItem('parentSessionId', data.user.id);
-
-        // Navigate to parent dashboard
-        navigation?.replace('ParentDashboard');
+      // Save email if "Remember Me" is checked
+      if (rememberMe) {
+        await AsyncStorage.setItem('parentEmail', email);
+      } else {
+        await AsyncStorage.removeItem('parentEmail');
       }
+
+      // Navigate to parent dashboard
+      navigation?.replace('ParentDashboard');
     } catch (err) {
       console.error('Login error:', err);
 
       // User-friendly error messages
       if (
         err.message?.includes('Invalid login') ||
-        err.message?.includes('incorrect')
+        err.message?.includes('incorrect') ||
+        err.message?.includes('Invalid PIN')
       ) {
         setError('Invalid email or password. Please try again.');
       } else if (err.message?.includes('not confirmed')) {

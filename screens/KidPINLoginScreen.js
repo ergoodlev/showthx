@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEdition } from '../context/EditionContext';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { supabase } from '../supabaseClient';
+import { validateKidPin } from '../services/authService';
 
 export const KidPINLoginScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
@@ -94,14 +94,10 @@ export const KidPINLoginScreen = ({ navigation }) => {
       setLoading(true);
       setError(null);
 
-      // Find child with this PIN
-      const { data: child, error: queryError } = await supabase
-        .from('children')
-        .select('id, name, parent_id')
-        .eq('pin', pin)
-        .single();
+      // Validate PIN using auth service
+      const result = await validateKidPin(pin);
 
-      if (queryError || !child) {
+      if (!result.success) {
         // Wrong PIN
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
@@ -121,9 +117,8 @@ export const KidPINLoginScreen = ({ navigation }) => {
         return;
       }
 
-      // Correct PIN - store session
-      await AsyncStorage.setItem('kidSessionId', child.id);
-      await AsyncStorage.setItem('kidName', child.name);
+      // Correct PIN - session already stored by validateKidPin
+      await AsyncStorage.setItem('kidName', result.childName);
 
       // Reset attempts
       await AsyncStorage.removeItem('kidPINAttempts');

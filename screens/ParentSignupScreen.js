@@ -15,12 +15,14 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEdition } from '../context/EditionContext';
 import { TextField } from '../components/TextField';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { supabase } from '../supabaseClient';
+import { parentSignup } from '../services/authService';
+import { sendParentWelcomeEmail } from '../services/emailService';
 
 export const ParentSignupScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
@@ -95,54 +97,18 @@ export const ParentSignupScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      // Create auth user
-      const { data, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
-      });
+      // Use auth service for signup
+      const result = await parentSignup(email, password, fullName);
 
-      if (authError) {
-        throw authError;
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
-      if (data?.user?.id) {
-        // Insert parent profile
-        const { error: profileError } = await supabase
-          .from('parents')
-          .insert({
-            id: data.user.id,
-            email,
-            full_name: fullName,
-            created_at: new Date().toISOString(),
-          });
+      // Send welcome email
+      await sendParentWelcomeEmail(email, fullName);
 
-        if (profileError) {
-          throw profileError;
-        }
-
-        // Record COPPA consent
-        const { error: consentError } = await supabase
-          .from('parental_consents')
-          .insert({
-            parent_id: data.user.id,
-            consent_type: 'coppa',
-            agreed: true,
-            agreed_at: new Date().toISOString(),
-          });
-
-        if (consentError) {
-          console.warn('Error recording COPPA consent:', consentError);
-          // Continue anyway - signup was successful
-        }
-
-        // Success - navigate to parent dashboard
-        navigation?.replace('ParentDashboard');
-      }
+      // Navigate to parent dashboard
+      navigation?.replace('ParentDashboard');
     } catch (err) {
       console.error('Signup error:', err);
 
