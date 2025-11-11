@@ -45,6 +45,10 @@
           "cameraPermission": "Allow GratituGram to access your camera to record thank you videos."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "SENDGRID_API_KEY": "@SENDGRID_API_KEY",
+      "FROM_EMAIL": "@FROM_EMAIL"
+    }
   }
 }

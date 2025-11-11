@@ -18,7 +18,8 @@ import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
-import { supabase } from '../supabaseClient';
+import { sendVideoToGuests } from '../services/emailService';
+import { updateGift } from '../services/databaseService';
 
 export const SendToGuestsScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -87,26 +88,28 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         .filter(g => selectedGuests.has(g.id))
         .map(g => g.email);
 
-      // In production, call email service (SendGrid, AWS SES, etc.)
-      // with the video URL and guest emails
-      console.log('Sending to guests:', selectedGuestEmails);
+      // Send emails via SendGrid
+      const emailResult = await sendVideoToGuests(
+        selectedGuestEmails,
+        giftName,
+        videoUri,
+        '30 days'
+      );
 
-      // Mock email sending
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!emailResult.success) {
+        throw new Error(emailResult.error || 'Failed to send emails');
+      }
 
       // Update gift status to 'sent'
-      const { error } = await supabase
-        .from('gifts')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          sent_to_count: selectedGuests.size,
-        })
-        .eq('id', giftId);
+      const { error } = await updateGift(giftId, {
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        sent_to_count: selectedGuests.size,
+      });
 
       if (error) {
         console.error('Error updating gift status:', error);
-        return;
+        throw new Error(error);
       }
 
       // Navigate to success
