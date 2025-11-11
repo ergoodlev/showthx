@@ -200,6 +200,8 @@ export const ParentSignupScreen = ({ navigation }) => {
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
+            autoCapitalize="none"
+            textContentType="emailAddress"
             error={validationErrors.email}
             required
           />
@@ -211,6 +213,8 @@ export const ParentSignupScreen = ({ navigation }) => {
             onChangeText={setPassword}
             secureTextEntry
             showPasswordToggle
+            autoCapitalize="none"
+            textContentType="password"
             error={validationErrors.password}
             required
           />
@@ -222,6 +226,8 @@ export const ParentSignupScreen = ({ navigation }) => {
             onChangeText={setConfirmPassword}
             secureTextEntry
             showPasswordToggle
+            autoCapitalize="none"
+            textContentType="password"
             error={validationErrors.confirmPassword}
             required
           />

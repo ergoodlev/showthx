@@ -27,6 +27,8 @@ export const TextField = ({
   required = false,
   disabled = false,
   showPasswordToggle = false,
+  autoCapitalize = 'sentences',
+  textContentType = undefined,
   style,
   ...props
 }) => {
@@ -92,6 +94,8 @@ export const TextField = ({
           secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
           editable={editable && !disabled}
+          autoCapitalize={autoCapitalize}
+          textContentType={textContentType}
           {...props}
         />
 
