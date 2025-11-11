@@ -35,6 +35,9 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 // Context & Providers
 import { EditionProvider, useEdition } from './context/EditionContext';
 
+// Navigation
+import RootNavigator from './navigation/RootNavigator';
+
 // Placeholder screens (to be implemented in Phase 2)
 import SplashScreen from './screens/SplashScreen';
 
@@ -87,51 +90,17 @@ const AppContent = () => {
   }
 
   // Main app content
-  // For Phase 2: Replace with actual navigation structure
+  // Phase 2: Now using RootNavigator for full navigation structure
   return (
-    <View style={[
-      styles.container,
-      {
-        backgroundColor: theme.colors.neutral.white,
-      },
-    ]}>
+    <View style={styles.container}>
       <StatusBar
         barStyle={edition === 'kids' ? 'dark-content' : 'dark-content'}
         backgroundColor={theme.colors.neutral.white}
       />
       <ExpoStatusBar style="dark" />
 
-      {/* Phase 2: Navigation will go here */}
-      {/* For now, showing placeholder */}
-      <SplashScreen />
-
-      {/*
-        Phase 2 Navigation Structure:
-
-        if (!isLoggedIn) {
-          - AuthStack
-            - ParentSignup
-            - ParentLogin
-        } else if (userRole === 'parent') {
-          - ParentStack
-            - ParentDashboard (home)
-            - EventManagement
-            - GiftManagement
-            - GuestManagement
-            - VideoReview
-            - SendToGuests
-        } else if (userRole === 'kid') {
-          - KidStack
-            - KidPINLogin
-            - KidPendingGifts (home)
-            - VideoRecording
-            - VideoPlayback
-            - MusicSelection
-            - VideoCustomization
-            - VideoConfirmation
-            - VideoSuccess
-        }
-      */}
+      {/* Phase 2: Complete Navigation Structure */}
+      <RootNavigator />
     </View>
   );
 };
