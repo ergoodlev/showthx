@@ -1,0 +1,433 @@
+/**
+ * KidPendingGiftsScreen
+ * Shows kid their gifts and video recording status
+ */
+
+import React, { useState, useCallback, useEffect } from 'react';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  SafeAreaView,
+  FlatList,
+  TouchableOpacity,
+  Text,
+  Alert,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { useEdition } from '../context/EditionContext';
+import { GiftCard } from '../components/GiftCard';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { ErrorMessage } from '../components/ErrorMessage';
+import { supabase } from '../supabaseClient';
+
+export const KidPendingGiftsScreen = ({ navigation }) => {
+  const { edition, theme } = useEdition();
+  const isKidsEdition = edition === 'kids';
+
+  // State
+  const [kidName, setKidName] = useState('');
+  const [kidId, setKidId] = useState('');
+  const [gifts, setGifts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Load gifts on focus
+  useFocusEffect(
+    useCallback(() => {
+      loadKidData();
+    }, [])
+  );
+
+  const loadKidData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get kid session from storage
+      const storedKidId = await AsyncStorage.getItem('kidSessionId');
+      const storedKidName = await AsyncStorage.getItem('kidName');
+
+      if (!storedKidId) {
+        navigation?.replace('KidPINLogin');
+        return;
+      }
+
+      setKidId(storedKidId);
+      setKidName(storedKidName || 'Friend');
+
+      // Load assigned gifts
+      const { data: giftsData, error: giftsError } = await supabase
+        .from('gift_assignments')
+        .select(
+          `
+          gift:gifts(
+            id,
+            name,
+            giver_name,
+            event_id,
+            event:events(name)
+          ),
+          video:videos(
+            id,
+            status,
+            recorded_at
+          )
+        `
+        )
+        .eq('children_id', storedKidId);
+
+      if (giftsError) throw giftsError;
+
+      // Transform data
+      const transformedGifts = giftsData
+        ?.map((assignment) => ({
+          id: assignment.gift.id,
+          name: assignment.gift.name,
+          giver_name: assignment.gift.giver_name,
+          event_name: assignment.gift.event?.name,
+          status: assignment.video?.status || 'pending',
+          has_video: !!assignment.video,
+          video_id: assignment.video?.id,
+        }))
+        .sort((a, b) => {
+          // Pending first, then recorded
+          if (a.status === 'pending' && b.status !== 'pending') return -1;
+          if (a.status !== 'pending' && b.status === 'pending') return 1;
+          return 0;
+        });
+
+      setGifts(transformedGifts || []);
+    } catch (err) {
+      console.error('Error loading gifts:', err);
+      setError(err.message || 'Failed to load gifts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getGiftStatus = (gift) => {
+    if (!gift.has_video) return 'pending';
+    if (gift.status === 'pending_approval') return 'recorded';
+    if (gift.status === 'approved') return 'approved';
+    if (gift.status === 'sent') return 'sent';
+    return 'pending';
+  };
+
+  const getStatusMessage = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'Record Thank You';
+      case 'recorded':
+        return 'Parent Reviewing';
+      case 'approved':
+        return 'Approved';
+      case 'sent':
+        return 'Sent to Guests';
+      default:
+        return 'Pending';
+    }
+  };
+
+  const handleRecordGift = (gift) => {
+    navigation?.navigate('VideoRecording', {
+      giftId: gift.id,
+      giftName: gift.name,
+      giverName: gift.giver_name,
+    });
+  };
+
+  const handleLogout = () => {
+    Alert.alert('Log Out', 'Are you sure?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Yes',
+        onPress: async () => {
+          await AsyncStorage.removeItem('kidSessionId');
+          await AsyncStorage.removeItem('kidName');
+          navigation?.replace('KidPINLogin');
+        },
+        style: 'destructive',
+      },
+    ]);
+  };
+
+  const paddingHorizontal = isKidsEdition ? theme.spacing.lg : theme.spacing.md;
+  const headerFontSize = isKidsEdition ? 28 : 24;
+  const subtitleFontSize = isKidsEdition ? 18 : 14;
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.neutral.white }}>
+      {/* Header */}
+      <View
+        style={{
+          paddingHorizontal,
+          paddingVertical: theme.spacing.md,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.neutral.lightGray,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <View>
+          <Text
+            style={{
+              fontSize: headerFontSize,
+              fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+              color: theme.colors.neutral.dark,
+              fontWeight: '700',
+            }}
+          >
+            Hi, {kidName}!
+          </Text>
+          <Text
+            style={{
+              fontSize: subtitleFontSize,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.colors.neutral.mediumGray,
+              marginTop: 4,
+              fontWeight: '400',
+            }}
+          >
+            Thanks to Give
+          </Text>
+        </View>
+        <TouchableOpacity onPress={handleLogout} style={{ padding: 8 }}>
+          <Ionicons name="log-out-outline" size={isKidsEdition ? 28 : 24} color={theme.colors.semantic.error} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
+      {loading ? (
+        <LoadingSpinner visible message="Loading gifts..." />
+      ) : (
+        <FlatList
+          data={gifts}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => {
+            const giftStatus = getGiftStatus(item);
+            return (
+              <TouchableOpacity
+                style={{
+                  marginHorizontal: paddingHorizontal,
+                  marginVertical: theme.spacing.sm,
+                }}
+                onPress={() => {
+                  if (giftStatus === 'pending') {
+                    handleRecordGift(item);
+                  } else {
+                    // View status
+                  }
+                }}
+              >
+                <View
+                  style={{
+                    backgroundColor: theme.colors.neutral.white,
+                    borderColor: theme.colors.neutral.lightGray,
+                    borderWidth: 1,
+                    borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+                    padding: theme.spacing.md,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                >
+                  {/* Gift Name - Large and Bold */}
+                  <Text
+                    style={{
+                      fontSize: isKidsEdition ? 22 : 18,
+                      fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                      color: theme.colors.neutral.dark,
+                      fontWeight: '700',
+                      marginBottom: 4,
+                    }}
+                  >
+                    {item.name.toUpperCase()}
+                  </Text>
+
+                  {/* From */}
+                  <Text
+                    style={{
+                      fontSize: isKidsEdition ? 16 : 13,
+                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                      color: theme.colors.neutral.mediumGray,
+                      marginBottom: theme.spacing.sm,
+                      fontWeight: '400',
+                    }}
+                  >
+                    From: {item.giver_name}
+                  </Text>
+
+                  {/* Event */}
+                  <Text
+                    style={{
+                      fontSize: isKidsEdition ? 13 : 11,
+                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                      color: theme.colors.neutral.mediumGray,
+                      marginBottom: theme.spacing.md,
+                      fontWeight: '400',
+                    }}
+                  >
+                    at {item.event_name}
+                  </Text>
+
+                  {/* Status Button Row */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingTop: theme.spacing.sm,
+                      borderTopWidth: 1,
+                      borderTopColor: theme.colors.neutral.lightGray,
+                    }}
+                  >
+                    {/* Status Indicator */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      {giftStatus === 'pending' && (
+                        <>
+                          <Ionicons name="videocam" size={18} color={theme.colors.brand.coral} />
+                          <Text
+                            style={{
+                              fontSize: isKidsEdition ? 14 : 12,
+                              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                              color: theme.colors.brand.coral,
+                              marginLeft: 6,
+                              fontWeight: '600',
+                            }}
+                          >
+                            Record
+                          </Text>
+                        </>
+                      )}
+                      {giftStatus === 'recorded' && (
+                        <>
+                          <Ionicons name="hourglass" size={18} color={theme.colors.semantic.warning} />
+                          <Text
+                            style={{
+                              fontSize: isKidsEdition ? 14 : 12,
+                              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                              color: theme.colors.semantic.warning,
+                              marginLeft: 6,
+                              fontWeight: '600',
+                            }}
+                          >
+                            Reviewing
+                          </Text>
+                        </>
+                      )}
+                      {giftStatus === 'approved' && (
+                        <>
+                          <Ionicons name="checkmark-circle" size={18} color={theme.colors.semantic.success} />
+                          <Text
+                            style={{
+                              fontSize: isKidsEdition ? 14 : 12,
+                              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                              color: theme.colors.semantic.success,
+                              marginLeft: 6,
+                              fontWeight: '600',
+                            }}
+                          >
+                            Approved
+                          </Text>
+                        </>
+                      )}
+                      {giftStatus === 'sent' && (
+                        <>
+                          <Ionicons name="checkmark-done-all" size={18} color={theme.colors.semantic.success} />
+                          <Text
+                            style={{
+                              fontSize: isKidsEdition ? 14 : 12,
+                              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                              color: theme.colors.semantic.success,
+                              marginLeft: 6,
+                              fontWeight: '600',
+                            }}
+                          >
+                            Sent
+                          </Text>
+                        </>
+                      )}
+                    </View>
+
+                    {/* Record Button */}
+                    {giftStatus === 'pending' && (
+                      <TouchableOpacity
+                        onPress={() => handleRecordGift(item)}
+                        style={{
+                          backgroundColor: theme.colors.brand.coral,
+                          paddingHorizontal: theme.spacing.md,
+                          paddingVertical: theme.spacing.sm,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: '#FFFFFF',
+                            fontSize: isKidsEdition ? 14 : 12,
+                            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                            fontWeight: '600',
+                          }}
+                        >
+                          Record
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+          ListHeaderComponent={
+            <>
+              {error && (
+                <ErrorMessage
+                  message={error}
+                  onDismiss={() => setError(null)}
+                  style={{ margin: theme.spacing.md }}
+                />
+              )}
+            </>
+          }
+          ListEmptyComponent={
+            !loading ? (
+              <View
+                style={{
+                  paddingHorizontal,
+                  paddingVertical: 60,
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons
+                  name="gift-outline"
+                  size={64}
+                  color={theme.colors.neutral.lightGray}
+                  style={{ marginBottom: theme.spacing.md }}
+                />
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 18 : 14,
+                    color: theme.colors.neutral.mediumGray,
+                    fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                    textAlign: 'center',
+                    fontWeight: '400',
+                  }}
+                >
+                  All done! No gifts to record yet.
+                </Text>
+              </View>
+            ) : null
+          }
+          contentContainerStyle={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.lg }}
+        />
+      )}
+    </SafeAreaView>
+  );
+};
+
+export default KidPendingGiftsScreen;
