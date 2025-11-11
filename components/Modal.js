@@ -74,7 +74,7 @@ export const Modal = ({
                   styles.modalView,
                   {
                     width: modalWidth,
-                    backgroundColor: theme.colors.neutral.white,
+                    backgroundColor: theme.neutralColors.white,
                     borderRadius: isKidsEdition
                       ? theme.borderRadius.large
                       : theme.borderRadius.medium,
@@ -96,7 +96,7 @@ export const Modal = ({
                         styles.title,
                         {
                           fontSize: titleSize,
-                          color: theme.colors.neutral.dark,
+                          color: theme.neutralColors.dark,
                           fontFamily: isKidsEdition
                             ? 'Nunito_Bold'
                             : 'Montserrat_Bold',
@@ -113,7 +113,7 @@ export const Modal = ({
                         styles.subtitle,
                         {
                           fontSize: subtitleSize,
-                          color: theme.colors.neutral.mediumGray,
+                          color: theme.neutralColors.gray,
                           fontFamily: isKidsEdition
                             ? 'Nunito_Regular'
                             : 'Montserrat_Regular',
@@ -133,7 +133,7 @@ export const Modal = ({
                       <Ionicons
                         name="close"
                         size={24}
-                        color={theme.colors.neutral.mediumGray}
+                        color={theme.neutralColors.gray}
                       />
                     </TouchableOpacity>
                   )}
@@ -169,12 +169,12 @@ export const Modal = ({
                           styles.actionButton,
                           {
                             backgroundColor: action.variant === 'secondary'
-                              ? theme.colors.brand.teal
+                              ? theme.brandColors.teal
                               : action.variant === 'outline'
                               ? 'transparent'
-                              : theme.colors.brand.coral,
+                              : theme.brandColors.coral,
                             borderColor: action.variant === 'outline'
-                              ? theme.colors.brand.coral
+                              ? theme.brandColors.coral
                               : 'transparent',
                             borderWidth: action.variant === 'outline' ? 1.5 : 0,
                             marginBottom: actions.length > 2 && index < actions.length - 1
@@ -193,7 +193,7 @@ export const Modal = ({
                             styles.actionText,
                             {
                               color: action.variant === 'outline'
-                                ? theme.colors.brand.coral
+                                ? theme.brandColors.coral
                                 : '#FFFFFF',
                               fontFamily: isKidsEdition
                                 ? 'Nunito_SemiBold'

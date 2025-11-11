@@ -306,12 +306,12 @@ export const ParentDashboardScreen = ({ navigation }) => {
               alignItems: 'center',
             }}
           >
-            <Ionicons name="alert-circle" size={16} color={theme.colors.semantic.warning} style={{ marginRight: 6 }} />
+            <Ionicons name="alert-circle" size={16} color={theme.semanticColors.warning} style={{ marginRight: 6 }} />
             <Text
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: theme.colors.semantic.warning,
+                color: theme.semanticColors.warning,
               }}
             >
               Awaiting your review
@@ -420,7 +420,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
       <TouchableOpacity
         style={{
-          backgroundColor: theme.colors.semantic.error,
+          backgroundColor: theme.semanticColors.error,
           borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
           paddingVertical: theme.spacing.md,
           marginBottom: theme.spacing.lg,

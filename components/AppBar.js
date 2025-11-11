@@ -38,7 +38,7 @@ export const AppBar = ({
       style={[
         styles.safeArea,
         {
-          backgroundColor: backgroundColor || theme.colors.neutral.white,
+          backgroundColor: backgroundColor || theme.neutralColors.white,
         },
       ]}
     >
@@ -48,8 +48,8 @@ export const AppBar = ({
           {
             height,
             paddingHorizontal: padding,
-            backgroundColor: backgroundColor || theme.colors.neutral.white,
-            borderBottomColor: theme.colors.neutral.lightGray,
+            backgroundColor: backgroundColor || theme.neutralColors.white,
+            borderBottomColor: theme.neutralColors.lightGray,
           },
           style,
         ]}
@@ -65,7 +65,7 @@ export const AppBar = ({
               <Ionicons
                 name="chevron-back"
                 size={isKidsEdition ? 28 : 24}
-                color={theme.colors.brand.coral}
+                color={theme.brandColors.coral}
               />
             </TouchableOpacity>
           )}
@@ -79,7 +79,7 @@ export const AppBar = ({
                 styles.title,
                 {
                   fontSize: titleSize,
-                  color: theme.colors.neutral.dark,
+                  color: theme.neutralColors.dark,
                   fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
                 },
               ]}
@@ -94,7 +94,7 @@ export const AppBar = ({
                 styles.subtitle,
                 {
                   fontSize: subtitleSize,
-                  color: theme.colors.neutral.mediumGray,
+                  color: theme.neutralColors.gray,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                 },
               ]}
@@ -122,7 +122,7 @@ export const AppBar = ({
               <Ionicons
                 name="menu"
                 size={isKidsEdition ? 28 : 24}
-                color={theme.colors.brand.coral}
+                color={theme.brandColors.coral}
               />
             </TouchableOpacity>
           ) : (

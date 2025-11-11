@@ -168,7 +168,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
         <TouchableOpacity
           onPress={handlePlayPause}
           style={{
-            backgroundColor: isPlaying ? theme.colors.semantic.error : theme.brandColors.coral,
+            backgroundColor: isPlaying ? theme.semanticColors.error : theme.brandColors.coral,
             paddingVertical: theme.spacing.md,
             borderRadius: 8,
             marginBottom: theme.spacing.md,

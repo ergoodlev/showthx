@@ -380,7 +380,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
             </Text>
 
             {formErrors.kids && (
-              <Text style={{ color: theme.colors.semantic.error, fontSize: 12, marginBottom: theme.spacing.xs }}>
+              <Text style={{ color: theme.semanticColors.error, fontSize: 12, marginBottom: theme.spacing.xs }}>
                 {formErrors.kids}
               </Text>
             )}

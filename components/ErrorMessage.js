@@ -69,7 +69,7 @@ export const ErrorMessage = ({
         styles.container,
         {
           opacity: fadeAnim,
-          backgroundColor: theme.colors.semantic.error,
+          backgroundColor: theme.semanticColors.error,
           borderRadius: isKidsEdition
             ? theme.borderRadius.medium
             : theme.borderRadius.small,

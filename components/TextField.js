@@ -42,10 +42,10 @@ export const TextField = ({
   const marginBottom = error ? 16 : 12;
 
   const borderColor = error
-    ? theme.colors.semantic.error
+    ? theme.semanticColors.error
     : disabled
-    ? theme.colors.neutral.lightGray
-    : theme.colors.neutral.mediumGray;
+    ? theme.neutralColors.lightGray
+    : theme.neutralColors.gray;
 
   return (
     <View style={[styles.container, { marginBottom }, style]}>
@@ -56,7 +56,7 @@ export const TextField = ({
             {
               fontSize: isKidsEdition ? 16 : 14,
               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.colors.neutral.dark,
+              color: theme.neutralColors.dark,
             },
           ]}>
             {label}
@@ -71,7 +71,7 @@ export const TextField = ({
           height: inputHeight,
           borderRadius: borderRadius,
           borderColor: borderColor,
-          backgroundColor: disabled ? theme.colors.neutral.lightGray : theme.colors.neutral.white,
+          backgroundColor: disabled ? theme.neutralColors.lightGray : theme.neutralColors.white,
           paddingHorizontal,
         },
       ]}>
@@ -81,12 +81,12 @@ export const TextField = ({
             {
               fontSize,
               fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: disabled ? theme.colors.neutral.mediumGray : theme.colors.neutral.dark,
+              color: disabled ? theme.neutralColors.gray : theme.neutralColors.dark,
               flex: 1,
             },
           ]}
           placeholder={placeholder}
-          placeholderTextColor={theme.colors.neutral.mediumGray}
+          placeholderTextColor={theme.neutralColors.gray}
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry && !showPassword}
@@ -103,7 +103,7 @@ export const TextField = ({
             <Ionicons
               name={showPassword ? 'eye' : 'eye-off'}
               size={20}
-              color={theme.colors.brand.coral}
+              color={theme.brandColors.coral}
             />
           </TouchableOpacity>
         )}
@@ -113,7 +113,7 @@ export const TextField = ({
         <Text style={[
           styles.error,
           {
-            color: theme.colors.semantic.error,
+            color: theme.semanticColors.error,
             fontSize: isKidsEdition ? 14 : 12,
             fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
           },

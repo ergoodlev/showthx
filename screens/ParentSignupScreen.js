@@ -304,7 +304,7 @@ export const ParentSignupScreen = ({ navigation }) => {
                   {
                     fontSize,
                     color: validationErrors.terms
-                      ? theme.colors.semantic.error
+                      ? theme.semanticColors.error
                       : theme.neutralColors.dark,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: theme.spacing.sm,
@@ -320,7 +320,7 @@ export const ParentSignupScreen = ({ navigation }) => {
                 style={[
                   {
                     fontSize: isKidsEdition ? 12 : 11,
-                    color: theme.colors.semantic.error,
+                    color: theme.semanticColors.error,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: checkboxSize + theme.spacing.sm,
                     marginTop: -theme.spacing.sm,
@@ -370,7 +370,7 @@ export const ParentSignupScreen = ({ navigation }) => {
                   {
                     fontSize,
                     color: validationErrors.privacy
-                      ? theme.colors.semantic.error
+                      ? theme.semanticColors.error
                       : theme.neutralColors.dark,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: theme.spacing.sm,
@@ -386,7 +386,7 @@ export const ParentSignupScreen = ({ navigation }) => {
                 style={[
                   {
                     fontSize: isKidsEdition ? 12 : 11,
-                    color: theme.colors.semantic.error,
+                    color: theme.semanticColors.error,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: checkboxSize + theme.spacing.sm,
                     marginTop: -theme.spacing.sm,
@@ -436,7 +436,7 @@ export const ParentSignupScreen = ({ navigation }) => {
                   {
                     fontSize,
                     color: validationErrors.coppa
-                      ? theme.colors.semantic.error
+                      ? theme.semanticColors.error
                       : theme.neutralColors.dark,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: theme.spacing.sm,
@@ -452,7 +452,7 @@ export const ParentSignupScreen = ({ navigation }) => {
                 style={[
                   {
                     fontSize: isKidsEdition ? 12 : 11,
-                    color: theme.colors.semantic.error,
+                    color: theme.semanticColors.error,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: checkboxSize + theme.spacing.sm,
                     marginTop: -theme.spacing.sm,

@@ -196,7 +196,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
           </Text>
         </View>
         <TouchableOpacity onPress={handleLogout} style={{ padding: 8 }}>
-          <Ionicons name="log-out-outline" size={isKidsEdition ? 28 : 24} color={theme.colors.semantic.error} />
+          <Ionicons name="log-out-outline" size={isKidsEdition ? 28 : 24} color={theme.semanticColors.error} />
         </TouchableOpacity>
       </View>
 
@@ -307,12 +307,12 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                       )}
                       {giftStatus === 'recorded' && (
                         <>
-                          <Ionicons name="hourglass" size={18} color={theme.colors.semantic.warning} />
+                          <Ionicons name="hourglass" size={18} color={theme.semanticColors.warning} />
                           <Text
                             style={{
                               fontSize: isKidsEdition ? 14 : 12,
                               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                              color: theme.colors.semantic.warning,
+                              color: theme.semanticColors.warning,
                               marginLeft: 6,
                               fontWeight: '600',
                             }}
@@ -323,12 +323,12 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                       )}
                       {giftStatus === 'approved' && (
                         <>
-                          <Ionicons name="checkmark-circle" size={18} color={theme.colors.semantic.success} />
+                          <Ionicons name="checkmark-circle" size={18} color={theme.semanticColors.success} />
                           <Text
                             style={{
                               fontSize: isKidsEdition ? 14 : 12,
                               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                              color: theme.colors.semantic.success,
+                              color: theme.semanticColors.success,
                               marginLeft: 6,
                               fontWeight: '600',
                             }}
@@ -339,12 +339,12 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                       )}
                       {giftStatus === 'sent' && (
                         <>
-                          <Ionicons name="checkmark-done-all" size={18} color={theme.colors.semantic.success} />
+                          <Ionicons name="checkmark-done-all" size={18} color={theme.semanticColors.success} />
                           <Text
                             style={{
                               fontSize: isKidsEdition ? 14 : 12,
                               fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                              color: theme.colors.semantic.success,
+                              color: theme.semanticColors.success,
                               marginLeft: 6,
                               fontWeight: '600',
                             }}

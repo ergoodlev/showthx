@@ -45,11 +45,11 @@ export const EventCard = ({
       style={[
         styles.card,
         {
-          backgroundColor: theme.colors.neutral.white,
+          backgroundColor: theme.neutralColors.white,
           borderRadius: isKidsEdition
             ? theme.borderRadius.medium
             : theme.borderRadius.small,
-          borderColor: theme.colors.neutral.lightGray,
+          borderColor: theme.neutralColors.lightGray,
           padding: isKidsEdition ? theme.spacing.md : theme.spacing.sm,
           marginBottom: theme.spacing.md,
           shadowColor: '#000',
@@ -70,7 +70,7 @@ export const EventCard = ({
               styles.title,
               {
                 fontSize: isKidsEdition ? 16 : 14,
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
                 fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
               },
             ]}
@@ -84,7 +84,7 @@ export const EventCard = ({
                 styles.type,
                 {
                   fontSize: isKidsEdition ? 12 : 11,
-                  color: theme.colors.neutral.mediumGray,
+                  color: theme.neutralColors.gray,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                   marginTop: 4,
                 },
@@ -104,7 +104,7 @@ export const EventCard = ({
               <Ionicons
                 name="pencil"
                 size={18}
-                color={theme.colors.brand.teal}
+                color={theme.brandColors.teal}
               />
             </TouchableOpacity>
           )}
@@ -116,7 +116,7 @@ export const EventCard = ({
               <Ionicons
                 name="trash"
                 size={18}
-                color={theme.colors.semantic.error}
+                color={theme.semanticColors.error}
               />
             </TouchableOpacity>
           )}
@@ -134,14 +134,14 @@ export const EventCard = ({
             <Ionicons
               name="calendar"
               size={14}
-              color={theme.colors.brand.coral}
+              color={theme.brandColors.coral}
             />
             <Text
               style={[
                 styles.detailText,
                 {
                   fontSize: isKidsEdition ? 12 : 11,
-                  color: theme.colors.neutral.mediumGray,
+                  color: theme.neutralColors.gray,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                   marginLeft: 6,
                 },
@@ -163,14 +163,14 @@ export const EventCard = ({
               <Ionicons
                 name="gift"
                 size={14}
-                color={theme.colors.brand.coral}
+                color={theme.brandColors.coral}
               />
               <Text
                 style={[
                   styles.detailText,
                   {
                     fontSize: isKidsEdition ? 12 : 11,
-                    color: theme.colors.neutral.mediumGray,
+                    color: theme.neutralColors.gray,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: 6,
                   },
@@ -191,14 +191,14 @@ export const EventCard = ({
               <Ionicons
                 name="people"
                 size={14}
-                color={theme.colors.brand.coral}
+                color={theme.brandColors.coral}
               />
               <Text
                 style={[
                   styles.detailText,
                   {
                     fontSize: isKidsEdition ? 12 : 11,
-                    color: theme.colors.neutral.mediumGray,
+                    color: theme.neutralColors.gray,
                     fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                     marginLeft: 6,
                   },

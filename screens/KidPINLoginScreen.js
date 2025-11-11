@@ -214,7 +214,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
         {error && (
           <View
             style={{
-              backgroundColor: theme.colors.semantic.error,
+              backgroundColor: theme.semanticColors.error,
               borderRadius: 8,
               padding: 12,
               marginBottom: 20,
@@ -238,7 +238,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
         {locked && (
           <View
             style={{
-              backgroundColor: theme.colors.semantic.warning,
+              backgroundColor: theme.semanticColors.warning,
               borderRadius: 8,
               padding: 16,
               marginBottom: 20,
@@ -351,7 +351,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
               height: buttonSize,
               borderRadius: 12,
               backgroundColor:
-                locked || pin.length !== 4 ? theme.neutralColors.lightGray : theme.colors.semantic.success,
+                locked || pin.length !== 4 ? theme.neutralColors.lightGray : theme.semanticColors.success,
               justifyContent: 'center',
               alignItems: 'center',
               shadowColor: '#000',

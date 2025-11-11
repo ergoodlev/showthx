@@ -273,7 +273,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
               <Ionicons
                 name="checkmark-circle"
                 size={64}
-                color={theme.colors.semantic.success}
+                color={theme.semanticColors.success}
                 style={{ marginBottom: 16 }}
               />
               <Text
@@ -354,7 +354,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 width: isKidsEdition ? 80 : 72,
                 height: isKidsEdition ? 80 : 72,
                 borderRadius: isKidsEdition ? 40 : 36,
-                backgroundColor: isRecording ? theme.colors.semantic.error : theme.brandColors.coral,
+                backgroundColor: isRecording ? theme.semanticColors.error : theme.brandColors.coral,
                 justifyContent: 'center',
                 alignItems: 'center',
                 shadowColor: '#000',

@@ -44,7 +44,7 @@ export const LoadingSpinner = ({
         style={[
           styles.spinnerContainer,
           fullScreen && {
-            backgroundColor: theme.colors.neutral.white,
+            backgroundColor: theme.neutralColors.white,
             borderRadius: theme.borderRadius.large,
             padding: theme.spacing.lg,
           },
@@ -52,7 +52,7 @@ export const LoadingSpinner = ({
       >
         <ActivityIndicator
           size={size}
-          color={theme.colors.brand.coral}
+          color={theme.brandColors.coral}
           style={styles.spinner}
         />
         {message && (
@@ -61,7 +61,7 @@ export const LoadingSpinner = ({
               styles.message,
               {
                 fontSize: isKidsEdition ? 16 : 14,
-                color: theme.colors.neutral.dark,
+                color: theme.neutralColors.dark,
                 fontFamily: isKidsEdition
                   ? 'Nunito_SemiBold'
                   : 'Montserrat_SemiBold',
