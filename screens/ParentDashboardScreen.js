@@ -24,7 +24,7 @@ import { EventCard } from '../components/EventCard';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { supabase } from '../supabaseClient';
-import { logoutAndReturnToAuth, handleUnauthorized } from '../services/navigationService';
+import { logoutAndReturnToAuth } from '../services/navigationService';
 
 const TABS = {
   EVENTS: 'events',
@@ -63,7 +63,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        handleUnauthorized(navigation);
+        await logoutAndReturnToAuth();
         return;
       }
 
