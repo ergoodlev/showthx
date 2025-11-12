@@ -29,30 +29,38 @@ export const parentSignup = async (email, password, fullName) => {
 
     if (authError) throw authError;
 
-    // Create parent profile
-    if (authData?.user?.id) {
-      const { error: profileError } = await supabase
-        .from('parents')
-        .insert({
-          id: authData.user.id,
-          email,
-          full_name: fullName,
-          created_at: new Date().toISOString(),
-        });
-
-      if (profileError) throw profileError;
-
-      // Store session
-      await AsyncStorage.setItem(SESSION_KEY, authData.user.id);
-
-      return {
-        success: true,
-        userId: authData.user.id,
-        email: authData.user.email,
-      };
+    if (!authData?.user?.id) {
+      throw new Error('No user returned from signup');
     }
 
-    throw new Error('No user returned from signup');
+    // Sign in the user to establish session (required for RLS policy)
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) throw signInError;
+
+    // Now create parent profile with active session
+    const { error: profileError } = await supabase
+      .from('parents')
+      .insert({
+        id: authData.user.id,
+        email,
+        full_name: fullName,
+        created_at: new Date().toISOString(),
+      });
+
+    if (profileError) throw profileError;
+
+    // Store session
+    await AsyncStorage.setItem(SESSION_KEY, authData.user.id);
+
+    return {
+      success: true,
+      userId: authData.user.id,
+      email: authData.user.email,
+    };
   } catch (error) {
     console.error('Signup error:', error);
     return {
