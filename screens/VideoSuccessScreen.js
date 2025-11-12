@@ -47,7 +47,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
   };
 
   const handleViewMore = () => {
-    navigation?.navigate('KidDashboard');
+    navigation?.navigate('KidPendingGifts');
   };
 
   return (

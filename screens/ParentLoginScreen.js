@@ -254,13 +254,13 @@ export const ParentLoginScreen = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            {/* Forgot Password Link */}
-            <TouchableOpacity onPress={() => navigation?.navigate('ForgotPassword')}>
+            {/* Forgot Password Link - Disabled for now */}
+            <TouchableOpacity disabled onPress={() => {}}>
               <Text
                 style={[
                   {
                     fontSize,
-                    color: theme.brandColors.coral,
+                    color: theme.neutralColors.lightGray,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
                   },
                 ]}
@@ -292,7 +292,7 @@ export const ParentLoginScreen = ({ navigation }) => {
             >
               Don't have an account?{' '}
             </Text>
-            <TouchableOpacity onPress={() => navigation?.navigate('ParentSignup')}>
+            <TouchableOpacity onPress={() => navigation?.replace('ParentSignup')}>
               <Text
                 style={[
                   {

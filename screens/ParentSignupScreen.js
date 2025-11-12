@@ -517,7 +517,7 @@ export const ParentSignupScreen = ({ navigation }) => {
             >
               Already have an account?{' '}
             </Text>
-            <TouchableOpacity onPress={() => navigation?.navigate('ParentLogin')}>
+            <TouchableOpacity onPress={() => navigation?.replace('ParentLogin')}>
               <Text
                 style={[
                   {

@@ -19,6 +19,7 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { supabase } from '../supabaseClient';
+import { handleUnauthorized } from '../services/navigationService';
 
 export const EventManagementScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -70,7 +71,7 @@ export const EventManagementScreen = ({ navigation, route }) => {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        navigation?.goBack();
+        handleUnauthorized(navigation);
         return;
       }
 

@@ -24,6 +24,7 @@ import { EventCard } from '../components/EventCard';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { supabase } from '../supabaseClient';
+import { logoutAndReturnToAuth, handleUnauthorized } from '../services/navigationService';
 
 const TABS = {
   EVENTS: 'events',
@@ -62,7 +63,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        navigation?.goBack();
+        handleUnauthorized(navigation);
         return;
       }
 
@@ -123,14 +124,11 @@ export const ParentDashboardScreen = ({ navigation }) => {
         text: 'Log Out',
         onPress: async () => {
           try {
-            await supabase.auth.signOut();
-            await AsyncStorage.removeItem('parentSessionId');
-            await AsyncStorage.removeItem('parentEmail');
-            // Reset navigation stack to show auth screens
-            navigation?.reset({
-              index: 0,
-              routes: [{ name: 'AuthChoice' }],
-            });
+            const result = await logoutAndReturnToAuth();
+            if (!result.success) {
+              setError('Error logging out: ' + result.error);
+            }
+            // RootNavigator will automatically switch to auth stack
           } catch (err) {
             setError('Error logging out: ' + err.message);
           }
@@ -180,7 +178,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
   };
 
   const handleVideoPress = (video) => {
-    navigation?.navigate('VideoReview', { videoId: video.id });
+    navigation?.navigate('ParentVideoReview', { videoId: video.id });
   };
 
   const tabHeight = isKidsEdition ? 56 : 48;
@@ -465,7 +463,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
         title={'Hi, ' + (parentData?.full_name?.split(' ')[0] || 'Parent') + '!'}
         showBack={false}
         rightButton={{
-          onPress: () => navigation?.navigate('KidPINLogin'),
+          onPress: () => logoutAndReturnToAuth(),
           icon: <Ionicons name="people" size={24} color={theme.brandColors.coral} />,
         }}
       />

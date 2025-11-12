@@ -25,8 +25,8 @@ import SendSuccessScreen from '../screens/SendSuccessScreen';
 // Screen imports - Kid flows
 import KidPINLoginScreen from '../screens/KidPINLoginScreen';
 import KidPendingGiftsScreen from '../screens/KidPendingGiftsScreen';
-// import VideoRecordingScreen from '../screens/VideoRecordingScreen'; // Temporarily disabled
-// import VideoPlaybackScreen from '../screens/VideoPlaybackScreen'; // Temporarily disabled
+import VideoRecordingScreen from '../screens/VideoRecordingScreen';
+import VideoPlaybackScreen from '../screens/VideoPlaybackScreen';
 import MusicSelectionScreen from '../screens/MusicSelectionScreen';
 import VideoCustomizationScreen from '../screens/VideoCustomizationScreen';
 import VideoConfirmationScreen from '../screens/VideoConfirmationScreen';
@@ -91,8 +91,8 @@ const KidAppStack = () => {
       }}
     >
       <Stack.Screen name="KidPendingGifts" component={KidPendingGiftsScreen} />
-      {/* <Stack.Screen name="VideoRecording" component={VideoRecordingScreen} /> Temporarily disabled */}
-      {/* <Stack.Screen name="VideoPlayback" component={VideoPlaybackScreen} /> Temporarily disabled */}
+      <Stack.Screen name="VideoRecording" component={VideoRecordingScreen} />
+      <Stack.Screen name="VideoPlayback" component={VideoPlaybackScreen} />
       <Stack.Screen name="MusicSelection" component={MusicSelectionScreen} />
       <Stack.Screen name="VideoCustomization" component={VideoCustomizationScreen} />
       <Stack.Screen name="VideoConfirmation" component={VideoConfirmationScreen} />
