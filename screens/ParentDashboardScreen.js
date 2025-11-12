@@ -62,7 +62,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        navigation?.replace('ParentSignup');
+        navigation?.goBack();
         return;
       }
 
@@ -126,7 +126,11 @@ export const ParentDashboardScreen = ({ navigation }) => {
             await supabase.auth.signOut();
             await AsyncStorage.removeItem('parentSessionId');
             await AsyncStorage.removeItem('parentEmail');
-            navigation?.replace('ParentSignup');
+            // Reset navigation stack to show auth screens
+            navigation?.reset({
+              index: 0,
+              routes: [{ name: 'AuthChoice' }],
+            });
           } catch (err) {
             setError('Error logging out: ' + err.message);
           }

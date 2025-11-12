@@ -70,7 +70,7 @@ export const EventManagementScreen = ({ navigation, route }) => {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        navigation?.replace('ParentSignup');
+        navigation?.goBack();
         return;
       }
 
