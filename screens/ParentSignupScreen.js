@@ -176,12 +176,37 @@ export const ParentSignupScreen = ({ navigation }) => {
 
           {/* Error Message */}
           {error && (
-            <ErrorMessage
-              message={error}
-              onDismiss={() => setError(null)}
-              autoDismiss={false}
-              style={{ marginBottom: theme.spacing.md }}
-            />
+            <>
+              <ErrorMessage
+                message={error}
+                onDismiss={() => setError(null)}
+                autoDismiss={false}
+                style={{ marginBottom: theme.spacing.md }}
+              />
+
+              {/* Show login button if email already registered */}
+              {error.includes('already registered') && (
+                <TouchableOpacity
+                  onPress={() => navigation?.replace('ParentLogin')}
+                  style={{
+                    marginBottom: theme.spacing.md,
+                    paddingVertical: theme.spacing.sm,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.brandColors.coral,
+                      fontSize: 14,
+                      fontWeight: '600',
+                      textDecorationLine: 'underline',
+                    }}
+                  >
+                    Go to Login Screen →
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
 
           {/* Form Fields */}
