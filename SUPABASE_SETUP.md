@@ -11,27 +11,65 @@ The app needs a Supabase project configured with database tables, authentication
 
 ## Step 1: Create Database Schema
 
+⚠️ **IMPORTANT: Use `SUPABASE_SCHEMA_MINIMAL.sql` and run it SECTION BY SECTION**
+
+Do NOT copy the entire file at once. Follow these steps exactly:
+
+### Optional: Clear Existing Tables (if you got errors before)
+If you have leftover tables from previous attempts, clean them up first:
+- Open Supabase Dashboard
+- Go to **SQL Editor**
+- Copy these lines from `SUPABASE_SCHEMA_MINIMAL.sql` (at the very top, in comments):
+  ```sql
+  DROP TABLE IF EXISTS public.parental_settings CASCADE;
+  DROP TABLE IF EXISTS public.guests CASCADE;
+  DROP TABLE IF EXISTS public.videos CASCADE;
+  DROP TABLE IF EXISTS public.gifts CASCADE;
+  DROP TABLE IF EXISTS public.events CASCADE;
+  DROP TABLE IF EXISTS public.children CASCADE;
+  DROP TABLE IF EXISTS public.parents CASCADE;
+  ```
+- Run it
+- Wait for completion
+
+### Now Run Each Section:
+
 1. **Open Supabase Dashboard**
    - Go to https://app.supabase.com
    - Select your project
-
-2. **Run SQL Script (USE THE FIXED VERSION)**
    - Go to **SQL Editor** (left sidebar)
    - Click **"New Query"**
-   - Open `SUPABASE_SCHEMA_FIXED.sql` from your project folder (NOT the original)
-   - Copy the entire contents
-   - Paste into the Supabase SQL editor
+
+2. **Run SECTION 1 ONLY (Parents Table)**
+   - Open `SUPABASE_SCHEMA_MINIMAL.sql` in your project folder
+   - Find **SECTION 1: Create Parents Table**
+   - Copy ONLY those lines (just the CREATE TABLE statement)
+   - Paste into SQL Editor
    - Click **"Run"**
+   - Wait for completion ✓
 
-3. **If you get errors:**
-   - Copy just **STEP 1** (parents table creation)
-   - Run it
-   - Then copy **STEP 2** (children table)
-   - Run it
-   - Continue through all STEPS
-   - The FIXED version is structured to run all at once
+3. **Run SECTION 2 (Children Table)**
+   - Find **SECTION 2: Create Children Table**
+   - Copy ONLY those lines
+   - Click **"New Query"** (or clear the previous one)
+   - Paste into SQL Editor
+   - Click **"Run"**
+   - Wait for completion ✓
 
-4. **Verify Tables Created**
+4. **Continue with SECTIONS 3-10**
+   - Repeat the same process for each section
+   - Run ONE section at a time
+   - Wait for each to complete before running the next
+   - Section 3: Events Table
+   - Section 4: Gifts Table
+   - Section 5: Videos Table
+   - Section 6: Guests Table
+   - Section 7: Parental Settings Table
+   - Section 8: Enable RLS
+   - Section 9: Create Indexes
+   - Section 10: Create RLS Policies
+
+5. **Verify Tables Created**
    - Go to **Database** → **Tables**
    - You should see these tables:
      - ✓ parents
