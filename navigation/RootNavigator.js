@@ -3,8 +3,8 @@
  * Main navigation structure connecting parent and kid flows
  */
 
-import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { ActivityIndicator, View, Text, TouchableOpacity, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -107,29 +107,42 @@ export const RootNavigator = () => {
   const [parentSession, setParentSession] = useState(null);
   const [kidSession, setKidSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const appState = useRef(AppState.currentState);
+
+  const loadSessions = async () => {
+    try {
+      // Check for parent session
+      const parentSessionId = await AsyncStorage.getItem('parentSessionId');
+      setParentSession(parentSessionId || null);
+
+      // Check for kid session
+      const kidSessionId = await AsyncStorage.getItem('kidSessionId');
+      setKidSession(kidSessionId || null);
+    } catch (error) {
+      console.error('Error loading sessions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppStateChange = async (nextAppState) => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      // App has come to foreground - reload sessions
+      await loadSessions();
+    }
+    appState.current = nextAppState;
+  };
 
   useEffect(() => {
-    const loadSessions = async () => {
-      try {
-        // Check for parent session
-        const parentSessionId = await AsyncStorage.getItem('parentSessionId');
-        if (parentSessionId) {
-          setParentSession(parentSessionId);
-        }
-
-        // Check for kid session
-        const kidSessionId = await AsyncStorage.getItem('kidSessionId');
-        if (kidSessionId) {
-          setKidSession(kidSessionId);
-        }
-      } catch (error) {
-        console.error('Error loading sessions:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    // Load sessions on mount
     loadSessions();
+
+    // Monitor app state changes (foreground/background)
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   if (loading) {
