@@ -166,6 +166,7 @@ CREATE INDEX IF NOT EXISTS idx_parental_settings_parent_id ON public.parental_se
 -- Copy and run this section AFTER Section 9 completes
 -- PARENTS POLICIES
 CREATE POLICY "Parents can view own record" ON public.parents FOR SELECT USING (auth.uid()::text = id::text);
+CREATE POLICY "Parents can insert own record" ON public.parents FOR INSERT WITH CHECK (auth.uid()::text = id::text);
 CREATE POLICY "Parents can update own record" ON public.parents FOR UPDATE USING (auth.uid()::text = id::text);
 
 -- CHILDREN POLICIES

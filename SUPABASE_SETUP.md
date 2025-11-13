@@ -1,5 +1,19 @@
 # Supabase Setup Guide for ThankCast Kids
 
+## 🚨 CRITICAL FIX (If Events Aren't Saving)
+
+If you created events but they don't appear in Supabase:
+1. Open Supabase Dashboard → SQL Editor
+2. Copy and run this single line:
+   ```sql
+   CREATE POLICY "Parents can insert own record" ON public.parents FOR INSERT WITH CHECK (auth.uid()::text = id::text);
+   ```
+3. After running: Try creating an event again - it should now work!
+
+**What was wrong:** The original schema was missing the INSERT policy for the parents table, so parent profiles couldn't be created when signing up.
+
+---
+
 ## Overview
 The app needs a Supabase project configured with database tables, authentication, and storage. Follow these steps to get everything set up.
 

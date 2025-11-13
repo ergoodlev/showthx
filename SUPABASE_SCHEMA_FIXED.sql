@@ -149,6 +149,10 @@ CREATE POLICY "Parents can view own record"
   ON public.parents FOR SELECT
   USING (auth.uid()::text = id::text);
 
+CREATE POLICY "Parents can insert own record"
+  ON public.parents FOR INSERT
+  WITH CHECK (auth.uid()::text = id::text);
+
 CREATE POLICY "Parents can update own record"
   ON public.parents FOR UPDATE
   USING (auth.uid()::text = id::text);
