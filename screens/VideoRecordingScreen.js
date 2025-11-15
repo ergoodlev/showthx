@@ -102,23 +102,45 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
         console.log('✅ Permission already granted');
       }
 
-      // Now wait for camera to be truly ready
-      if (!isCameraReady) {
-        console.log('⏳ Waiting for camera to initialize...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+      // Always wait - even if onCameraReady fired, hardware may not be fully ready
+      console.log('⏳ Waiting for camera hardware to be fully ready (1500ms)...');
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       console.log('🎥 Starting video recording with recordAsync()...');
       setIsRecording(true);
 
-      // Use recordAsync() - the correct method for CameraView
-      const video = await cameraRef.current.recordAsync({
-        maxDuration: isKidsEdition ? 60 : 120,
-        maxFileSize: 100 * 1024 * 1024, // 100MB
-        quality: '720p',
-      });
+      // Retry logic for recordAsync - camera readiness is finicky
+      let video = null;
+      let lastError = null;
+      const maxRetries = 5;
 
-      console.log('✅ Video recorded successfully:', video);
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`📹 Recording attempt ${attempt}/${maxRetries}...`);
+          video = await cameraRef.current.recordAsync({
+            maxDuration: isKidsEdition ? 60 : 120,
+            maxFileSize: 100 * 1024 * 1024, // 100MB
+            quality: '720p',
+          });
+          console.log('✅ Video recorded successfully:', video);
+          break; // Success - exit retry loop
+        } catch (err) {
+          lastError = err;
+          console.warn(`⚠️  Recording attempt ${attempt} failed: ${err.message}`);
+
+          if (attempt < maxRetries) {
+            // Wait before retrying (exponential backoff: 300ms, 500ms, 700ms, 900ms)
+            const waitTime = 300 + attempt * 200;
+            console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        }
+      }
+
+      if (!video) {
+        throw new Error(`Failed after ${maxRetries} attempts: ${lastError?.message}`);
+      }
+
       setRecordedUri(video.uri);
       setIsRecording(false);
     } catch (err) {
