@@ -18,6 +18,8 @@ import ParentLoginScreen from '../screens/ParentLoginScreen';
 import ParentDashboardScreen from '../screens/ParentDashboardScreen';
 import EventManagementScreen from '../screens/EventManagementScreen';
 import GiftManagementScreen from '../screens/GiftManagementScreen';
+import ManageChildrenScreen from '../screens/ManageChildrenScreen';
+import GuestManagementScreen from '../screens/GuestManagementScreen';
 import ParentVideoReviewScreen from '../screens/ParentVideoReviewScreen';
 import SendToGuestsScreen from '../screens/SendToGuestsScreen';
 import SendSuccessScreen from '../screens/SendSuccessScreen';
@@ -62,6 +64,8 @@ const ParentAppStack = () => {
       <Stack.Screen name="ParentDashboard" component={ParentDashboardScreen} />
       <Stack.Screen name="EventManagement" component={EventManagementScreen} />
       <Stack.Screen name="GiftManagement" component={GiftManagementScreen} />
+      <Stack.Screen name="ManageChildren" component={ManageChildrenScreen} />
+      <Stack.Screen name="GuestManagement" component={GuestManagementScreen} />
       <Stack.Screen name="ParentVideoReview" component={ParentVideoReviewScreen} />
       <Stack.Screen name="SendToGuests" component={SendToGuestsScreen} />
       <Stack.Screen name="SendSuccess" component={SendSuccessScreen} />
@@ -140,8 +144,16 @@ export const RootNavigator = () => {
     // Monitor app state changes (foreground/background)
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
+    // Poll for session changes every 500ms (helps detect login/logout immediately)
+    const pollInterval = setInterval(() => {
+      if (appState.current === 'active') {
+        loadSessions();
+      }
+    }, 500);
+
     return () => {
       subscription.remove();
+      clearInterval(pollInterval);
     };
   }, []);
 

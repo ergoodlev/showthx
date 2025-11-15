@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import { useEdition } from '../context/EditionContext';
@@ -50,44 +51,70 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
   const handleSubmit = async () => {
     try {
       setLoading(true);
+      console.log('📹 Submitting video for gift:', giftName);
 
-      // In production, this would:
-      // 1. Merge video with music (using ffmpeg or AWS Lambda)
-      // 2. Apply transitions and text overlays
-      // 3. Upload final video to Supabase storage
-      // 4. Update gift record with video URL and status 'recorded'
+      // Get kid session info
+      const kidSessionId = await AsyncStorage.getItem('kidSessionId');
+      const parentId = await AsyncStorage.getItem('parentId');
 
-      // For now, simulate the submission
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!kidSessionId) {
+        throw new Error('Kid session not found');
+      }
 
-      // Mock update to gift record
-      const { error } = await supabase
+      // Create video record in database with pending_approval status
+      const { data: videoData, error: videoError } = await supabase
+        .from('videos')
+        .insert({
+          child_id: kidSessionId,
+          gift_id: giftId,
+          parent_id: parentId,
+          status: 'pending_approval',
+          recorded_at: new Date().toISOString(),
+          metadata: {
+            music_id: musicId,
+            customization: {
+              text: overlayText,
+              textColor,
+              textPosition,
+              transition,
+            },
+          },
+        })
+        .select()
+        .single();
+
+      if (videoError) {
+        console.error('❌ Error creating video record:', videoError);
+        throw videoError;
+      }
+
+      console.log('✅ Video record created:', videoData);
+
+      // Update gift status to show video is pending approval
+      const { error: giftError } = await supabase
         .from('gifts')
         .update({
-          video_url: videoUri,
-          status: 'recorded',
-          music_id: musicId,
-          customization: {
-            text: overlayText,
-            textColor,
-            textPosition,
-            transition,
-          },
+          status: 'pending_approval',
           recorded_at: new Date().toISOString(),
         })
         .eq('id', giftId);
 
-      if (error) {
-        console.error('Error updating gift:', error);
+      if (giftError) {
+        console.error('❌ Error updating gift:', giftError);
+        throw giftError;
       }
+
+      console.log('✅ Gift status updated to pending_approval');
 
       // Navigate to success screen
       navigation?.navigate('VideoSuccess', {
         giftId,
         giftName,
+        videoId: videoData.id,
       });
     } catch (error) {
-      console.error('Error submitting video:', error);
+      console.error('❌ Error submitting video:', error);
+      alert('Error submitting video: ' + error.message);
       setLoading(false);
     }
   };

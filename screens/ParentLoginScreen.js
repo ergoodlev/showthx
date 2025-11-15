@@ -97,8 +97,9 @@ export const ParentLoginScreen = ({ navigation }) => {
         await AsyncStorage.removeItem('parentEmail');
       }
 
-      // Navigate to parent dashboard
-      navigation?.replace('ParentDashboard');
+      // Session is stored in AsyncStorage
+      // RootNavigator will detect it via polling and switch to ParentAppStack
+      console.log('✅ Login successful - RootNavigator will handle navigation');
     } catch (err) {
       console.error('Login error:', err);
 

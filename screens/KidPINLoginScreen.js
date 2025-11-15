@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -89,17 +89,17 @@ export const KidPINLoginScreen = ({ navigation }) => {
   };
 
   const handleSubmit = async () => {
-    if (locked || pin.length !== 4) return;
+    if (locked || pin.length !== 7) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      // Validate PIN using auth service
+      // Validate access code using auth service
       const result = await validateKidPin(pin);
 
       if (!result.success) {
-        // Wrong PIN
+        // Wrong code
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
         await AsyncStorage.setItem('kidPINAttempts', newAttempts.toString());
@@ -112,20 +112,21 @@ export const KidPINLoginScreen = ({ navigation }) => {
           await AsyncStorage.setItem('kidPINLockTime', now.toString());
           setError('Too many attempts. Try again in 15 minutes.');
         } else {
-          setError('Wrong PIN. Try again. (' + (5 - newAttempts) + ' attempts remaining)');
+          setError('Wrong code. Try again. (' + (5 - newAttempts) + ' attempts remaining)');
         }
         setPin('');
         return;
       }
 
-      // Correct PIN - session already stored by validateKidPin
-      await AsyncStorage.setItem('kidName', result.childName);
+      // Correct code - session already stored by validateKidPin
+      // kidSessionId was stored in AsyncStorage
+      // RootNavigator will detect this and automatically show KidAppStack
 
       // Reset attempts
       await AsyncStorage.removeItem('kidPINAttempts');
 
-      // Navigate to kid home
-      navigation?.replace('KidPendingGifts');
+      // Don't navigate manually - RootNavigator will detect the session change
+      // and automatically switch to KidAppStack which shows KidPendingGifts
     } catch (err) {
       console.error('Login error:', err);
       setError('Error logging in. Try again.');
@@ -158,6 +159,25 @@ export const KidPINLoginScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
+      {/* Back Button */}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+        <TouchableOpacity
+          onPress={() => navigation?.goBack()}
+          style={{
+            width: 44,
+            height: 44,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={32}
+            color={theme.brandColors.teal}
+          />
+        </TouchableOpacity>
+      </View>
+
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         {/* Header */}
         <View style={{ marginBottom: 40, alignItems: 'center' }}>
@@ -170,7 +190,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
               fontWeight: '700',
             }}
           >
-            Hi! Enter your PIN
+            Enter Your Code
           </Text>
           <Text
             style={{
@@ -184,31 +204,32 @@ export const KidPINLoginScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {/* PIN Display */}
-        <View
+        {/* Code Input Field */}
+        <TextInput
           style={{
+            width: 220,
+            paddingVertical: 16,
+            paddingHorizontal: 12,
+            fontSize: isKidsEdition ? 28 : 24,
+            textAlign: 'center',
+            backgroundColor: theme.neutralColors.lightGray,
+            borderColor: theme.brandColors.coral,
+            borderWidth: 2,
+            borderRadius: 12,
+            fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+            color: theme.brandColors.coral,
             marginBottom: 40,
-            flexDirection: 'row',
-            justifyContent: 'center',
-            gap: 12,
+            letterSpacing: 4,
           }}
-        >
-          {[0, 1, 2, 3].map((i) => (
-            <View
-              key={i}
-              style={{
-                width: pinDisplaySize * 2,
-                height: pinDisplaySize * 2,
-                borderRadius: pinDisplaySize,
-                backgroundColor: i < pin.length ? theme.brandColors.coral : theme.neutralColors.lightGray,
-                justifyContent: 'center',
-                alignItems: 'center',
-                borderWidth: 2,
-                borderColor: i < pin.length ? theme.brandColors.coral : theme.neutralColors.mediumGray,
-              }}
-            />
-          ))}
-        </View>
+          value={pin.toUpperCase()}
+          onChangeText={(text) => setPin(text.toUpperCase().slice(0, 7))}
+          placeholder="ABC1234"
+          placeholderTextColor={theme.neutralColors.mediumGray}
+          maxLength={7}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          autoFocus={true}
+        />
 
         {/* Error Message */}
         {error && (
@@ -270,57 +291,11 @@ export const KidPINLoginScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Number Pad */}
-        <View style={{ marginBottom: 20 }}>
-          {digits.map((row, rowIndex) => (
-            <View key={rowIndex} style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-              {row.map((digit, colIndex) => (
-                <TouchableOpacity
-                  key={colIndex}
-                  disabled={locked || digit === '' || (pin.length === 4 && digit !== '')}
-                  onPress={() => handleDigitPress(digit)}
-                  style={{
-                    width: buttonSize,
-                    height: buttonSize,
-                    borderRadius: buttonSize / 2,
-                    backgroundColor:
-                      digit === ''
-                        ? 'transparent'
-                        : locked || (pin.length === 4 && digit !== '')
-                        ? theme.neutralColors.lightGray
-                        : theme.brandColors.coral,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    shadowColor: digit === '' ? 'transparent' : '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 4,
-                    elevation: 3,
-                  }}
-                >
-                  {digit !== '' && (
-                    <Text
-                      style={{
-                        fontSize,
-                        fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-                        color: '#FFFFFF',
-                        fontWeight: '700',
-                      }}
-                    >
-                      {digit}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))}
-        </View>
-
-        {/* Clear and Enter Buttons */}
+        {/* Clear and Submit Buttons */}
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <TouchableOpacity
             disabled={locked || pin.length === 0}
-            onPress={handleDelete}
+            onPress={() => setPin('')}
             style={{
               width: buttonSize + 20,
               height: buttonSize,
@@ -337,21 +312,21 @@ export const KidPINLoginScreen = ({ navigation }) => {
             }}
           >
             <Ionicons
-              name="arrow-back"
+              name="close"
               size={isKidsEdition ? 28 : 24}
               color="#FFFFFF"
             />
           </TouchableOpacity>
 
           <TouchableOpacity
-            disabled={locked || pin.length !== 4}
+            disabled={locked || pin.length !== 7}
             onPress={handleSubmit}
             style={{
               width: buttonSize + 20,
               height: buttonSize,
               borderRadius: 12,
               backgroundColor:
-                locked || pin.length !== 4 ? theme.neutralColors.lightGray : theme.semanticColors.success,
+                locked || pin.length !== 7 ? theme.neutralColors.lightGray : theme.semanticColors.success,
               justifyContent: 'center',
               alignItems: 'center',
               shadowColor: '#000',
@@ -370,7 +345,7 @@ export const KidPINLoginScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <LoadingSpinner visible={loading} message="Checking PIN..." fullScreen />
+      <LoadingSpinner visible={loading} message="Checking code..." fullScreen />
     </SafeAreaView>
   );
 };

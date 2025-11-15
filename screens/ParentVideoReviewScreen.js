@@ -3,7 +3,7 @@
  * Review and approve/request changes to recorded thank you videos
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,11 @@ import {
   TouchableOpacity,
   SafeAreaView,
   TextInput,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
+import { useFocusEffect } from '@react-navigation/native';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -31,10 +33,71 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
   const musicTitle = route?.params?.musicTitle;
 
   const videoRef = useRef(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [fetchedGiftId, setFetchedGiftId] = useState(giftId);
+  const [fetchedGiftName, setFetchedGiftName] = useState(giftName);
+  const [fetchedKidName, setFetchedKidName] = useState(kidName);
+  const [fetchedMusicTitle, setFetchedMusicTitle] = useState(musicTitle);
   const [isPlaying, setIsPlaying] = useState(false);
   const [action, setAction] = useState(null); // 'approve' or 'request-changes'
   const [feedback, setFeedback] = useState('');
+
+  // Load video details if only videoId is provided
+  useFocusEffect(
+    React.useCallback(() => {
+      if (videoId && !giftId) {
+        loadVideoDetails();
+      } else {
+        setLoading(false);
+      }
+    }, [videoId, giftId])
+  );
+
+  const loadVideoDetails = async () => {
+    try {
+      setLoading(true);
+      console.log('📹 Loading video details for:', videoId);
+
+      // Get video record
+      const { data: videoData, error: videoError } = await supabase
+        .from('videos')
+        .select('*')
+        .eq('id', videoId)
+        .single();
+
+      if (videoError) throw videoError;
+
+      // Get gift details
+      const { data: giftData, error: giftError } = await supabase
+        .from('gifts')
+        .select('id, name, giver_name')
+        .eq('id', videoData.gift_id)
+        .single();
+
+      if (giftError) throw giftError;
+
+      // Get child name
+      const { data: childData, error: childError } = await supabase
+        .from('children')
+        .select('id, name')
+        .eq('id', videoData.child_id)
+        .single();
+
+      if (childError) throw childError;
+
+      console.log('✅ Loaded video details');
+      setFetchedGiftId(videoData.gift_id);
+      setFetchedGiftName(giftData.name);
+      setFetchedKidName(childData.name);
+      setFetchedMusicTitle(videoData.metadata?.music_id || null);
+    } catch (error) {
+      console.error('❌ Error loading video details:', error);
+      Alert.alert('Error', 'Failed to load video details');
+      navigation?.goBack();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePlayPause = async () => {
     if (!videoRef.current) return;
@@ -50,29 +113,46 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
   const handleApprove = async () => {
     try {
       setLoading(true);
+      console.log('✅ Approving video:', videoId);
+
+      // Update video status to 'approved'
+      const { error: videoError } = await supabase
+        .from('videos')
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', videoId);
+
+      if (videoError) {
+        console.error('Error approving video:', videoError);
+        throw videoError;
+      }
 
       // Update gift status to 'approved'
-      const { error } = await supabase
+      const { error: giftError } = await supabase
         .from('gifts')
         .update({
           status: 'approved',
           approved_at: new Date().toISOString(),
         })
-        .eq('id', giftId);
+        .eq('id', fetchedGiftId);
 
-      if (error) {
-        console.error('Error approving video:', error);
-        return;
+      if (giftError) {
+        console.error('Error updating gift:', giftError);
       }
+
+      console.log('✅ Video approved, navigating to share screen');
 
       // Navigate to send screen
       navigation?.navigate('SendToGuests', {
-        giftId,
-        giftName,
+        giftId: fetchedGiftId,
+        giftName: fetchedGiftName,
         videoUri,
       });
     } catch (error) {
-      console.error('Error approving video:', error);
+      console.error('❌ Error approving video:', error);
+      Alert.alert('Error', 'Failed to approve video');
       setLoading(false);
     }
   };
@@ -80,32 +160,48 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
   const handleRequestChanges = async () => {
     try {
       if (!feedback.trim()) {
-        alert('Please provide feedback for the child');
+        Alert.alert('Validation', 'Please provide feedback for the child');
         return;
       }
 
       setLoading(true);
+      console.log('🔄 Requesting changes for video:', videoId);
 
-      // Update gift status and add feedback
-      const { error } = await supabase
-        .from('gifts')
+      // Update video status and add feedback
+      const { error: videoError } = await supabase
+        .from('videos')
         .update({
-          status: 'needs-rerecord',
+          status: 'needs_rerecord',
           parent_feedback: feedback,
           feedback_sent_at: new Date().toISOString(),
         })
-        .eq('id', giftId);
+        .eq('id', videoId);
 
-      if (error) {
-        console.error('Error requesting changes:', error);
-        return;
+      if (videoError) {
+        console.error('Error updating video:', videoError);
+        throw videoError;
+      }
+
+      // Also update gift status
+      const { error: giftError } = await supabase
+        .from('gifts')
+        .update({
+          status: 'needs_rerecord',
+          parent_feedback: feedback,
+          feedback_sent_at: new Date().toISOString(),
+        })
+        .eq('id', fetchedGiftId);
+
+      if (giftError) {
+        console.error('Error updating gift:', giftError);
       }
 
       // Show confirmation and go back
-      alert('Your feedback has been sent to the child. They can re-record the video now.');
+      Alert.alert('Feedback Sent', 'Your feedback has been sent to the child. They can re-record the video now.');
       navigation?.goBack();
     } catch (error) {
-      console.error('Error requesting changes:', error);
+      console.error('❌ Error requesting changes:', error);
+      Alert.alert('Error', 'Failed to send feedback');
       setLoading(false);
     }
   };
@@ -200,7 +296,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
                   marginTop: 2,
                 }}
               >
-                {giftName}
+                {fetchedGiftName}
               </Text>
             </View>
 
@@ -222,7 +318,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
                   marginTop: 2,
                 }}
               >
-                {kidName}
+                {fetchedKidName}
               </Text>
             </View>
           </View>

@@ -70,7 +70,10 @@ export const EventManagementScreen = ({ navigation, route }) => {
         data: { user },
       } = await supabase.auth.getUser();
 
+      console.log('🔍 DEBUG: Current user:', user);
+
       if (!user) {
+        console.error('❌ No authenticated user found');
         handleUnauthorized(navigation);
         return;
       }
@@ -83,15 +86,26 @@ export const EventManagementScreen = ({ navigation, route }) => {
         description: description || null,
       };
 
+      console.log('📝 DEBUG: Event data:', eventData);
+      console.log('👤 DEBUG: Parent ID:', user.id);
+
       if (mode === 'create') {
-        const { error: createError } = await supabase
+        console.log('➕ DEBUG: Creating new event...');
+        const { data: insertData, error: createError } = await supabase
           .from('events')
           .insert({
             ...eventData,
             parent_id: user.id,
           });
 
-        if (createError) throw createError;
+        console.log('📊 DEBUG: Insert response:', { data: insertData, error: createError });
+
+        if (createError) {
+          console.error('❌ Insert error:', createError);
+          throw createError;
+        }
+
+        console.log('✅ Event created successfully');
       } else {
         const { error: updateError } = await supabase
           .from('events')
@@ -103,7 +117,7 @@ export const EventManagementScreen = ({ navigation, route }) => {
 
       navigation?.goBack();
     } catch (err) {
-      console.error('Error saving event:', err);
+      console.error('❌ Error saving event:', err);
       setError(err.message || 'Failed to save event');
     } finally {
       setLoading(false);

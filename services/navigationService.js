@@ -20,6 +20,9 @@ export const logoutAndReturnToAuth = async () => {
     await AsyncStorage.removeItem('kidSessionId');
     await AsyncStorage.removeItem('parentEmail');
     await AsyncStorage.removeItem('kidName');
+    await AsyncStorage.removeItem('parentId');
+    await AsyncStorage.removeItem('childId');
+    await AsyncStorage.removeItem('childName');
 
     // RootNavigator will automatically re-evaluate conditions
     // and switch to appropriate auth stack

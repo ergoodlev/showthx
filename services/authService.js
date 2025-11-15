@@ -166,38 +166,70 @@ export const getOrCreateKidCode = async (parentId) => {
 };
 
 /**
- * Validate kid PIN and login
+ * Validate kid access code and login
+ * Access code is unique per child (e.g., "ALI5821")
+ * Prevents PIN collision at scale
  */
-export const validateKidPin = async (pin) => {
+export const validateKidPin = async (accessCode) => {
   try {
-    // Find parent with this PIN
-    const { data: parent, error } = await supabase
-      .from('parents')
-      .select('id, full_name, child_name')
-      .eq('kid_code', pin)
-      .single();
+    const upperCode = accessCode.toUpperCase();
+    console.log('🔐 Attempting login with access code:', upperCode);
 
-    if (error || !parent) {
+    // First, let's check ALL children to see what access codes exist
+    const { data: allChildren, error: allError } = await supabase
+      .from('children')
+      .select('id, name, access_code');
+
+    console.log('📊 All children in database:', allChildren);
+
+    // Find child with this access code (use limit instead of single to avoid error on 0 rows)
+    const { data: children, error: queryError } = await supabase
+      .from('children')
+      .select('id, parent_id, name, access_code')
+      .eq('access_code', upperCode)
+      .limit(1);
+
+    console.log('🔍 Query result for code "' + upperCode + '":', { children, queryError });
+
+    if (queryError) {
+      console.error('❌ Query error:', queryError);
       return {
         success: false,
-        error: 'Invalid PIN',
+        error: 'Database error: ' + queryError.message,
       };
     }
 
+    if (!children || children.length === 0) {
+      console.error('❌ No child found with code:', upperCode);
+      const existingCodes = allChildren?.map(c => ({ name: c.name, code: c.access_code })) || [];
+      console.log('💡 Existing access codes in database:', existingCodes);
+      return {
+        success: false,
+        error: 'Invalid Login Code - No child found. Check the code is correct.',
+      };
+    }
+
+    const child = children[0];
+    console.log('✅ Child found:', child.name, 'with code:', child.access_code);
+
     // Store kid session
-    await AsyncStorage.setItem(KID_SESSION_KEY, pin);
-    await AsyncStorage.setItem('parentId', parent.id);
+    // IMPORTANT: kidSessionId must be the childId, not the access code
+    await AsyncStorage.setItem(KID_SESSION_KEY, child.id);
+    await AsyncStorage.setItem('kidName', child.name);
+    await AsyncStorage.setItem('parentId', child.parent_id);
+    await AsyncStorage.setItem('childId', child.id);
 
     return {
       success: true,
-      parentId: parent.id,
-      childName: parent.child_name || 'Child',
+      parentId: child.parent_id,
+      childId: child.id,
+      childName: child.name,
     };
   } catch (error) {
-    console.error('PIN validation error:', error);
+    console.error('💥 Access code validation exception:', error);
     return {
       success: false,
-      error: 'Unable to validate PIN',
+      error: 'Error: ' + error.message,
     };
   }
 };
@@ -209,9 +241,11 @@ export const getKidSession = async () => {
   try {
     const pin = await AsyncStorage.getItem(KID_SESSION_KEY);
     const parentId = await AsyncStorage.getItem('parentId');
-    return { pin, parentId };
+    const childId = await AsyncStorage.getItem('childId');
+    const childName = await AsyncStorage.getItem('childName');
+    return { pin, parentId, childId, childName };
   } catch (error) {
-    return { pin: null, parentId: null };
+    return { pin: null, parentId: null, childId: null, childName: null };
   }
 };
 
@@ -222,6 +256,8 @@ export const kidLogout = async () => {
   try {
     await AsyncStorage.removeItem(KID_SESSION_KEY);
     await AsyncStorage.removeItem('parentId');
+    await AsyncStorage.removeItem('childId');
+    await AsyncStorage.removeItem('childName');
     return { success: true };
   } catch (error) {
     console.error('Logout error:', error);
