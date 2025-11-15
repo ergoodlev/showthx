@@ -91,7 +91,20 @@ export const GiftManagementScreen = ({ navigation, route }) => {
 
       const { data, error: queryError } = await supabase
         .from('gifts')
-        .select('id, name, description, giver_name, status, child_id, event_id, created_at')
+        .select(`
+          id,
+          name,
+          description,
+          giver_name,
+          status,
+          child_id,
+          event_id,
+          created_at,
+          gift_assignments (
+            children_id,
+            children (id, name)
+          )
+        `)
         .eq('event_id', eventId)
         .order('created_at', { ascending: false });
 
