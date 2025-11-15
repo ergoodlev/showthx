@@ -71,6 +71,9 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
   const handleCameraReady = () => {
     console.log('📷 Camera onCameraReady callback fired!');
+    console.log('   permission.granted:', permission?.granted);
+    console.log('   permission.canAskAgain:', permission?.canAskAgain);
+    console.log('   permission.status:', permission?.status);
     setIsCameraReady(true);
   };
 
@@ -79,6 +82,9 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     console.log('   cameraRef.current:', cameraRef.current ? '✅ exists' : '❌ null');
     console.log('   cameraRef.current.recordAsync:', cameraRef.current?.recordAsync ? '✅ exists' : '❌ missing');
     console.log('   isCameraReady:', isCameraReady);
+    console.log('   permission.granted:', permission?.granted);
+    console.log('   permission.canAskAgain:', permission?.canAskAgain);
+    console.log('   permission.status:', permission?.status);
 
     // CRITICAL: Don't proceed if camera component isn't mounted
     if (!cameraRef.current) {
@@ -97,12 +103,22 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       return;
     }
 
+    // CRITICAL: Check permission status
+    if (!permission?.granted) {
+      console.error('❌ Permission is NOT granted at recording time!');
+      console.error('   status:', permission?.status);
+      console.error('   canAskAgain:', permission?.canAskAgain);
+      setError('Camera permission not granted. Please go to Settings and enable camera access.');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
       setRecordingTime(0);
 
       console.log('🎥 Starting recording (permission pre-granted in parent screen)...');
+      console.log('   ✅ All checks passed - attempting recordAsync()...');
 
       // CRITICAL FIX: Permission is requested BEFORE navigating to this screen
       // (in KidPendingGiftsScreen.handleRecordGift)
@@ -133,6 +149,9 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
         } catch (err) {
           lastError = err;
           console.warn(`⚠️  Recording attempt ${attempt} failed: ${err.message}`);
+          console.warn(`   Error code:`, err.code);
+          console.warn(`   Error name:`, err.name);
+          console.warn(`   Full error:`, JSON.stringify(err, null, 2));
 
           if (attempt < maxRetries) {
             // Wait longer between retries (1000ms, 1500ms)

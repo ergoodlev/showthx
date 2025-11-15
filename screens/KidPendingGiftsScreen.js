@@ -39,6 +39,17 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Log permission state changes
+  useEffect(() => {
+    console.log('🔐 PERMISSION STATE CHANGED:', {
+      granted: permission?.granted,
+      canAskAgain: permission?.canAskAgain,
+      status: permission?.status,
+      expires: permission?.expires,
+      fullObject: JSON.stringify(permission)
+    });
+  }, [permission]);
+
   // Load gifts on focus
   useFocusEffect(
     useCallback(() => {
@@ -161,28 +172,53 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
 
   const handleRecordGift = async (gift) => {
     console.log('🎬 handleRecordGift called for:', gift.name);
+    console.log('🔐 Current permission state:', {
+      granted: permission?.granted,
+      canAskAgain: permission?.canAskAgain,
+      status: permission?.status,
+      expires: permission?.expires
+    });
 
     // Request permission BEFORE navigating to camera view
     // This is the ShowThx pattern: permission first, then camera view
     if (!permission?.granted) {
-      console.log('📋 Requesting camera permission before showing camera...');
+      console.log('📋 Permission NOT granted, requesting now...');
+      console.log('   canAskAgain:', permission?.canAskAgain);
+
       const result = await requestPermission();
 
+      console.log('📋 Permission request result:', {
+        granted: result?.granted,
+        canAskAgain: result?.canAskAgain,
+        status: result?.status,
+        expires: result?.expires,
+        fullObject: JSON.stringify(result)
+      });
+
       if (!result?.granted) {
+        console.error('❌ Permission denied');
+        if (!result?.canAskAgain) {
+          console.error('   iOS will not ask again - user must enable in Settings');
+        }
         Alert.alert(
           'Camera Permission Required',
           'Please allow camera access to record videos.'
         );
         return;
       }
-      console.log('✅ Permission granted, now navigating to camera...');
+      console.log('✅ Permission granted after request');
     } else {
       console.log('✅ Permission already granted');
+      console.log('   granted:', permission.granted);
+      console.log('   canAskAgain:', permission.canAskAgain);
+      console.log('   status:', permission.status);
     }
 
     // CRITICAL: Wait a bit after permission is granted before navigating
     // This gives the system time to fully set up camera access
+    console.log('⏳ Waiting 500ms before navigating to camera view...');
     await new Promise(resolve => setTimeout(resolve, 500));
+    console.log('✅ Done waiting, navigating now...');
 
     // Now navigate to camera view
     // Camera view will have full permission and hardware access ready
