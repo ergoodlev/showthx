@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { useCameraPermissions } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { GiftCard } from '../components/GiftCard';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -27,6 +28,9 @@ import { logoutAndReturnToAuth } from '../services/navigationService';
 export const KidPendingGiftsScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
   const isKidsEdition = edition === 'kids';
+
+  // Camera permission
+  const [permission, requestPermission] = useCameraPermissions();
 
   // State
   const [kidName, setKidName] = useState('');
@@ -155,7 +159,33 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
     }
   };
 
-  const handleRecordGift = (gift) => {
+  const handleRecordGift = async (gift) => {
+    console.log('🎬 handleRecordGift called for:', gift.name);
+
+    // Request permission BEFORE navigating to camera view
+    // This is the ShowThx pattern: permission first, then camera view
+    if (!permission?.granted) {
+      console.log('📋 Requesting camera permission before showing camera...');
+      const result = await requestPermission();
+
+      if (!result?.granted) {
+        Alert.alert(
+          'Camera Permission Required',
+          'Please allow camera access to record videos.'
+        );
+        return;
+      }
+      console.log('✅ Permission granted, now navigating to camera...');
+    } else {
+      console.log('✅ Permission already granted');
+    }
+
+    // CRITICAL: Wait a bit after permission is granted before navigating
+    // This gives the system time to fully set up camera access
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Now navigate to camera view
+    // Camera view will have full permission and hardware access ready
     navigation?.navigate('VideoRecording', {
       giftId: gift.id,
       giftName: gift.name,

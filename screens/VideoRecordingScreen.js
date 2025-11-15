@@ -102,27 +102,14 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       setError(null);
       setRecordingTime(0);
 
-      console.log('🎥 Requesting camera permission just-in-time...');
+      console.log('🎥 Starting recording (permission pre-granted in parent screen)...');
 
-      // REQUEST PERMISSION JUST-IN-TIME - but ONLY request if not already granted
-      // Requesting permission while camera is active might interrupt initialization
-      if (!permission?.granted) {
-        console.log('📋 Permission not granted, requesting now...');
-        const result = await requestPermission();
-
-        if (!result.granted) {
-          setError('Camera permission required to record video');
-          setLoading(false);
-          return;
-        }
-        console.log('✅ Permission granted');
-      } else {
-        console.log('✅ Permission already granted');
-      }
-
-      // CRITICAL: Wait longer after onCameraReady fires
-      // The callback fires but camera needs MORE time to be ready for recording
-      console.log('⏳ Waiting 2000ms for camera to be fully ready for recording...');
+      // CRITICAL FIX: Permission is requested BEFORE navigating to this screen
+      // (in KidPendingGiftsScreen.handleRecordGift)
+      // This matches the ShowThx pattern and ensures the camera is fully
+      // initialized with proper hardware access when this screen mounts.
+      // Just give it extra time after onCameraReady fires to be absolutely ready.
+      console.log('⏳ Waiting 2000ms for camera hardware to be fully ready...');
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       console.log('🎥 Starting video recording with recordAsync()...');
