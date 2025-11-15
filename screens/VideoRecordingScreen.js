@@ -76,13 +76,13 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     setIsCameraReady(true);
 
     // CRITICAL INSIGHT: onCameraReady fires when camera PREVIEW is ready,
-    // but the RECORDING OUTPUT needs 1-2 more seconds to initialize.
-    // This is the key difference from what was failing before!
-    console.log('⏳ Waiting 2000ms for recording OUTPUT to initialize...');
+    // but the RECORDING OUTPUT needs longer to initialize (not just 2 seconds).
+    // Wait 5 seconds to give recording output time to initialize
+    console.log('⏳ Waiting 5000ms for recording OUTPUT to fully initialize...');
     setTimeout(() => {
-      console.log('🎥 Recording OUTPUT is now ready - showing record button');
+      console.log('🎥 Recording OUTPUT should be ready - showing record button');
       setIsRecordingReady(true);
-    }, 2000);
+    }, 5000);
   };
 
   const handleStartRecording = async () => {
@@ -106,17 +106,42 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       setRecordingTime(0);
       setIsRecording(true);
 
-      console.log('🎥 Starting video recording (output is ready)...');
+      console.log('🎥 Starting video recording (output should be ready)...');
 
-      // Now that we've waited 2 seconds, the recording OUTPUT should be initialized
-      // Just call recordAsync() directly - no long waits or retries needed
-      const video = await cameraRef.current.recordAsync({
-        maxDuration: isKidsEdition ? 60 : 120,
-        maxFileSize: 100 * 1024 * 1024, // 100MB
-        quality: '720p',
-      });
+      // Even though we waited 2 seconds, recording output can still be flaky
+      // Try recording with retries and increasing waits
+      let video = null;
+      let lastError = null;
+      const maxRetries = 3;
 
-      console.log('✅ Video recorded successfully:', video);
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`📹 Recording attempt ${attempt}/${maxRetries}...`);
+          video = await cameraRef.current.recordAsync({
+            maxDuration: isKidsEdition ? 60 : 120,
+            maxFileSize: 100 * 1024 * 1024, // 100MB
+            quality: '720p',
+          });
+          console.log('✅ Video recorded successfully:', video);
+          break; // Success!
+        } catch (err) {
+          lastError = err;
+          console.warn(`⚠️  Recording attempt ${attempt} failed:`, err.message);
+          console.warn(`   Error code:`, err.code);
+
+          if (attempt < maxRetries) {
+            // Wait longer before retry
+            const waitTime = 2000 + attempt * 1000; // 3s, 4s
+            console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        }
+      }
+
+      if (!video) {
+        throw lastError || new Error('Failed to record video after retries');
+      }
+
       setRecordedUri(video.uri);
       setIsRecording(false);
     } catch (err) {
