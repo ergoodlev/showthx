@@ -8,15 +8,12 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Camera } from 'expo-camera';
+import Camera, { useCameraPermissions } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
-import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 
 export const VideoRecordingScreen = ({ navigation, route }) => {
@@ -27,7 +24,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
   // Camera state - using OLD API that works
   const cameraRef = useRef(null);
-  const [hasPermission, setHasPermission] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [isRecording, setIsRecording] = useState(false);
   const [recordedUri, setRecordedUri] = useState(null);
 
@@ -36,20 +33,12 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const [error, setError] = useState(null);
   const recordingIntervalRef = useRef(null);
 
-  // Request camera permissions on mount (OLD API)
+  // Request camera permissions on mount
   useEffect(() => {
-    requestCameraPermissions();
-  }, []);
-
-  const requestCameraPermissions = async () => {
-    try {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-      console.log('📷 Camera permission status:', status);
-    } catch (err) {
-      console.error('❌ Permission request error:', err);
+    if (permission === null) {
+      requestPermission();
     }
-  };
+  }, [permission, requestPermission]);
 
   // Recording timer
   useEffect(() => {
@@ -132,7 +121,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   };
 
   // Permission not granted
-  if (hasPermission === null) {
+  if (permission === null) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
         <AppBar
@@ -147,7 +136,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     );
   }
 
-  if (!hasPermission) {
+  if (!permission?.granted) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
         <AppBar
@@ -473,8 +462,6 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
           </View>
         )}
       </View>
-
-      <LoadingSpinner visible={loading} message="Processing video..." fullScreen />
     </SafeAreaView>
   );
 };
