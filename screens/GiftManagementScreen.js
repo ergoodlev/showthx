@@ -190,10 +190,14 @@ export const GiftManagementScreen = ({ navigation, route }) => {
     }
 
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       const { data, error } = await supabase
         .from('guests')
         .insert({
-          event_id: eventId,
+          parent_id: user.id,
           name: newGuestName.trim(),
           email: newGuestEmail.trim() || null,
           created_at: new Date().toISOString(),
