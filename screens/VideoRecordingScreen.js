@@ -333,8 +333,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
           >
             {/* Flip Camera Button */}
             <TouchableOpacity
-              disabled={isRecording || !isCameraReady}
-              onPress={handleFlipCamera}
+              disabled={true}
+              onPress={() => {}}
               style={{
                 width: isKidsEdition ? 56 : 48,
                 height: isKidsEdition ? 56 : 48,
@@ -388,7 +388,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
             {/* Delete Button */}
             <TouchableOpacity
-              disabled={isRecording || !isCameraReady}
+              disabled={isRecording}
               onPress={() => {
                 // Placeholder for future use
               }}
