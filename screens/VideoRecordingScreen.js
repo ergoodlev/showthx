@@ -91,50 +91,24 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     try {
       setLoading(true);
       setError(null);
-      setIsRecording(true);
       setRecordingTime(0);
 
-      console.log('🎥 Starting video recording...');
+      console.log('🎥 Starting video recording with startRecording()...');
 
-      // Wait longer for camera to be fully ready (expo-camera timing issue)
-      // Increased from 300ms to 1000ms for better reliability
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Extra wait to ensure camera hardware is truly ready
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Start recording with retry logic (increased retries from 3 to 5)
-      let video = null;
-      let retries = 5;
-      let lastError = null;
+      // Use startRecording() instead of recordAsync() - more reliable pattern
+      await cameraRef.current.startRecording({
+        maxDuration: isKidsEdition ? 60 : 120,
+        maxFileSize: 100 * 1024 * 1024, // 100MB
+      });
 
-      while (retries > 0 && !video) {
-        try {
-          video = await cameraRef.current.recordAsync({
-            maxDuration: isKidsEdition ? 60 : 120,
-            maxFileSize: 100 * 1024 * 1024, // 100MB
-            quality: '720p',
-          });
-          console.log('✅ Video recorded successfully:', video);
-        } catch (err) {
-          lastError = err;
-          retries--;
-          if (retries > 0) {
-            console.warn(`⚠️  Recording attempt failed, retrying... (${retries} attempts left)`);
-            // Wait before retrying (increased from 200ms to 300ms)
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-        }
-      }
-
-      if (!video && lastError) {
-        throw lastError;
-      }
-
-      if (video) {
-        setRecordedUri(video.uri);
-        setIsRecording(false);
-      }
+      console.log('✅ Recording started successfully');
+      setIsRecording(true);
     } catch (err) {
-      console.error('❌ Recording error:', err);
-      setError('Error recording video: ' + err.message);
+      console.error('❌ Recording start error:', err);
+      setError('Error starting recording: ' + err.message);
       setIsRecording(false);
     } finally {
       setLoading(false);
@@ -145,10 +119,18 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     if (!cameraRef.current) return;
 
     try {
+      console.log('⏹️  Stopping recording...');
       setIsRecording(false);
-      await cameraRef.current.stopRecording();
+
+      const video = await cameraRef.current.stopRecording();
+
+      if (video) {
+        console.log('✅ Video recorded successfully:', video);
+        setRecordedUri(video.uri);
+      }
     } catch (err) {
-      console.error('Stop recording error:', err);
+      console.error('❌ Stop recording error:', err);
+      setError('Error saving video: ' + err.message);
     }
   };
 
