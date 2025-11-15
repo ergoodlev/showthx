@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Camera, { useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { ErrorMessage } from '../components/ErrorMessage';
@@ -22,9 +22,10 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const giftId = route?.params?.giftId;
   const giftName = route?.params?.giftName;
 
-  // Camera state - using OLD API that works
+  // Camera state
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [cameraReady, setCameraReady] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedUri, setRecordedUri] = useState(null);
 
@@ -35,7 +36,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
   // Request camera permissions on mount
   useEffect(() => {
-    if (permission === null) {
+    if (!permission) {
       requestPermission();
     }
   }, [permission, requestPermission]);
@@ -65,11 +66,17 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
         clearInterval(recordingIntervalRef.current);
       }
     };
-  }, [isRecording]);
+  }, [isRecording, isKidsEdition]);
+
+  const handleCameraReady = () => {
+    console.log('📷 Camera is ready');
+    setCameraReady(true);
+  };
 
   const handleStartRecording = async () => {
-    if (!cameraRef.current) {
-      setError('Camera not available');
+    if (!cameraRef.current || !cameraReady) {
+      setError('Camera not ready. Please wait a moment and try again.');
+      console.log('❌ Camera not ready:', { cameraRef: !!cameraRef.current, cameraReady });
       return;
     }
 
@@ -77,7 +84,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       setError(null);
       setRecordingTime(0);
 
-      console.log('🎥 Starting video recording with OLD Camera API...');
+      console.log('🎥 Starting video recording...');
       setIsRecording(true);
 
       const video = await cameraRef.current.recordAsync({
@@ -96,8 +103,12 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
   const handleStopRecording = async () => {
     if (cameraRef.current && isRecording) {
-      cameraRef.current.stopRecording();
-      setIsRecording(false);
+      try {
+        await cameraRef.current.stopRecording();
+        setIsRecording(false);
+      } catch (err) {
+        console.error('❌ Stop recording error:', err);
+      }
     }
   };
 
@@ -120,8 +131,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     });
   };
 
-  // Permission not granted
-  if (permission === null) {
+  // Permission not granted - loading
+  if (!permission) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
         <AppBar
@@ -136,7 +147,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     );
   }
 
-  if (!permission?.granted) {
+  // Permission denied
+  if (!permission.granted) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
         <AppBar
@@ -215,10 +227,12 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       <View style={{ flex: 1, backgroundColor: '#000000' }}>
         {!recordedUri ? (
           <>
-            <Camera
+            <CameraView
               ref={cameraRef}
               style={{ flex: 1 }}
-              type="front"
+              facing="front"
+              onCameraReady={handleCameraReady}
+              video={true}
             />
 
             {/* Recording Info Overlay */}
@@ -343,6 +357,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             {/* Record Button - Large Circle */}
             <TouchableOpacity
               onPress={isRecording ? handleStopRecording : handleStartRecording}
+              disabled={!cameraReady || isRecording}
               style={{
                 width: isKidsEdition ? 80 : 72,
                 height: isKidsEdition ? 80 : 72,
@@ -350,6 +365,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 backgroundColor: isRecording ? theme.semanticColors.error : theme.brandColors.coral,
                 justifyContent: 'center',
                 alignItems: 'center',
+                opacity: !cameraReady && !isRecording ? 0.5 : 1,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.3,
