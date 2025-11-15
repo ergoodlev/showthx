@@ -108,16 +108,19 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      console.log('🎥 Starting video recording with startRecording()...');
+      console.log('🎥 Starting video recording with recordAsync()...');
+      setIsRecording(true);
 
-      // Use startRecording() instead of recordAsync() - more reliable pattern
-      await cameraRef.current.startRecording({
+      // Use recordAsync() - the correct method for CameraView
+      const video = await cameraRef.current.recordAsync({
         maxDuration: isKidsEdition ? 60 : 120,
         maxFileSize: 100 * 1024 * 1024, // 100MB
+        quality: '720p',
       });
 
-      console.log('✅ Recording started successfully');
-      setIsRecording(true);
+      console.log('✅ Video recorded successfully:', video);
+      setRecordedUri(video.uri);
+      setIsRecording(false);
     } catch (err) {
       console.error('❌ Recording start error:', err);
       setError('Error starting recording: ' + err.message);
@@ -128,22 +131,9 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   };
 
   const handleStopRecording = async () => {
-    if (!cameraRef.current) return;
-
-    try {
-      console.log('⏹️  Stopping recording...');
-      setIsRecording(false);
-
-      const video = await cameraRef.current.stopRecording();
-
-      if (video) {
-        console.log('✅ Video recorded successfully:', video);
-        setRecordedUri(video.uri);
-      }
-    } catch (err) {
-      console.error('❌ Stop recording error:', err);
-      setError('Error saving video: ' + err.message);
-    }
+    // recordAsync() completes when user releases button or max duration reached
+    // This is just a state update to show recording stopped
+    setIsRecording(false);
   };
 
   const handleFlipCamera = () => {
