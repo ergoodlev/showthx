@@ -29,6 +29,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isRecordingReady, setIsRecordingReady] = useState(false); // KEY: Recording output ready
   const [facing, setFacing] = useState('front');
   const [isRecording, setIsRecording] = useState(false);
   const [recordedUri, setRecordedUri] = useState(null);
@@ -70,45 +71,32 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   }, [isRecording]);
 
   const handleCameraReady = () => {
-    console.log('📷 Camera onCameraReady callback fired!');
+    console.log('📷 Camera PREVIEW is ready - user can see themselves');
     console.log('   permission.granted:', permission?.granted);
-    console.log('   permission.canAskAgain:', permission?.canAskAgain);
-    console.log('   permission.status:', permission?.status);
     setIsCameraReady(true);
+
+    // CRITICAL INSIGHT: onCameraReady fires when camera PREVIEW is ready,
+    // but the RECORDING OUTPUT needs 1-2 more seconds to initialize.
+    // This is the key difference from what was failing before!
+    console.log('⏳ Waiting 2000ms for recording OUTPUT to initialize...');
+    setTimeout(() => {
+      console.log('🎥 Recording OUTPUT is now ready - showing record button');
+      setIsRecordingReady(true);
+    }, 2000);
   };
 
   const handleStartRecording = async () => {
     console.log('🎬 handleStartRecording called');
-    console.log('   cameraRef.current:', cameraRef.current ? '✅ exists' : '❌ null');
-    console.log('   cameraRef.current.recordAsync:', cameraRef.current?.recordAsync ? '✅ exists' : '❌ missing');
-    console.log('   isCameraReady:', isCameraReady);
-    console.log('   permission.granted:', permission?.granted);
-    console.log('   permission.canAskAgain:', permission?.canAskAgain);
-    console.log('   permission.status:', permission?.status);
+    console.log('   isRecordingReady:', isRecordingReady);
 
-    // CRITICAL: Don't proceed if camera component isn't mounted
+    // CRITICAL: Only allow recording after output has been initialized (2 seconds after onCameraReady)
+    if (!isRecordingReady) {
+      setError('Camera is still initializing. Please wait...');
+      return;
+    }
+
     if (!cameraRef.current) {
       setError('Camera component not mounted');
-      return;
-    }
-
-    if (!cameraRef.current.recordAsync) {
-      setError('Camera recordAsync method not available');
-      return;
-    }
-
-    // CRITICAL: Don't proceed if camera isn't ready
-    if (!isCameraReady) {
-      setError('Camera is still initializing. Please wait.');
-      return;
-    }
-
-    // CRITICAL: Check permission status
-    if (!permission?.granted) {
-      console.error('❌ Permission is NOT granted at recording time!');
-      console.error('   status:', permission?.status);
-      console.error('   canAskAgain:', permission?.canAskAgain);
-      setError('Camera permission not granted. Please go to Settings and enable camera access.');
       return;
     }
 
@@ -116,64 +104,25 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       setLoading(true);
       setError(null);
       setRecordingTime(0);
-
-      console.log('🎥 Starting recording (permission pre-granted in parent screen)...');
-      console.log('   ✅ All checks passed - attempting recordAsync()...');
-
-      // CRITICAL FIX: Permission is requested BEFORE navigating to this screen
-      // (in KidPendingGiftsScreen.handleRecordGift)
-      //
-      // KEY INSIGHT FROM LOGS: onCameraReady fires, but recordAsync fails with
-      // ERR_CAMERA_OUTPUT_NOT_READY - the camera VIEW is ready but the RECORDING
-      // OUTPUT (encoder/file writer) is NOT initialized yet.
-      // This requires MUCH longer than the camera view initialization.
-      console.log('⏳ Waiting 5000ms for camera recording output to initialize...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      console.log('🎥 Starting video recording with recordAsync()...');
       setIsRecording(true);
 
-      // Retry logic for recordAsync - recording output is very finicky on iOS
-      let video = null;
-      let lastError = null;
-      const maxRetries = 5;
+      console.log('🎥 Starting video recording (output is ready)...');
 
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          console.log(`📹 Recording attempt ${attempt}/${maxRetries}...`);
-          video = await cameraRef.current.recordAsync({
-            maxDuration: isKidsEdition ? 60 : 120,
-            maxFileSize: 100 * 1024 * 1024, // 100MB
-            quality: '720p',
-          });
-          console.log('✅ Video recorded successfully:', video);
-          break; // Success - exit retry loop
-        } catch (err) {
-          lastError = err;
-          console.warn(`⚠️  Recording attempt ${attempt} failed: ${err.message}`);
-          console.warn(`   Error code:`, err.code);
-          console.warn(`   Error name:`, err.name);
-          console.warn(`   Full error:`, JSON.stringify(err, null, 2));
+      // Now that we've waited 2 seconds, the recording OUTPUT should be initialized
+      // Just call recordAsync() directly - no long waits or retries needed
+      const video = await cameraRef.current.recordAsync({
+        maxDuration: isKidsEdition ? 60 : 120,
+        maxFileSize: 100 * 1024 * 1024, // 100MB
+        quality: '720p',
+      });
 
-          if (attempt < maxRetries) {
-            // Wait much longer between retries - output initialization is slow
-            // Exponential: 3000ms, 5000ms, 7000ms, 9000ms
-            const waitTime = 1000 + attempt * 2000;
-            console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-          }
-        }
-      }
-
-      if (!video) {
-        throw new Error(`Failed after ${maxRetries} attempts: ${lastError?.message}`);
-      }
-
+      console.log('✅ Video recorded successfully:', video);
       setRecordedUri(video.uri);
       setIsRecording(false);
     } catch (err) {
-      console.error('❌ Recording start error:', err);
-      setError('Error starting recording: ' + err.message);
+      console.error('❌ Recording error:', err);
+      console.error('   Error code:', err.code);
+      setError('Error recording video: ' + err.message);
       setIsRecording(false);
     } finally {
       setLoading(false);
@@ -351,6 +300,30 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                   </Text>
                 </View>
               )}
+
+              {/* Recording Output Status Indicator */}
+              {isCameraReady && !isRecordingReady && (
+                <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center' }}>
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: '#FF6B6B',
+                      marginRight: 8,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      color: '#FF6B6B',
+                      fontSize: isKidsEdition ? 12 : 11,
+                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                    }}
+                  >
+                    Preparing recording...
+                  </Text>
+                </View>
+              )}
             </View>
           </>
         ) : (
@@ -441,7 +414,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
             {/* Record Button - Large Circle */}
             <TouchableOpacity
-              disabled={!isCameraReady || loading}
+              disabled={!isRecordingReady || loading}
               onPress={isRecording ? handleStopRecording : handleStartRecording}
               style={{
                 width: isKidsEdition ? 80 : 72,
@@ -455,7 +428,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 shadowOpacity: 0.3,
                 shadowRadius: 8,
                 elevation: 8,
-                opacity: !isCameraReady || loading ? 0.5 : 1,
+                opacity: !isRecordingReady || loading ? 0.5 : 1,
               }}
             >
               {isRecording ? (
