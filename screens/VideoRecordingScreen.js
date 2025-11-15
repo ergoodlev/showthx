@@ -89,10 +89,28 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     console.log('🎬 handleStartRecording called');
     console.log('   isRecordingReady:', isRecordingReady);
 
-    // CRITICAL: Only allow recording after output has been initialized (2 seconds after onCameraReady)
+    // CRITICAL: Only allow recording after output has been initialized
     if (!isRecordingReady) {
       setError('Camera is still initializing. Please wait...');
       return;
+    }
+
+    // DEBUG: Validate the camera ref thoroughly
+    console.log('🔍 REF VALIDATION:');
+    console.log('   cameraRef exists:', !!cameraRef);
+    console.log('   cameraRef.current exists:', !!cameraRef.current);
+    console.log('   typeof cameraRef.current:', typeof cameraRef.current);
+
+    if (cameraRef.current) {
+      console.log('   recordAsync exists:', !!cameraRef.current.recordAsync);
+      console.log('   recordAsync type:', typeof cameraRef.current.recordAsync);
+
+      try {
+        const refKeys = Object.keys(cameraRef.current);
+        console.log('   ref keys:', refKeys.slice(0, 10)); // First 10 keys
+      } catch (e) {
+        console.log('   Cannot read ref keys:', e.message);
+      }
     }
 
     if (!cameraRef.current) {
@@ -106,7 +124,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       setRecordingTime(0);
       setIsRecording(true);
 
-      console.log('🎥 Starting video recording (output should be ready)...');
+      console.log('🎥 Starting video recording (calling recordAsync NOW)...');
 
       // Even though we waited 2 seconds, recording output can still be flaky
       // Try recording with retries and increasing waits
