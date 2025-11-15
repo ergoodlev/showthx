@@ -70,10 +70,15 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   }, [isRecording]);
 
   const handleCameraReady = () => {
+    console.log('📷 Camera onCameraReady callback fired!');
     setIsCameraReady(true);
   };
 
   const handleStartRecording = async () => {
+    console.log('🎬 handleStartRecording called');
+    console.log('   cameraRef.current:', cameraRef.current ? '✅ exists' : '❌ null');
+    console.log('   isCameraReady:', isCameraReady);
+
     if (!cameraRef.current) {
       setError('Camera not available');
       return;
