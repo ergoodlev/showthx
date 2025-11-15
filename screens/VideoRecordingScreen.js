@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Camera, CameraType } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -25,23 +25,31 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const giftId = route?.params?.giftId;
   const giftName = route?.params?.giftName;
 
-  // Camera state
+  // Camera state - using OLD API that works
   const cameraRef = useRef(null);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [isCameraReady, setIsCameraReady] = useState(false);
-  const [isRecordingReady, setIsRecordingReady] = useState(false); // KEY: Recording output ready
-  const [facing, setFacing] = useState('front');
+  const [hasPermission, setHasPermission] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedUri, setRecordedUri] = useState(null);
 
   // UI state
   const [recordingTime, setRecordingTime] = useState(0);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const recordingIntervalRef = useRef(null);
 
-  // Permission is requested just-in-time (when user clicks Record), not on mount
-  // This prevents timing issues with iOS permission requests
+  // Request camera permissions on mount (OLD API)
+  useEffect(() => {
+    requestCameraPermissions();
+  }, []);
+
+  const requestCameraPermissions = async () => {
+    try {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+      console.log('📷 Camera permission status:', status);
+    } catch (err) {
+      console.error('❌ Permission request error:', err);
+    }
+  };
 
   // Recording timer
   useEffect(() => {
@@ -70,127 +78,38 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     };
   }, [isRecording]);
 
-  const handleCameraReady = () => {
-    console.log('📷 Camera PREVIEW is ready - user can see themselves');
-    console.log('   Time:', new Date().toISOString());
-    console.log('   isCameraReady (before):', isCameraReady);
-    console.log('   isRecordingReady (before):', isRecordingReady);
-    console.log('   cameraRef.current exists:', !!cameraRef.current);
-
-    // If this fires multiple times, it means camera is remounting!
-    if (isCameraReady) {
-      console.warn('⚠️  WARNING: onCameraReady fired AGAIN! Camera may have remounted!');
-      return;
-    }
-
-    setIsCameraReady(true);
-
-    // CRITICAL INSIGHT: onCameraReady fires when camera PREVIEW is ready,
-    // but the RECORDING OUTPUT needs longer to initialize (not just 2 seconds).
-    // Wait 5 seconds to give recording output time to initialize
-    console.log('⏳ Waiting 5000ms for recording OUTPUT to fully initialize...');
-    setTimeout(() => {
-      console.log('🎥 Recording OUTPUT should be ready - showing record button');
-      console.log('   Setting isRecordingReady = true');
-      setIsRecordingReady(true);
-    }, 5000);
-  };
-
   const handleStartRecording = async () => {
-    console.log('🎬 handleStartRecording called');
-    console.log('   isRecordingReady:', isRecordingReady);
-
-    // CRITICAL: Only allow recording after output has been initialized
-    if (!isRecordingReady) {
-      setError('Camera is still initializing. Please wait...');
-      return;
-    }
-
-    // DEBUG: Validate the camera ref thoroughly
-    console.log('🔍 REF VALIDATION:');
-    console.log('   cameraRef exists:', !!cameraRef);
-    console.log('   cameraRef.current exists:', !!cameraRef.current);
-    console.log('   typeof cameraRef.current:', typeof cameraRef.current);
-
-    if (cameraRef.current) {
-      console.log('   recordAsync exists:', !!cameraRef.current.recordAsync);
-      console.log('   recordAsync type:', typeof cameraRef.current.recordAsync);
-
-      try {
-        const refKeys = Object.keys(cameraRef.current);
-        console.log('   ref keys:', refKeys.slice(0, 10)); // First 10 keys
-      } catch (e) {
-        console.log('   Cannot read ref keys:', e.message);
-      }
-    }
-
     if (!cameraRef.current) {
-      setError('Camera component not mounted');
+      setError('Camera not available');
       return;
     }
 
     try {
-      setLoading(true);
       setError(null);
       setRecordingTime(0);
+
+      console.log('🎥 Starting video recording with OLD Camera API...');
       setIsRecording(true);
 
-      console.log('🎥 Starting video recording (calling recordAsync NOW)...');
+      const video = await cameraRef.current.recordAsync({
+        maxDuration: isKidsEdition ? 60 : 120,
+      });
 
-      // Even though we waited 2 seconds, recording output can still be flaky
-      // Try recording with retries and increasing waits
-      let video = null;
-      let lastError = null;
-      const maxRetries = 3;
-
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          console.log(`📹 Recording attempt ${attempt}/${maxRetries}...`);
-          video = await cameraRef.current.recordAsync({
-            maxDuration: isKidsEdition ? 60 : 120,
-            maxFileSize: 100 * 1024 * 1024, // 100MB
-            quality: '720p',
-          });
-          console.log('✅ Video recorded successfully:', video);
-          break; // Success!
-        } catch (err) {
-          lastError = err;
-          console.warn(`⚠️  Recording attempt ${attempt} failed:`, err.message);
-          console.warn(`   Error code:`, err.code);
-
-          if (attempt < maxRetries) {
-            // Wait longer before retry
-            const waitTime = 2000 + attempt * 1000; // 3s, 4s
-            console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-          }
-        }
-      }
-
-      if (!video) {
-        throw lastError || new Error('Failed to record video after retries');
-      }
-
+      console.log('✅ Video recorded successfully:', video);
       setRecordedUri(video.uri);
       setIsRecording(false);
     } catch (err) {
       console.error('❌ Recording error:', err);
-      console.error('   Error code:', err.code);
       setError('Error recording video: ' + err.message);
       setIsRecording(false);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleStopRecording = async () => {
-    // recordAsync() completes when user releases button or max duration reached
-    // This is just a state update to show recording stopped
-    setIsRecording(false);
-  };
-
-  const handleFlipCamera = () => {
-    setFacing((f) => (f === 'front' ? 'back' : 'front'));
+    if (cameraRef.current && isRecording) {
+      cameraRef.current.stopRecording();
+      setIsRecording(false);
+    }
   };
 
   const handleDeleteRecording = () => {
@@ -213,7 +132,22 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   };
 
   // Permission not granted
-  if (!permission?.granted) {
+  if (hasPermission === null) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
+        <AppBar
+          title="Record Thank You"
+          onBackPress={() => navigation?.goBack()}
+          showBack={true}
+        />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ color: theme.neutralColors.dark }}>Requesting camera access...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!hasPermission) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
         <AppBar
@@ -292,11 +226,10 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       <View style={{ flex: 1, backgroundColor: '#000000' }}>
         {!recordedUri ? (
           <>
-            <CameraView
+            <Camera
               ref={cameraRef}
-              facing={facing}
-              onCameraReady={handleCameraReady}
               style={{ flex: 1 }}
+              type={CameraType.front}
             />
 
             {/* Recording Info Overlay */}
@@ -330,54 +263,6 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
               >
                 Say thank you! {isRecording && `(${recordingTime}s)`}
               </Text>
-
-              {/* Camera Status Indicator */}
-              {!isCameraReady && (
-                <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center' }}>
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: '#FFD93D',
-                      marginRight: 8,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      color: '#FFD93D',
-                      fontSize: isKidsEdition ? 12 : 11,
-                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                    }}
-                  >
-                    Preparing camera...
-                  </Text>
-                </View>
-              )}
-
-              {/* Recording Output Status Indicator */}
-              {isCameraReady && !isRecordingReady && (
-                <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center' }}>
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: '#FF6B6B',
-                      marginRight: 8,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      color: '#FF6B6B',
-                      fontSize: isKidsEdition ? 12 : 11,
-                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                    }}
-                  >
-                    Preparing recording...
-                  </Text>
-                </View>
-              )}
             </View>
           </>
         ) : (
@@ -468,7 +353,6 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
             {/* Record Button - Large Circle */}
             <TouchableOpacity
-              disabled={!isRecordingReady || loading}
               onPress={isRecording ? handleStopRecording : handleStartRecording}
               style={{
                 width: isKidsEdition ? 80 : 72,
@@ -482,7 +366,6 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 shadowOpacity: 0.3,
                 shadowRadius: 8,
                 elevation: 8,
-                opacity: !isRecordingReady || loading ? 0.5 : 1,
               }}
             >
               {isRecording ? (
