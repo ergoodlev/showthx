@@ -122,19 +122,21 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
       // CRITICAL FIX: Permission is requested BEFORE navigating to this screen
       // (in KidPendingGiftsScreen.handleRecordGift)
-      // This matches the ShowThx pattern and ensures the camera is fully
-      // initialized with proper hardware access when this screen mounts.
-      // Just give it extra time after onCameraReady fires to be absolutely ready.
-      console.log('⏳ Waiting 2000ms for camera hardware to be fully ready...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      //
+      // KEY INSIGHT FROM LOGS: onCameraReady fires, but recordAsync fails with
+      // ERR_CAMERA_OUTPUT_NOT_READY - the camera VIEW is ready but the RECORDING
+      // OUTPUT (encoder/file writer) is NOT initialized yet.
+      // This requires MUCH longer than the camera view initialization.
+      console.log('⏳ Waiting 5000ms for camera recording output to initialize...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       console.log('🎥 Starting video recording with recordAsync()...');
       setIsRecording(true);
 
-      // Retry logic for recordAsync - camera readiness is finicky on iOS
+      // Retry logic for recordAsync - recording output is very finicky on iOS
       let video = null;
       let lastError = null;
-      const maxRetries = 3;
+      const maxRetries = 5;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -154,8 +156,9 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
           console.warn(`   Full error:`, JSON.stringify(err, null, 2));
 
           if (attempt < maxRetries) {
-            // Wait longer between retries (1000ms, 1500ms)
-            const waitTime = 1000 + attempt * 500;
+            // Wait much longer between retries - output initialization is slow
+            // Exponential: 3000ms, 5000ms, 7000ms, 9000ms
+            const waitTime = 1000 + attempt * 2000;
             console.log(`⏳ Waiting ${waitTime}ms before retry...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
