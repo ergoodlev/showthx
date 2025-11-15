@@ -1,6 +1,6 @@
 /**
  * ParentDashboardScreen
- * Main parent hub with tabs: Events, Pending Videos, Settings
+ * Main parent hub with tabs: Events, Children, Videos, Settings
  */
 
 import React, { useState, useCallback } from 'react';
@@ -14,9 +14,11 @@ import {
   FlatList,
   RefreshControl,
   Alert,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
@@ -28,6 +30,7 @@ import { logoutAndReturnToAuth } from '../services/navigationService';
 
 const TABS = {
   EVENTS: 'events',
+  CHILDREN: 'children',
   VIDEOS: 'videos',
   SETTINGS: 'settings',
 };
@@ -40,6 +43,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState(TABS.EVENTS);
   const [parentData, setParentData] = useState(null);
   const [events, setEvents] = useState([]);
+  const [children, setChildren] = useState([]);
   const [pendingVideos, setPendingVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,19 +91,29 @@ export const ParentDashboardScreen = ({ navigation }) => {
       if (eventsError) throw eventsError;
       setEvents(eventList || []);
 
+      // Load children
+      const { data: childList, error: childrenError } = await supabase
+        .from('children')
+        .select('id, name, age, access_code, created_at')
+        .eq('parent_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (childrenError) throw childrenError;
+      setChildren(childList || []);
+
       // Load pending videos
       const { data: videoList, error: videosError } = await supabase
         .from('videos')
         .select(`
           id,
           status,
-          recorded_at,
-          kid:children(name),
-          gift:gifts(name, giver_name)
+          created_at,
+          child_id,
+          gift_id
         `)
         .eq('parent_id', user.id)
         .eq('status', 'pending_approval')
-        .order('recorded_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (videosError) throw videosError;
       setPendingVideos(videoList || []);
@@ -140,6 +154,10 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
   const handleCreateEvent = () => {
     navigation?.navigate('EventManagement', { mode: 'create' });
+  };
+
+  const handleCreateChild = () => {
+    navigation?.navigate('ManageChildren', { mode: 'create' });
   };
 
   const handleEventPress = (event) => {
@@ -422,6 +440,30 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
       <TouchableOpacity
         style={{
+          backgroundColor: theme.brandColors.teal,
+          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+          paddingVertical: theme.spacing.md,
+          marginBottom: theme.spacing.lg,
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+        onPress={() => navigation?.navigate('GuestManagement')}
+      >
+        <Ionicons name="document-outline" size={20} color="#FFFFFF" style={{ marginRight: theme.spacing.sm }} />
+        <Text
+          style={{
+            color: '#FFFFFF',
+            fontSize: isKidsEdition ? 16 : 14,
+            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+          }}
+        >
+          Manage Guests & Import CSV
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={{
           backgroundColor: theme.semanticColors.error,
           borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
           paddingVertical: theme.spacing.md,
@@ -455,6 +497,155 @@ export const ParentDashboardScreen = ({ navigation }) => {
         ThankCast v1.0.0
       </Text>
     </ScrollView>
+  );
+
+  const renderChildrenTab = () => (
+    <FlatList
+      data={children}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <View
+          style={{
+            marginHorizontal: theme.spacing.md,
+            marginVertical: theme.spacing.sm,
+            backgroundColor: theme.neutralColors.white,
+            borderColor: theme.neutralColors.lightGray,
+            borderWidth: 1,
+            borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+            padding: theme.spacing.md,
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 16 : 14,
+                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                  color: theme.neutralColors.dark,
+                }}
+              >
+                {item.name}
+              </Text>
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 12 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.neutralColors.mediumGray,
+                  marginTop: 4,
+                }}
+              >
+                Age {item.age}
+              </Text>
+              <View
+                style={{
+                  marginTop: theme.spacing.sm,
+                  backgroundColor: theme.brandColors.coral,
+                  paddingHorizontal: theme.spacing.sm,
+                  paddingVertical: 4,
+                  borderRadius: 4,
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 12 : 10,
+                    fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                    color: '#FFFFFF',
+                  }}
+                >
+                  Login Code: {item.access_code}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              <TouchableOpacity
+                onPress={() => {
+                  Share.share({
+                    message: `${item.name}'s Login Code: ${item.access_code}\n\nShare this with ${item.name} so they can log in to GratituGram!`,
+                  });
+                }}
+                style={{
+                  backgroundColor: theme.brandColors.teal,
+                  paddingHorizontal: theme.spacing.md,
+                  paddingVertical: theme.spacing.sm,
+                  borderRadius: 4,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="share-social" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation?.navigate('ManageChildren', { mode: 'edit', child: item })}
+                style={{
+                  backgroundColor: theme.brandColors.coral,
+                  paddingHorizontal: theme.spacing.md,
+                  paddingVertical: theme.spacing.sm,
+                  borderRadius: 4,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="pencil" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+      ListHeaderComponent={
+        <>
+          {error && (
+            <ErrorMessage
+              message={error}
+              onDismiss={() => setError(null)}
+              style={{ margin: theme.spacing.md }}
+            />
+          )}
+          <View
+            style={{
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: theme.spacing.md,
+              marginBottom: theme.spacing.sm,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.neutralColors.dark,
+                fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                fontSize: isKidsEdition ? 16 : 14,
+                fontWeight: '600',
+              }}
+            >
+              {children.length === 0 ? 'No children yet' : children.length + ' child' + (children.length !== 1 ? 'ren' : '')}
+            </Text>
+          </View>
+        </>
+      }
+      ListEmptyComponent={
+        !loading ? (
+          <View style={{ paddingHorizontal: theme.spacing.md, paddingVertical: 60, alignItems: 'center' }}>
+            <Ionicons
+              name="people-outline"
+              size={64}
+              color={theme.neutralColors.lightGray}
+              style={{ marginBottom: theme.spacing.md }}
+            />
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 16 : 14,
+                color: theme.neutralColors.mediumGray,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                textAlign: 'center',
+              }}
+            >
+              No children yet. Add one to get started!
+            </Text>
+          </View>
+        ) : null
+      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={{ paddingTop: theme.spacing.md }}
+    />
   );
 
   return (
@@ -508,12 +699,13 @@ export const ParentDashboardScreen = ({ navigation }) => {
           </View>
 
           {activeTab === TABS.EVENTS && renderEventsTab()}
+          {activeTab === TABS.CHILDREN && renderChildrenTab()}
           {activeTab === TABS.VIDEOS && renderVideosTab()}
           {activeTab === TABS.SETTINGS && renderSettingsTab()}
         </View>
       )}
 
-      {activeTab === TABS.EVENTS && !loading && (
+      {(activeTab === TABS.EVENTS || activeTab === TABS.CHILDREN) && !loading && (
         <TouchableOpacity
           style={{
             position: 'absolute',
@@ -531,7 +723,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
             shadowRadius: 8,
             elevation: 8,
           }}
-          onPress={handleCreateEvent}
+          onPress={activeTab === TABS.EVENTS ? handleCreateEvent : handleCreateChild}
         >
           <Ionicons name="add" size={isKidsEdition ? 32 : 28} color="#FFFFFF" />
         </TouchableOpacity>
