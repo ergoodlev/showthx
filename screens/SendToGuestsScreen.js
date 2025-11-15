@@ -18,6 +18,7 @@ import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
+import { supabase } from '../supabaseClient';
 import { sendVideoToGuests } from '../services/emailService';
 import { updateGift } from '../services/databaseService';
 
@@ -38,17 +39,37 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
     const fetchGuests = async () => {
       try {
         setFetchingGuests(true);
-        // In production, fetch from Supabase based on giftId -> eventId -> guests
-        // For now, mock data
-        setGuests([
-          { id: '1', name: 'Grandma', email: 'grandma@example.com' },
-          { id: '2', name: 'Uncle Bob', email: 'uncle.bob@example.com' },
-          { id: '3', name: 'Aunt Sarah', email: 'aunt.sarah@example.com' },
-          { id: '4', name: 'Cousin Mike', email: 'cousin.mike@example.com' },
-          { id: '5', name: 'Best Friend Alex', email: 'alex@example.com' },
-        ]);
+
+        // First, get the gift to find the parent_id
+        const { data: giftData, error: giftError } = await supabase
+          .from('gifts')
+          .select('parent_id')
+          .eq('id', giftId)
+          .single();
+
+        if (giftError) throw giftError;
+
+        if (!giftData) {
+          console.warn('Gift not found');
+          setGuests([]);
+          setFetchingGuests(false);
+          return;
+        }
+
+        // Fetch guests for this parent
+        const { data: guestData, error: guestError } = await supabase
+          .from('guests')
+          .select('*')
+          .eq('parent_id', giftData.parent_id)
+          .order('created_at', { ascending: false });
+
+        if (guestError) throw guestError;
+
+        console.log('✅ Loaded guests for parent:', guestData?.length || 0);
+        setGuests(guestData || []);
       } catch (error) {
         console.error('Error fetching guests:', error);
+        setGuests([]);
       } finally {
         setFetchingGuests(false);
       }
