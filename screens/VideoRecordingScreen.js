@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Camera, CameraType } from 'expo-camera';
+import { Camera } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -229,7 +229,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             <Camera
               ref={cameraRef}
               style={{ flex: 1 }}
-              type={CameraType.front}
+              type="front"
             />
 
             {/* Recording Info Overlay */}
