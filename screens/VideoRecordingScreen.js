@@ -78,7 +78,15 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   };
 
   const handleStartRecording = async () => {
-    if (!cameraRef.current || !isCameraReady) return;
+    if (!cameraRef.current) {
+      setError('Camera not available');
+      return;
+    }
+
+    if (!isCameraReady) {
+      setError('Camera is initializing... please wait a moment and try again');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -86,19 +94,46 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       setIsRecording(true);
       setRecordingTime(0);
 
-      // Start recording
-      const video = await cameraRef.current.recordAsync({
-        maxDuration: isKidsEdition ? 60 : 120,
-        maxFileSize: 100 * 1024 * 1024, // 100MB
-        quality: '720p',
-      });
+      console.log('🎥 Starting video recording...');
+
+      // Wait longer for camera to be fully ready (expo-camera timing issue)
+      // Increased from 300ms to 1000ms for better reliability
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Start recording with retry logic (increased retries from 3 to 5)
+      let video = null;
+      let retries = 5;
+      let lastError = null;
+
+      while (retries > 0 && !video) {
+        try {
+          video = await cameraRef.current.recordAsync({
+            maxDuration: isKidsEdition ? 60 : 120,
+            maxFileSize: 100 * 1024 * 1024, // 100MB
+            quality: '720p',
+          });
+          console.log('✅ Video recorded successfully:', video);
+        } catch (err) {
+          lastError = err;
+          retries--;
+          if (retries > 0) {
+            console.warn(`⚠️  Recording attempt failed, retrying... (${retries} attempts left)`);
+            // Wait before retrying (increased from 200ms to 300ms)
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        }
+      }
+
+      if (!video && lastError) {
+        throw lastError;
+      }
 
       if (video) {
         setRecordedUri(video.uri);
         setIsRecording(false);
       }
     } catch (err) {
-      console.error('Recording error:', err);
+      console.error('❌ Recording error:', err);
       setError('Error recording video: ' + err.message);
       setIsRecording(false);
     } finally {
@@ -258,6 +293,30 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
               >
                 Say thank you! {isRecording && `(${recordingTime}s)`}
               </Text>
+
+              {/* Camera Status Indicator */}
+              {!isCameraReady && (
+                <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center' }}>
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: '#FFD93D',
+                      marginRight: 8,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      color: '#FFD93D',
+                      fontSize: isKidsEdition ? 12 : 11,
+                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                    }}
+                  >
+                    Preparing camera...
+                  </Text>
+                </View>
+              )}
             </View>
           </>
         ) : (
@@ -348,7 +407,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
             {/* Record Button - Large Circle */}
             <TouchableOpacity
-              disabled={!isCameraReady}
+              disabled={!isCameraReady || loading}
               onPress={isRecording ? handleStopRecording : handleStartRecording}
               style={{
                 width: isKidsEdition ? 80 : 72,
@@ -362,6 +421,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 shadowOpacity: 0.3,
                 shadowRadius: 8,
                 elevation: 8,
+                opacity: !isCameraReady || loading ? 0.5 : 1,
               }}
             >
               {isRecording ? (
