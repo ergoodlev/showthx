@@ -72,7 +72,17 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
   const handleCameraReady = () => {
     console.log('📷 Camera PREVIEW is ready - user can see themselves');
-    console.log('   permission.granted:', permission?.granted);
+    console.log('   Time:', new Date().toISOString());
+    console.log('   isCameraReady (before):', isCameraReady);
+    console.log('   isRecordingReady (before):', isRecordingReady);
+    console.log('   cameraRef.current exists:', !!cameraRef.current);
+
+    // If this fires multiple times, it means camera is remounting!
+    if (isCameraReady) {
+      console.warn('⚠️  WARNING: onCameraReady fired AGAIN! Camera may have remounted!');
+      return;
+    }
+
     setIsCameraReady(true);
 
     // CRITICAL INSIGHT: onCameraReady fires when camera PREVIEW is ready,
@@ -81,6 +91,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     console.log('⏳ Waiting 5000ms for recording OUTPUT to fully initialize...');
     setTimeout(() => {
       console.log('🎥 Recording OUTPUT should be ready - showing record button');
+      console.log('   Setting isRecordingReady = true');
       setIsRecordingReady(true);
     }, 5000);
   };
