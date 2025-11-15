@@ -69,8 +69,13 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   }, [isRecording, isKidsEdition]);
 
   const handleCameraReady = () => {
-    console.log('📷 Camera is ready');
-    setCameraReady(true);
+    console.log('📷 Camera onCameraReady callback fired - waiting for recording output to initialize...');
+    // Wait 2 seconds to ensure recording output stream is fully initialized
+    // onCameraReady fires early, before the recording encoder is ready
+    setTimeout(() => {
+      console.log('✅ Recording output should now be ready');
+      setCameraReady(true);
+    }, 2000);
   };
 
   const handleStartRecording = async () => {
@@ -87,9 +92,14 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       console.log('🎥 Starting video recording...');
       setIsRecording(true);
 
-      const video = await cameraRef.current.recordAsync({
-        maxDuration: isKidsEdition ? 60 : 120,
-      });
+      // Wait a moment before calling recordAsync to ensure the camera encoder is ready
+      console.log('⏳ Waiting 500ms before starting recording...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // NOTE: Do NOT pass options to recordAsync() - some versions of expo-camera
+      // have issues with maxDuration parameter. We rely on manual stop via UI.
+      console.log('📹 Calling recordAsync...');
+      const video = await cameraRef.current.recordAsync();
 
       console.log('✅ Video recorded successfully:', video);
       setRecordedUri(video.uri);
