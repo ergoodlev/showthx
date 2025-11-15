@@ -39,12 +39,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const [error, setError] = useState(null);
   const recordingIntervalRef = useRef(null);
 
-  // Request camera permission on mount
-  useEffect(() => {
-    if (!permission) {
-      requestPermission();
-    }
-  }, [permission]);
+  // Permission is requested just-in-time (when user clicks Record), not on mount
+  // This prevents timing issues with iOS permission requests
 
   // Recording timer
   useEffect(() => {
@@ -83,20 +79,36 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       return;
     }
 
-    if (!isCameraReady) {
-      setError('Camera is initializing... please wait a moment and try again');
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
       setRecordingTime(0);
 
-      console.log('🎥 Starting video recording with startRecording()...');
+      console.log('🎥 Requesting camera permission just-in-time...');
 
-      // Extra wait to ensure camera hardware is truly ready
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // REQUEST PERMISSION JUST-IN-TIME (key fix from previous iteration)
+      // Don't request on mount - request right when user clicks Record
+      if (!permission?.granted) {
+        console.log('📋 Permission not granted, requesting now...');
+        const result = await requestPermission();
+
+        if (!result.granted) {
+          setError('Camera permission required to record video');
+          setLoading(false);
+          return;
+        }
+        console.log('✅ Permission granted');
+      } else {
+        console.log('✅ Permission already granted');
+      }
+
+      // Now wait for camera to be truly ready
+      if (!isCameraReady) {
+        console.log('⏳ Waiting for camera to initialize...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      console.log('🎥 Starting video recording with startRecording()...');
 
       // Use startRecording() instead of recordAsync() - more reliable pattern
       await cameraRef.current.startRecording({
