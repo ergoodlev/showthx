@@ -22,6 +22,7 @@ import { GiftCard } from '../components/GiftCard';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { supabase } from '../supabaseClient';
+import { logoutAndReturnToAuth } from '../services/navigationService';
 
 export const KidPendingGiftsScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
@@ -51,47 +52,70 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
       const storedKidName = await AsyncStorage.getItem('kidName');
 
       if (!storedKidId) {
-        navigation?.replace('KidPINLogin');
+        await logoutAndReturnToAuth();
         return;
       }
 
       setKidId(storedKidId);
       setKidName(storedKidName || 'Friend');
 
-      // Load assigned gifts
+      // Load assigned gifts (with gift details)
+      console.log('🎁 Loading gifts for child:', storedKidId);
+
       const { data: giftsData, error: giftsError } = await supabase
         .from('gift_assignments')
         .select(
           `
+          gift_id,
           gift:gifts(
             id,
             name,
             giver_name,
             event_id,
             event:events(name)
-          ),
-          video:videos(
-            id,
-            status,
-            recorded_at
           )
         `
         )
         .eq('children_id', storedKidId);
 
+      console.log('📦 Gift assignments query result:', { giftsData, giftsError });
+
       if (giftsError) throw giftsError;
+
+      // Load videos for this kid (to match with gifts)
+      console.log('🎬 Loading videos for child:', storedKidId);
+
+      const { data: videosData, error: videosError } = await supabase
+        .from('videos')
+        .select('gift_id, id, status, recorded_at')
+        .eq('child_id', storedKidId);
+
+      console.log('📹 Videos query result:', { videosData, videosError });
+
+      if (videosError) throw videosError;
+
+      // Create a map of gift_id -> video for quick lookup
+      const videosByGiftId = {};
+      videosData?.forEach((video) => {
+        if (!videosByGiftId[video.gift_id]) {
+          videosByGiftId[video.gift_id] = video;
+        }
+      });
 
       // Transform data
       const transformedGifts = giftsData
-        ?.map((assignment) => ({
-          id: assignment.gift.id,
-          name: assignment.gift.name,
-          giver_name: assignment.gift.giver_name,
-          event_name: assignment.gift.event?.name,
-          status: assignment.video?.status || 'pending',
-          has_video: !!assignment.video,
-          video_id: assignment.video?.id,
-        }))
+        ?.map((assignment) => {
+          const video = videosByGiftId[assignment.gift.id];
+          return {
+            id: assignment.gift.id,
+            name: assignment.gift.name,
+            giver_name: assignment.gift.giver_name,
+            event_name: assignment.gift.event?.name,
+            status: video?.status || 'pending',
+            has_video: !!video,
+            video_id: video?.id,
+          };
+        })
         .sort((a, b) => {
           // Pending first, then recorded
           if (a.status === 'pending' && b.status !== 'pending') return -1;
@@ -145,9 +169,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
       {
         text: 'Yes',
         onPress: async () => {
-          await AsyncStorage.removeItem('kidSessionId');
-          await AsyncStorage.removeItem('kidName');
-          navigation?.replace('KidPINLogin');
+          await logoutAndReturnToAuth();
         },
         style: 'destructive',
       },
