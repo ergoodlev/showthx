@@ -77,10 +77,23 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const handleStartRecording = async () => {
     console.log('🎬 handleStartRecording called');
     console.log('   cameraRef.current:', cameraRef.current ? '✅ exists' : '❌ null');
+    console.log('   cameraRef.current.recordAsync:', cameraRef.current?.recordAsync ? '✅ exists' : '❌ missing');
     console.log('   isCameraReady:', isCameraReady);
 
+    // CRITICAL: Don't proceed if camera component isn't mounted
     if (!cameraRef.current) {
-      setError('Camera not available');
+      setError('Camera component not mounted');
+      return;
+    }
+
+    if (!cameraRef.current.recordAsync) {
+      setError('Camera recordAsync method not available');
+      return;
+    }
+
+    // CRITICAL: Don't proceed if camera isn't ready
+    if (!isCameraReady) {
+      setError('Camera is still initializing. Please wait.');
       return;
     }
 
@@ -91,8 +104,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
       console.log('🎥 Requesting camera permission just-in-time...');
 
-      // REQUEST PERMISSION JUST-IN-TIME (key fix from previous iteration)
-      // Don't request on mount - request right when user clicks Record
+      // REQUEST PERMISSION JUST-IN-TIME - but ONLY request if not already granted
+      // Requesting permission while camera is active might interrupt initialization
       if (!permission?.granted) {
         console.log('📋 Permission not granted, requesting now...');
         const result = await requestPermission();
@@ -107,17 +120,18 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
         console.log('✅ Permission already granted');
       }
 
-      // Always wait - even if onCameraReady fired, hardware may not be fully ready
-      console.log('⏳ Waiting for camera hardware to be fully ready (1500ms)...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // CRITICAL: Wait longer after onCameraReady fires
+      // The callback fires but camera needs MORE time to be ready for recording
+      console.log('⏳ Waiting 2000ms for camera to be fully ready for recording...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       console.log('🎥 Starting video recording with recordAsync()...');
       setIsRecording(true);
 
-      // Retry logic for recordAsync - camera readiness is finicky
+      // Retry logic for recordAsync - camera readiness is finicky on iOS
       let video = null;
       let lastError = null;
-      const maxRetries = 5;
+      const maxRetries = 3;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -134,8 +148,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
           console.warn(`⚠️  Recording attempt ${attempt} failed: ${err.message}`);
 
           if (attempt < maxRetries) {
-            // Wait before retrying (exponential backoff: 300ms, 500ms, 700ms, 900ms)
-            const waitTime = 300 + attempt * 200;
+            // Wait longer between retries (1000ms, 1500ms)
+            const waitTime = 1000 + attempt * 500;
             console.log(`⏳ Waiting ${waitTime}ms before retry...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
