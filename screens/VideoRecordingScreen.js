@@ -1,16 +1,16 @@
 /**
- * VideoRecordingScreen - FINAL WORKING VERSION
+ * VideoRecordingScreen - v15 API with Opus's Retry Logic
  *
- * Clean implementation with retry logic for expo-camera v17
- * No expo-av imports - only expo-camera
+ * Combines the robust retry mechanism from Opus with expo-camera v15 API
+ * v15 doesn't have the front camera encoder bug present in v17
  */
 
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-// IMPORTANT: Only import from expo-camera, NOT expo-av
-import { CameraView, useCameraPermissions } from 'expo-camera';
+// v15 API: use Camera component and direct permission method
+import { Camera } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { ErrorMessage } from '../components/ErrorMessage';
@@ -23,7 +23,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
   // Camera state
   const cameraRef = useRef(null);
-  const [permission, requestPermission] = useCameraPermissions();
+  const [hasPermission, setHasPermission] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedUri, setRecordedUri] = useState(null);
@@ -40,13 +40,12 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
   // Request camera permissions on mount
   useEffect(() => {
-    if (!permission) {
-      console.log('📷 Camera permission status:', permission?.status);
-      requestPermission();
-    } else {
-      console.log('📷 Camera permission status:', permission.status);
-    }
-  }, [permission, requestPermission]);
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+      console.log('📷 Camera permission status:', status);
+    })();
+  }, []);
 
   // Initialize camera with delay when ready
   useEffect(() => {
@@ -150,13 +149,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
     } catch (err) {
       console.error('❌ Recording failed after all retries:', err);
-      setError('Unable to start recording. Please try using the rear camera.');
+      setError('Unable to start recording. Please try again.');
       setIsRecording(false);
-
-      // Suggest using rear camera as fallback
-      setTimeout(() => {
-        setError('Tip: Try switching to rear camera in settings if front camera fails.');
-      }, 2000);
     }
   };
 
@@ -192,7 +186,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   };
 
   // Permission loading
-  if (!permission) {
+  if (hasPermission === null) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
         <AppBar title="Record Thank You" onBackPress={() => navigation?.goBack()} showBack={true} />
@@ -211,7 +205,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   }
 
   // Permission denied
-  if (!permission.granted) {
+  if (!hasPermission) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
         <AppBar title="Record Thank You" onBackPress={() => navigation?.goBack()} showBack={true} />
@@ -241,7 +235,10 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             GratituGram needs camera access to record thank you videos
           </Text>
           <TouchableOpacity
-            onPress={requestPermission}
+            onPress={async () => {
+              const { status } = await Camera.requestCameraPermissionsAsync();
+              setHasPermission(status === 'granted');
+            }}
             style={{
               backgroundColor: theme.brandColors.coral,
               paddingHorizontal: 32,
@@ -280,12 +277,12 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       <View style={{ flex: 1, backgroundColor: '#000000' }}>
         {!recordedUri ? (
           <>
-            <CameraView
+            {/* v15 API: Camera component with type prop as string literal */}
+            <Camera
               ref={cameraRef}
               style={{ flex: 1 }}
-              facing="front"
+              type="front"
               onCameraReady={handleCameraReady}
-              video={true}
             />
 
             {/* Initialization overlay */}

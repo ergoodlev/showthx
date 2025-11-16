@@ -13,7 +13,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+// v15 API: use Camera component
+import { Camera } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function GiftOpeningCaptureScreen({
@@ -22,7 +23,7 @@ export default function GiftOpeningCaptureScreen({
   onVideoCaptured,
   onCancel,
 }) {
-  const [permission, requestPermission] = useCameraPermissions();
+  const [hasPermission, setHasPermission] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
@@ -31,10 +32,11 @@ export default function GiftOpeningCaptureScreen({
   const intervalRef = useRef(null);
 
   useEffect(() => {
-    if (!permission) {
-      requestPermission();
-    }
-  }, [permission, requestPermission]);
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
 
   useEffect(() => {
     if (isRecording) {
@@ -98,7 +100,7 @@ export default function GiftOpeningCaptureScreen({
     }
   };
 
-  if (!permission) {
+  if (hasPermission === null) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#14B8A6" />
@@ -106,7 +108,7 @@ export default function GiftOpeningCaptureScreen({
     );
   }
 
-  if (!permission.granted) {
+  if (!hasPermission) {
     return (
       <View style={styles.container}>
         <View style={styles.permissionContainer}>
@@ -117,7 +119,10 @@ export default function GiftOpeningCaptureScreen({
           </Text>
           <TouchableOpacity
             style={styles.permissionButton}
-            onPress={requestPermission}
+            onPress={async () => {
+              const { status } = await Camera.requestCameraPermissionsAsync();
+              setHasPermission(status === 'granted');
+            }}
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
           </TouchableOpacity>
@@ -128,12 +133,12 @@ export default function GiftOpeningCaptureScreen({
 
   return (
     <View style={styles.container}>
-      <CameraView
+      {/* v15 API: Camera component with type prop as string literal */}
+      <Camera
         ref={cameraRef}
         style={styles.camera}
-        facing="back"
+        type="back"
         onCameraReady={() => setCameraReady(true)}
-        video={true}
       />
 
       {/* Overlay with instructions */}
