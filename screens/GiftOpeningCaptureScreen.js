@@ -13,7 +13,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function GiftOpeningCaptureScreen({
@@ -22,8 +22,7 @@ export default function GiftOpeningCaptureScreen({
   onVideoCaptured,
   onCancel,
 }) {
-  const [hasPermission, setHasPermission] = useState(null);
-  const [permissionError, setPermissionError] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
   const [isRecording, setIsRecording] = useState(false);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
@@ -31,16 +30,11 @@ export default function GiftOpeningCaptureScreen({
   const durationRef = useRef(0);
   const intervalRef = useRef(null);
 
-  // Request camera permissions on mount
   useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-      if (status !== 'granted') {
-        setPermissionError(true);
-      }
-    })();
-  }, []);
+    if (!permission) {
+      requestPermission();
+    }
+  }, [permission, requestPermission]);
 
   useEffect(() => {
     if (isRecording) {
@@ -104,7 +98,7 @@ export default function GiftOpeningCaptureScreen({
     }
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#14B8A6" />
@@ -112,7 +106,7 @@ export default function GiftOpeningCaptureScreen({
     );
   }
 
-  if (!hasPermission) {
+  if (!permission.granted) {
     return (
       <View style={styles.container}>
         <View style={styles.permissionContainer}>
@@ -123,10 +117,7 @@ export default function GiftOpeningCaptureScreen({
           </Text>
           <TouchableOpacity
             style={styles.permissionButton}
-            onPress={async () => {
-              const { status } = await Camera.requestCameraPermissionsAsync();
-              setHasPermission(status === 'granted');
-            }}
+            onPress={requestPermission}
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
           </TouchableOpacity>
@@ -137,11 +128,12 @@ export default function GiftOpeningCaptureScreen({
 
   return (
     <View style={styles.container}>
-      <Camera
+      <CameraView
         ref={cameraRef}
         style={styles.camera}
-        type={Camera.Constants.Type.back}
+        facing="back"
         onCameraReady={() => setCameraReady(true)}
+        video={true}
       />
 
       {/* Overlay with instructions */}
