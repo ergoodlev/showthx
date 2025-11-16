@@ -27,7 +27,7 @@ import SendSuccessScreen from '../screens/SendSuccessScreen';
 // Screen imports - Kid flows
 import KidPINLoginScreen from '../screens/KidPINLoginScreen';
 import KidPendingGiftsScreen from '../screens/KidPendingGiftsScreen';
-import VideoRecordingScreen from '../screens/VideoRecordingScreen';
+import { VideoRecordingScreen } from '../screens/VideoRecordingScreen';
 import VideoPlaybackScreen from '../screens/VideoPlaybackScreen';
 import MusicSelectionScreen from '../screens/MusicSelectionScreen';
 import VideoCustomizationScreen from '../screens/VideoCustomizationScreen';

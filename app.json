@@ -39,10 +39,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-av",
       [
-        "expo-camera",
+        "react-native-vision-camera",
         {
-          "cameraPermission": "Allow GratituGram to access your camera to record thank you videos."
+          "cameraPermissionText": "GratituGram needs access to your camera to record thank you videos.",
+          "enableMicrophonePermission": true,
+          "microphonePermissionText": "GratituGram needs access to your microphone to record audio for your thank you videos."
         }
       ]
     ],

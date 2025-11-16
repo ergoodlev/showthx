@@ -4,8 +4,8 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
@@ -22,7 +22,7 @@
     "@terrylinla/react-native-sketch-canvas": "^0.8.0",
     "expo": "~54.0.23",
     "expo-av": "~16.0.7",
-    "expo-camera": "~15.0.0",
+    "expo-camera": "^17.0.9",
     "expo-constants": "^18.0.10",
     "expo-crypto": "^15.0.7",
     "expo-document-picker": "~14.0.7",
@@ -39,6 +39,7 @@
     "react-native-screens": "4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-url-polyfill": "^2.0.0",
+    "react-native-vision-camera": "^4.7.3",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
