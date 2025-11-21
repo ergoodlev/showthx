@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "GratituGram",
-    "slug": "gratitugram",
+    "name": "ShowThx",
+    "slug": "showthx",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#A78BFA"
     },
@@ -15,11 +16,12 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.gratitugram",
+      "bundleIdentifier": "com.EricGoodlev.ShowThx",
       "infoPlist": {
-        "NSCameraUsageDescription": "GratituGram needs access to your camera to record thank you videos.",
-        "NSMicrophoneUsageDescription": "GratituGram needs access to your microphone to record audio for your thank you videos.",
-        "NSPhotoLibraryUsageDescription": "GratituGram needs access to your photo library to save and share videos."
+        "NSCameraUsageDescription": "ShowThx needs access to your camera to record thank you videos.",
+        "NSMicrophoneUsageDescription": "ShowThx needs access to your microphone to record audio for your thank you videos.",
+        "NSPhotoLibraryUsageDescription": "ShowThx needs access to your photo library to save and share videos.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,12 +29,15 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#A78BFA"
       },
-      "package": "com.yourcompany.gratitugram",
+      "package": "com.EricGoodlev.ShowThx",
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA"
       ]
     },
     "web": {
@@ -41,17 +46,24 @@
     "plugins": [
       "expo-av",
       [
-        "react-native-vision-camera",
+        "expo-camera",
         {
-          "cameraPermissionText": "GratituGram needs access to your camera to record thank you videos.",
-          "enableMicrophonePermission": true,
-          "microphonePermissionText": "GratituGram needs access to your microphone to record audio for your thank you videos."
+          "cameraPermission": "ShowThx needs access to your camera to record thank you videos.",
+          "microphonePermission": "ShowThx needs access to your microphone to record audio for your thank you videos."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-secure-store"
     ],
     "extra": {
+      "SUPABASE_URL": "@SUPABASE_URL",
+      "SUPABASE_ANON_KEY": "@SUPABASE_ANON_KEY",
       "SENDGRID_API_KEY": "@SENDGRID_API_KEY",
-      "FROM_EMAIL": "@FROM_EMAIL"
+      "FROM_EMAIL": "@FROM_EMAIL",
+      "APP_ENV": "@APP_ENV",
+      "eas": {
+        "projectId": "61a97263-4c4a-4ffb-8088-bd65957d2e06"
+      }
     }
   }
 }
