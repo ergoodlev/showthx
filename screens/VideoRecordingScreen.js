@@ -1,23 +1,20 @@
 /**
- * VideoRecordingScreen - USING REACT-NATIVE-VISION-CAMERA
- * Most reliable camera library for React Native
+ * VideoRecordingScreen - Using expo-camera
+ * Records thank you videos with front or back camera
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
   Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-
-// React Native Vision Camera
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
-
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 
@@ -28,24 +25,13 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const giftName = route?.params?.giftName;
 
   const cameraRef = useRef(null);
-  const { hasPermission, requestPermission } = useCameraPermission();
-  const device = useCameraDevice('front');
-  
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState('front');
   const [isRecording, setIsRecording] = useState(false);
   const [recordedUri, setRecordedUri] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [cameraActive, setCameraActive] = useState(true);
-  const [facing, setFacing] = useState('front');
+  const [cameraReady, setCameraReady] = useState(false);
   const recordingIntervalRef = useRef(null);
-
-  const currentDevice = useCameraDevice(facing);
-
-  // Request permissions on mount
-  useEffect(() => {
-    if (!hasPermission) {
-      requestPermission();
-    }
-  }, []);
 
   // Recording timer
   useEffect(() => {
@@ -66,32 +52,26 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   }, [isRecording]);
 
   const handleStartRecording = async () => {
-    if (!cameraRef.current) {
-      Alert.alert('Please wait', 'Camera is initializing...');
+    if (!cameraRef.current || !cameraReady) {
+      Alert.alert('Please wait', 'Camera is still initializing...');
       return;
     }
 
     try {
-      console.log('🎬 Starting recording with Vision Camera...');
+      console.log('🎬 Starting recording with expo-camera...');
       setRecordingTime(0);
       setIsRecording(true);
 
-      cameraRef.current.startRecording({
-        onRecordingFinished: (video) => {
-          console.log('✅ Recording finished!', video.path);
-          setRecordedUri(video.path);
-          setIsRecording(false);
-        },
-        onRecordingError: (error) => {
-          console.error('❌ Recording error:', error);
-          Alert.alert('Recording Error', 'Failed to record video. Please try again.');
-          setIsRecording(false);
-        },
+      const video = await cameraRef.current.recordAsync({
+        maxDuration: 60,
       });
-      
+
+      console.log('✅ Recording complete:', video.uri);
+      setRecordedUri(video.uri);
+      setIsRecording(false);
     } catch (err) {
-      console.error('❌ Failed to start recording:', err);
-      Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
+      console.error('❌ Recording failed:', err);
+      Alert.alert('Recording Error', 'Failed to record video. Please try again.');
       setIsRecording(false);
     }
   };
@@ -99,31 +79,32 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const handleStopRecording = async () => {
     if (cameraRef.current && isRecording) {
       try {
+        console.log('⏹️ Stopping recording...');
         await cameraRef.current.stopRecording();
-        console.log('⏹️ Stopped recording');
       } catch (err) {
         console.error('Error stopping recording:', err);
       }
     }
   };
 
-  const toggleCameraType = () => {
+  const toggleCameraFacing = () => {
     setFacing(current => current === 'back' ? 'front' : 'back');
   };
 
-  // Permission screens
-  if (hasPermission === null) {
+  // Permission loading
+  if (!permission) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" />
-          <Text style={{ marginTop: 10 }}>Checking camera permission...</Text>
+          <ActivityIndicator size="large" color="#FF6B6B" />
+          <Text style={{ marginTop: 10 }}>Loading camera...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (!hasPermission) {
+  // Permission not granted
+  if (!permission.granted) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
         <AppBar title="Record Thank You" onBackPress={() => navigation?.goBack()} showBack={true} />
@@ -147,18 +128,6 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     );
   }
 
-  if (!currentDevice) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-        <AppBar title="Record Thank You" onBackPress={() => navigation?.goBack()} showBack={true} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <ActivityIndicator size="large" />
-          <Text style={{ marginTop: 10 }}>Loading camera...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   // Main camera view
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
@@ -168,7 +137,6 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
           if (recordedUri) {
             setRecordedUri(null);
             setRecordingTime(0);
-            setCameraActive(true);
           } else {
             navigation?.goBack();
           }
@@ -178,18 +146,28 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
 
       {!recordedUri ? (
         <View style={{ flex: 1 }}>
-          {/* Vision Camera component */}
-          <Camera
+          {/* Camera View */}
+          <CameraView
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
-            device={currentDevice}
-            isActive={cameraActive}
-            video={true}
-            audio={true}
+            facing={facing}
+            mode="video"
+            onCameraReady={() => {
+              console.log('📷 Camera is ready');
+              setCameraReady(true);
+            }}
           />
 
+          {/* Loading indicator while camera initializes */}
+          {!cameraReady && (
+            <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+              <ActivityIndicator size="large" color="#fff" />
+              <Text style={{ color: '#fff', marginTop: 10 }}>Starting camera...</Text>
+            </View>
+          )}
+
           {/* Overlay UI */}
-          <View style={StyleSheet.absoluteFillObject}>
+          <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
             {/* Camera flip button */}
             <TouchableOpacity
               style={{
@@ -200,7 +178,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 backgroundColor: 'rgba(255,255,255,0.3)',
                 borderRadius: 25
               }}
-              onPress={toggleCameraType}
+              onPress={toggleCameraFacing}
               disabled={isRecording}
             >
               <Ionicons name="camera-reverse" size={24} color="#fff" />
@@ -232,7 +210,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             )}
 
             {/* Kid instructions */}
-            {isKidsEdition && !isRecording && (
+            {isKidsEdition && !isRecording && cameraReady && (
               <View style={{
                 position: 'absolute',
                 top: 80,
@@ -246,7 +224,6 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                   color: '#fff',
                   fontSize: 16,
                   textAlign: 'center',
-                  fontFamily: 'Nunito_Bold'
                 }}>
                   Say "Thank You" for your {giftName || 'gift'}! 🎁
                 </Text>
@@ -262,11 +239,12 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             }}>
               <TouchableOpacity
                 onPress={isRecording ? handleStopRecording : handleStartRecording}
+                disabled={!cameraReady}
                 style={{
                   width: 80,
                   height: 80,
                   borderRadius: 40,
-                  backgroundColor: isRecording ? '#ff0000' : '#FF6B6B',
+                  backgroundColor: !cameraReady ? '#888' : (isRecording ? '#ff0000' : '#FF6B6B'),
                   justifyContent: 'center',
                   alignItems: 'center',
                   borderWidth: 4,
@@ -286,7 +264,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                 marginTop: 12,
                 fontSize: 14
               }}>
-                {isRecording ? 'Tap to Stop' : 'Tap to Record'}
+                {!cameraReady ? 'Loading...' : (isRecording ? 'Tap to Stop' : 'Tap to Record')}
               </Text>
             </View>
           </View>
@@ -318,7 +296,6 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
               onPress={() => {
                 setRecordedUri(null);
                 setRecordingTime(0);
-                setCameraActive(true);
               }}
               style={{
                 paddingVertical: 12,
@@ -357,3 +334,5 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     </SafeAreaView>
   );
 };
+
+export default VideoRecordingScreen;
