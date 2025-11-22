@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
 import {
   Nunito_400Regular,
@@ -111,9 +112,11 @@ const AppContent = () => {
  */
 export default function App() {
   return (
-    <EditionProvider>
-      <AppContent />
-    </EditionProvider>
+    <SafeAreaProvider>
+      <EditionProvider>
+        <AppContent />
+      </EditionProvider>
+    </SafeAreaProvider>
   );
 }
 
