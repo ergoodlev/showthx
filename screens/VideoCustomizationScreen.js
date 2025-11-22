@@ -34,6 +34,16 @@ const TEXT_COLORS = [
   { id: 'yellow', label: 'Yellow', hex: '#FFD93D' },
 ];
 
+// Modern frame styles - clean, contemporary designs
+const FRAMES = [
+  { id: 'none', label: 'None', icon: 'remove-circle-outline' },
+  { id: 'gradient-glow', label: 'Glow', icon: 'sunny-outline', colors: ['#FF6B6B', '#FFD93D'] },
+  { id: 'neon-border', label: 'Neon', icon: 'flashlight-outline', colors: ['#00F5FF', '#FF00FF'] },
+  { id: 'soft-vignette', label: 'Soft', icon: 'ellipse-outline', colors: ['#000000'] },
+  { id: 'celebration', label: 'Party', icon: 'sparkles-outline', colors: ['#FFD700', '#FF6B6B'] },
+  { id: 'minimal', label: 'Clean', icon: 'square-outline', colors: ['#FFFFFF'] },
+];
+
 export const VideoCustomizationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
   const isKidsEdition = edition === 'kids';
@@ -50,6 +60,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
   const [overlayText, setOverlayText] = useState('');
   const [showTextPreview, setShowTextPreview] = useState(true);
   const [textPosition, setTextPosition] = useState('bottom'); // top, middle, bottom
+  const [selectedFrame, setSelectedFrame] = useState('none');
 
   const handleAddText = () => {
     if (overlayText.trim()) {
@@ -73,7 +84,53 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
       overlayText,
       textColor: selectedTextColor,
       textPosition,
+      frame: selectedFrame,
     });
+  };
+
+  // Render frame overlay based on selection
+  const renderFrameOverlay = () => {
+    const frame = FRAMES.find(f => f.id === selectedFrame);
+    if (!frame || selectedFrame === 'none') return null;
+
+    switch (selectedFrame) {
+      case 'gradient-glow':
+        return (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 40, backgroundColor: 'rgba(255,107,107,0.4)' }} />
+            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, backgroundColor: 'rgba(255,217,61,0.4)' }} />
+            <View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 8, backgroundColor: 'rgba(255,107,107,0.6)' }} />
+            <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 8, backgroundColor: 'rgba(255,217,61,0.6)' }} />
+          </View>
+        );
+      case 'neon-border':
+        return (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 4, borderColor: '#00F5FF', borderRadius: 12, pointerEvents: 'none', shadowColor: '#00F5FF', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 10 }} />
+        );
+      case 'soft-vignette':
+        return (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 50, backgroundColor: 'rgba(0,0,0,0.5)' }} />
+            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, backgroundColor: 'rgba(0,0,0,0.5)' }} />
+          </View>
+        );
+      case 'celebration':
+        return (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+            <View style={{ position: 'absolute', top: 8, left: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFD700' }} />
+            <View style={{ position: 'absolute', top: 8, right: 8, width: 16, height: 16, borderRadius: 8, backgroundColor: '#FF6B6B' }} />
+            <View style={{ position: 'absolute', bottom: 8, left: 20, width: 14, height: 14, borderRadius: 7, backgroundColor: '#FF6B6B' }} />
+            <View style={{ position: 'absolute', bottom: 12, right: 16, width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFD700' }} />
+            <View style={{ position: 'absolute', top: 40, right: 30, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFD700' }} />
+          </View>
+        );
+      case 'minimal':
+        return (
+          <View style={{ position: 'absolute', top: 8, left: 8, right: 8, bottom: 8, borderWidth: 2, borderColor: 'rgba(255,255,255,0.8)', borderRadius: 8, pointerEvents: 'none' }} />
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -105,6 +162,9 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             useNativeControls={false}
             isLooping
           />
+
+          {/* Frame Overlay Preview */}
+          {renderFrameOverlay()}
 
           {/* Text Overlay Preview */}
           {showTextPreview && overlayText && (
@@ -289,6 +349,57 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        {/* Frame Selection Section */}
+        <View style={{ marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.lg }}>
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 16 : 14,
+              fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
+              color: theme.neutralColors.dark,
+              marginBottom: theme.spacing.md,
+            }}
+          >
+            Video Frame
+          </Text>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              {FRAMES.map(frame => (
+                <TouchableOpacity
+                  key={frame.id}
+                  onPress={() => setSelectedFrame(frame.id)}
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 12,
+                    backgroundColor: selectedFrame === frame.id ? theme.brandColors.coral : theme.neutralColors.lightGray,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: selectedFrame === frame.id ? 0 : 1,
+                    borderColor: theme.neutralColors.mediumGray,
+                  }}
+                >
+                  <Ionicons
+                    name={frame.icon}
+                    size={28}
+                    color={selectedFrame === frame.id ? '#FFFFFF' : theme.neutralColors.dark}
+                  />
+                  <Text
+                    style={{
+                      fontSize: isKidsEdition ? 11 : 10,
+                      fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                      color: selectedFrame === frame.id ? '#FFFFFF' : theme.neutralColors.mediumGray,
+                      marginTop: 4,
+                    }}
+                  >
+                    {frame.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
         </View>
 
         {/* Music Info */}

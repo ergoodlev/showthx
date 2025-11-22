@@ -14,28 +14,54 @@ const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
  */
 export const uploadVideo = async (videoUri, giftId, parentId) => {
   try {
-    // Read file data
+    console.log('📤 Starting video upload...', { videoUri, giftId, parentId });
+
+    // Validate inputs
+    if (!videoUri || !giftId || !parentId) {
+      throw new Error('Missing required parameters for upload');
+    }
+
+    // Read file as base64
     const base64Data = await FileSystem.readAsStringAsync(videoUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    // Create file path - timestamp gets escaped in bash
-    const timestamp = new Date().getTime();
-    const filename = parentId + '/' + giftId + '/' + timestamp + '.mp4';
+    console.log('📁 Read file, size:', Math.round(base64Data.length / 1024), 'KB (base64)');
+
+    // Create file path
+    const timestamp = Date.now();
+    const filename = `${parentId}/${giftId}/${timestamp}.mp4`;
+
+    // Convert base64 to Uint8Array for upload
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    console.log('📤 Uploading to Supabase Storage:', filename);
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from(VIDEOS_BUCKET)
-      .upload(filename, decode(base64Data), {
+      .upload(filename, bytes.buffer, {
         contentType: 'video/mp4',
+        upsert: false,
       });
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase upload error:', error);
+      throw error;
+    }
+
+    console.log('✅ Upload successful:', data);
 
     // Get public URL
     const { data: urlData } = supabase.storage
       .from(VIDEOS_BUCKET)
       .getPublicUrl(filename);
+
+    console.log('🔗 Video URL:', urlData.publicUrl);
 
     return {
       success: true,
@@ -43,7 +69,7 @@ export const uploadVideo = async (videoUri, giftId, parentId) => {
       path: filename,
     };
   } catch (error) {
-    console.error('Error uploading video:', error);
+    console.error('❌ Error uploading video:', error);
     return {
       success: false,
       error: error.message,
@@ -115,43 +141,15 @@ export const validateVideo = async (videoUri) => {
     if (fileInfo.size > MAX_VIDEO_SIZE) {
       return {
         valid: false,
-        error: 'Video exceeds max size',
+        error: `Video exceeds max size of ${MAX_VIDEO_SIZE / 1024 / 1024}MB`,
       };
     }
 
-    return { valid: true };
+    return { valid: true, size: fileInfo.size };
   } catch (error) {
     return { valid: false, error: error.message };
   }
 };
-
-/**
- * Helper function to decode base64
- */
-function decode(str) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let bitmap, sLen = str.length, s = 0, i = 0;
-  const nBits = (sLen * 6) / 8;
-  const nBuf = new ArrayBuffer(nBits);
-  const dataView = new Uint8Array(nBuf);
-
-  for (; i < sLen; i++) {
-    const nMapIdx = chars.indexOf(str[i]);
-    if (nMapIdx < 0) {
-      continue;
-    }
-
-    if (i & 1) {
-      dataView[(i * 6) >> 3] |= (nMapIdx & 0x3f) << 2;
-      if ((i + 1) * 6) >> 3 > nBits) break;
-      dataView[((i + 1) * 6) >> 3] |= nMapIdx >> 4;
-    } else {
-      dataView[(i * 6) >> 3] |= nMapIdx << 2;
-    }
-  }
-
-  return nBuf;
-}
 
 export default {
   uploadVideo,

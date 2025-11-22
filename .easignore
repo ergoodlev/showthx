@@ -1,0 +1,74 @@
+# EAS Build Ignore File
+# Excludes unnecessary files from upload to speed up builds
+
+# Large archives
+*.zip
+Archive.zip
+
+# Dependencies (reinstalled on EAS server)
+node_modules/
+node_modules\ 2/
+node_modules 2/
+
+# Duplicate/corrupted directories
+android\ 2/
+android 2/
+*\ 2/
+*\ 2.js
+
+# Documentation (not needed for build)
+docs/
+*.md
+!README.md
+
+# SQL files (database schemas, not needed for app build)
+*.sql
+
+# Local build artifacts (regenerated on EAS)
+ios/Pods/
+ios/build/
+ios/.xcode.env.local
+android/build/
+android/.gradle/
+android/app/build/
+
+# Development files
+.git/
+.expo/
+.claude/
+clear/
+archive/
+
+# Shell scripts
+*.sh
+build.sh
+start-dev.sh
+setup-env.sh
+start-build.sh
+
+# Environment files (should use EAS secrets)
+.env
+.env.*
+!.env.example
+
+# Test files
+test-imports.js
+*.test.js
+*.spec.js
+__tests__/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Misc
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+project-structure.txt
+sample-evite-guests.csv
+config.js

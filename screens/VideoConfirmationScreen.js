@@ -19,6 +19,7 @@ import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { supabase } from '../supabaseClient';
+import { uploadVideo, validateVideo } from '../services/videoService';
 
 export const VideoConfirmationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -58,10 +59,31 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       const parentId = await AsyncStorage.getItem('parentId');
 
       if (!kidSessionId) {
-        throw new Error('Kid session not found');
+        throw new Error('Kid session not found. Please log in again.');
       }
 
-      // Create video record in database with pending_approval status
+      if (!parentId) {
+        throw new Error('Parent ID not found. Please log in again.');
+      }
+
+      // Step 1: Validate video file exists
+      console.log('📋 Validating video file...');
+      const validation = await validateVideo(videoUri);
+      if (!validation.valid) {
+        throw new Error(validation.error || 'Video file is invalid');
+      }
+      console.log('✅ Video validated, size:', Math.round(validation.size / 1024), 'KB');
+
+      // Step 2: Upload video to Supabase Storage
+      console.log('📤 Uploading video to storage...');
+      const uploadResult = await uploadVideo(videoUri, giftId, parentId);
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Failed to upload video');
+      }
+      console.log('✅ Video uploaded:', uploadResult.url);
+
+      // Step 3: Create video record in database with pending_approval status
+      console.log('💾 Creating database record...');
       const { data: videoData, error: videoError } = await supabase
         .from('videos')
         .insert({
@@ -69,6 +91,8 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           gift_id: giftId,
           parent_id: parentId,
           status: 'pending_approval',
+          video_url: uploadResult.url,
+          storage_path: uploadResult.path,
           recorded_at: new Date().toISOString(),
           metadata: {
             music_id: musicId,
@@ -90,7 +114,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
 
       console.log('✅ Video record created:', videoData);
 
-      // Update gift status to show video is pending approval
+      // Step 4: Update gift status to show video is pending approval
       const { error: giftError } = await supabase
         .from('gifts')
         .update({

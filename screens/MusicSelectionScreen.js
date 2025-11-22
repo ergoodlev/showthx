@@ -11,6 +11,7 @@ import {
   FlatList,
   TouchableOpacity,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
@@ -65,43 +66,13 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  const handlePlayPreview = async (music) => {
-    try {
-      // Stop current preview if playing
-      if (soundRef.current && previewPlaying === music.id) {
-        await soundRef.current.stopAsync();
-        setPreviewPlaying(null);
-        return;
-      }
-
-      // Stop previous preview
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-      }
-
-      // Load and play new preview
-      setPreviewPlaying(music.id);
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: music.url },
-        { shouldPlay: true }
-      );
-      soundRef.current = sound;
-
-      // Stop preview after 10 seconds or when finished
-      setTimeout(async () => {
-        if (soundRef.current) {
-          try {
-            await soundRef.current.stopAsync();
-            setPreviewPlaying(null);
-          } catch (e) {
-            // Already stopped
-          }
-        }
-      }, 10000);
-    } catch (error) {
-      console.error('Error playing preview:', error);
-      setPreviewPlaying(null);
-    }
+  const handlePlayPreview = (music) => {
+    // Music preview coming soon - show friendly message
+    Alert.alert(
+      '🎵 Preview Coming Soon',
+      `"${music.title}" by ${music.artist}\n\nMusic previews will be available in a future update. For now, select a track and it will be noted for the video.`,
+      [{ text: 'Got it!', style: 'default' }]
+    );
   };
 
   const handleSelectMusic = (music) => {
@@ -205,6 +176,43 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
       />
 
       <ScrollView style={{ flex: 1 }}>
+        {/* Coming Soon Banner */}
+        <View
+          style={{
+            backgroundColor: 'rgba(78, 205, 196, 0.15)',
+            borderRadius: 12,
+            padding: theme.spacing.md,
+            marginHorizontal: theme.spacing.md,
+            marginTop: theme.spacing.md,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing.sm,
+          }}
+        >
+          <Ionicons name="musical-notes" size={24} color={theme.brandColors.teal} />
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 14 : 12,
+                fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
+                color: theme.brandColors.teal,
+              }}
+            >
+              Music Integration Coming Soon!
+            </Text>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.mediumGray,
+                marginTop: 2,
+              }}
+            >
+              Select your preferred track. Full audio will be added in a future update.
+            </Text>
+          </View>
+        </View>
+
         {/* Mood Filter */}
         <View style={{ marginTop: theme.spacing.lg, marginBottom: theme.spacing.lg }}>
           <Text
