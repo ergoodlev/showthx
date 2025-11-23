@@ -24,6 +24,10 @@ docs/
 # SQL files (database schemas, not needed for app build)
 *.sql
 
+# Native folders (let EAS regenerate fresh)
+ios/
+android/
+
 # Local build artifacts (regenerated on EAS)
 ios/Pods/
 ios/build/
