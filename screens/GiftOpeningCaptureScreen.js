@@ -2,6 +2,7 @@
  * Gift Opening Capture Screen
  * Records child opening a gift with rear camera
  * Includes start/stop controls and "pure joy" moment capture
+ * Uses expo-camera for consistency with other screens
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -14,9 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-// React Native Vision Camera
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 export default function GiftOpeningCaptureScreen({
   guestName,
@@ -24,20 +23,14 @@ export default function GiftOpeningCaptureScreen({
   onVideoCaptured,
   onCancel,
 }) {
-  const { hasPermission, requestPermission } = useCameraPermission();
-  const device = useCameraDevice('back');
-  
+  const [permission, requestPermission] = useCameraPermissions();
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordedDuration, setRecordedDuration] = useState(0);
+  const [cameraReady, setCameraReady] = useState(false);
   const cameraRef = useRef(null);
   const durationRef = useRef(0);
   const intervalRef = useRef(null);
-
-  useEffect(() => {
-    if (!hasPermission) {
-      requestPermission();
-    }
-  }, []);
 
   useEffect(() => {
     if (isRecording) {
@@ -59,7 +52,7 @@ export default function GiftOpeningCaptureScreen({
   }, [isRecording]);
 
   const handleStartRecording = async () => {
-    if (!cameraRef.current) {
+    if (!cameraRef.current || !cameraReady) {
       Alert.alert('Camera Not Ready', 'Please wait for the camera to initialize');
       return;
     }
@@ -69,28 +62,24 @@ export default function GiftOpeningCaptureScreen({
       durationRef.current = 0;
       setRecordedDuration(0);
 
-      cameraRef.current.startRecording({
-        onRecordingFinished: (video) => {
-          console.log('✅ Gift opening recorded!', video.path);
-          setIsRecording(false);
-          
-          onVideoCaptured({
-            uri: video.path,
-            type: 'gift_opening',
-            duration: durationRef.current,
-            guestName,
-            giftName,
-          });
-        },
-        onRecordingError: (error) => {
-          console.error('[GIFT_OPENING] Recording error:', error);
-          Alert.alert('Recording Error', 'Failed to record video. Please try again.');
-          setIsRecording(false);
-        },
+      console.log('🎬 Starting gift opening recording with expo-camera...');
+      const video = await cameraRef.current.recordAsync({
+        maxDuration: 120,
+      });
+
+      console.log('✅ Gift opening recorded!', video.uri);
+      setIsRecording(false);
+
+      onVideoCaptured({
+        uri: video.uri,
+        type: 'gift_opening',
+        duration: durationRef.current,
+        guestName,
+        giftName,
       });
     } catch (error) {
-      console.error('[GIFT_OPENING] Failed to start recording:', error);
-      Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
+      console.error('[GIFT_OPENING] Recording error:', error);
+      Alert.alert('Recording Error', 'Failed to record video. Please try again.');
       setIsRecording(false);
     }
   };
@@ -98,15 +87,15 @@ export default function GiftOpeningCaptureScreen({
   const handleStopRecording = async () => {
     if (cameraRef.current && isRecording) {
       try {
+        console.log('⏹️ Stopping recording...');
         await cameraRef.current.stopRecording();
-        console.log('⏹️ Stopped recording');
       } catch (error) {
         console.error('[GIFT_OPENING] Stop recording error:', error);
       }
     }
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#14B8A6" />
@@ -114,7 +103,7 @@ export default function GiftOpeningCaptureScreen({
     );
   }
 
-  if (!hasPermission) {
+  if (!permission.granted) {
     return (
       <View style={styles.container}>
         <View style={styles.permissionContainer}>
@@ -134,25 +123,18 @@ export default function GiftOpeningCaptureScreen({
     );
   }
 
-  if (!device) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#14B8A6" />
-        <Text style={{ marginTop: 10, color: 'white' }}>Loading camera...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {/* Vision Camera component */}
-      <Camera
+      {/* expo-camera CameraView component */}
+      <CameraView
         ref={cameraRef}
         style={styles.camera}
-        device={device}
-        isActive={true}
-        video={true}
-        audio={true}
+        facing="back"
+        mode="video"
+        onCameraReady={() => {
+          console.log('📷 Gift opening camera ready');
+          setCameraReady(true);
+        }}
       />
 
       {/* Overlay with instructions */}
@@ -200,11 +182,14 @@ export default function GiftOpeningCaptureScreen({
         <View style={styles.controlsContainer}>
           {!isRecording ? (
             <TouchableOpacity
-              style={styles.recordButton}
+              style={[styles.recordButton, !cameraReady && styles.buttonDisabled]}
               onPress={handleStartRecording}
+              disabled={!cameraReady}
             >
               <View style={styles.recordButtonInner} />
-              <Text style={styles.recordButtonText}>Start Recording</Text>
+              <Text style={styles.recordButtonText}>
+                {cameraReady ? 'Start Recording' : 'Loading...'}
+              </Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -346,6 +331,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 28,
     gap: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   recordButtonInner: {
     width: 20,
