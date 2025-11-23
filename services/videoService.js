@@ -4,7 +4,7 @@
  */
 
 import { supabase } from '../supabaseClient';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const VIDEOS_BUCKET = 'videos';
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB

@@ -1,5 +1,5 @@
 /**
- * ThankCast App Configuration
+ * ShowThx App Configuration
  * Specifies which edition of the app this is
  *
  * Current Edition: KIDS
@@ -10,9 +10,9 @@
  * 3. Changes will cascade through entire app via EditionContext
  *
  * Supported Editions:
- * - 'kids' (ThankCast Kids) - with parental features, age-appropriate UI
- * - 'wedding' (ThankCast Wedding) - adult version, no parental features
- * - 'pro' (ThankCast Pro) - professional version
+ * - 'kids' (ShowThx Kids) - with parental features, age-appropriate UI
+ * - 'wedding' (ShowThx Wedding) - adult version, no parental features
+ * - 'pro' (ShowThx Pro) - professional version
  */
 
 export const APP_EDITION = 'kids'; // Current edition
@@ -21,12 +21,12 @@ export const APP_EDITION = 'kids'; // Current edition
  * App Metadata
  */
 export const APP_METADATA = {
-  name: 'ThankCast Kids',
+  name: 'ShowThx',
   version: '2.0.0',
   buildNumber: 1,
-  supportEmail: 'support@thankcast.app',
-  privacyPolicyUrl: 'https://thankcast.app/privacy',
-  termsOfServiceUrl: 'https://thankcast.app/terms',
+  supportEmail: 'support@showthx.app',
+  privacyPolicyUrl: 'https://showthx.app/privacy',
+  termsOfServiceUrl: 'https://showthx.app/terms',
   coppa: {
     compliance: true, // COPPA compliant
     minAge: 5,
@@ -114,8 +114,8 @@ export const MUSIC_CONFIG = {
  * Email Configuration
  */
 export const EMAIL_CONFIG = {
-  fromEmail: 'hello@thankcast.app',
-  fromName: 'ThankCast',
+  fromEmail: 'hello@showthx.app',
+  fromName: 'ShowThx',
   videoLinkExpiration: 24, // hours
   allowGuestDownload: false, // Kids edition - disable download
   allowGuestSharing: false, // Kids edition - disable sharing

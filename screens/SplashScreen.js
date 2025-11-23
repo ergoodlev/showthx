@@ -104,8 +104,8 @@ export default function SplashScreen({ onLoginPressed, onSignUpPressed, onChecki
               <Ionicons name="videocam" size={48} color="white" />
             </LinearGradient>
           </View>
-          <Text style={styles.appTitle}>GratituGram</Text>
-          <Text style={styles.appSubtitle}>Gratitude in Motion</Text>
+          <Text style={styles.appTitle}>ShowThx</Text>
+          <Text style={styles.appSubtitle}>Thank You Videos Made Easy</Text>
         </Animated.View>
 
         {/* Content Section */}

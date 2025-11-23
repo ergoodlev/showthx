@@ -1,7 +1,12 @@
 /**
- * ThankCast Button Components
+ * ShowThx Button Components
  * Edition-aware button components with consistent styling across the app
  * All buttons use the design system and respond to edition changes
+ *
+ * Brand Colors:
+ * - Primary: #8360c3 (purple)
+ * - Secondary: #2ebf91 (teal)
+ * - Gradient: purple → teal
  */
 
 import React from 'react';
@@ -67,8 +72,9 @@ export const ThankCastButton = ({
     </View>
   );
 
-  if (gradient && isKidsEdition) {
-    const gradientColors = theme.gradients.coralToYellow?.colors || theme.gradients.coral?.colors || [Colors.brand.coral, Colors.kids.sunshineYellow];
+  if (gradient) {
+    // Use ShowThx brand gradient: purple (#8360c3) → teal (#2ebf91)
+    const gradientColors = [Colors.brand.purple, Colors.brand.teal];
     return (
       <LinearGradient
         colors={gradientColors}

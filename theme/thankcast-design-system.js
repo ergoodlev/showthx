@@ -15,26 +15,34 @@ import { Dimensions } from 'react-native';
 // ============================================
 
 export const Colors = {
-  // Core Brand Colors (All Versions)
+  // ShowThx Brand Colors
+  // Primary gradient: #8360c3 (purple) → #2ebf91 (teal)
   brand: {
-    coral: '#FF6B6B',
-    coralLight: '#FF8A8A',
-    coralDark: '#E85555',
-    teal: '#4ECDC4',
-    tealLight: '#6ED9D2',
-    tealDark: '#3AB8B0',
-    cream: '#FFF8F0',
-    creamDark: '#FFF0E0',
+    // Primary colors from logo gradient
+    purple: '#8360c3',
+    purpleLight: '#9B7ED4',
+    purpleDark: '#6B4FA8',
+    teal: '#2ebf91',
+    tealLight: '#4DCCA3',
+    tealDark: '#259B76',
+    // Midpoint of gradient
+    mid: '#5690AA',
+    // Legacy names for compatibility
+    coral: '#8360c3', // Map to purple for existing code
+    coralLight: '#9B7ED4',
+    coralDark: '#6B4FA8',
+    cream: '#FFFFFF',
+    creamDark: '#F5F5F5',
   },
 
-  // Kids Edition Colors
+  // Kids Edition Colors (ShowThx branded)
   kids: {
     sunshineYellow: '#FFD93D',
-    skyBlue: '#A8E6CF',
-    gentlePurple: '#C4A1E0',
-    peachyPink: '#FFABAB',
-    coral: '#FF6B6B', // Same as brand
-    teal: '#4ECDC4',  // Same as brand
+    skyBlue: '#2ebf91', // Brand teal
+    gentlePurple: '#8360c3', // Brand purple
+    peachyPink: '#9B7ED4', // Light purple
+    coral: '#8360c3', // Brand purple
+    teal: '#2ebf91',  // Brand teal
   },
 
   // Wedding/Adult Edition Colors
@@ -345,7 +353,29 @@ export const ButtonStyles = {
 // ============================================
 
 export const Gradients = {
+  // ShowThx Brand Gradient (purple to teal)
+  brand: {
+    colors: [Colors.brand.purple, Colors.brand.teal],
+    start: { x: 0, y: 0 },
+    end: { x: 1, y: 1 },
+  },
+  brandVertical: {
+    colors: [Colors.brand.purple, Colors.brand.teal],
+    start: { x: 0, y: 0 },
+    end: { x: 0, y: 1 },
+  },
+  brandReverse: {
+    colors: [Colors.brand.teal, Colors.brand.purple],
+    start: { x: 0, y: 0 },
+    end: { x: 1, y: 1 },
+  },
+
   kids: {
+    primary: {
+      colors: [Colors.brand.purple, Colors.brand.teal],
+      start: { x: 0, y: 0 },
+      end: { x: 1, y: 1 },
+    },
     coralToYellow: {
       colors: [Colors.brand.coral, Colors.kids.sunshineYellow],
       start: { x: 0, y: 0 },
@@ -358,10 +388,9 @@ export const Gradients = {
     },
     rainbow: {
       colors: [
-        Colors.brand.coral,
+        Colors.brand.purple,
+        Colors.brand.teal,
         Colors.kids.sunshineYellow,
-        Colors.kids.skyBlue,
-        Colors.kids.gentlePurple,
       ],
       start: { x: 0, y: 0 },
       end: { x: 1, y: 1 },
@@ -369,13 +398,18 @@ export const Gradients = {
   },
 
   adult: {
+    primary: {
+      colors: [Colors.brand.purple, Colors.brand.teal],
+      start: { x: 0, y: 0 },
+      end: { x: 1, y: 1 },
+    },
     coral: {
       colors: [Colors.brand.coral, Colors.brand.coralDark],
       start: { x: 0, y: 0 },
       end: { x: 0, y: 1 },
     },
     elegant: {
-      colors: [Colors.brand.coral, Colors.wedding.dustyRose],
+      colors: [Colors.brand.purple, Colors.wedding.dustyRose],
       start: { x: 0, y: 0 },
       end: { x: 1, y: 1 },
     },

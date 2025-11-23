@@ -116,6 +116,49 @@ export const getParentSession = async () => {
 };
 
 /**
+ * Restore parent session (for biometric login)
+ * Checks if there's a valid stored session and refreshes it
+ */
+export const restoreParentSession = async () => {
+  try {
+    // Check if there's a stored session ID
+    const sessionId = await AsyncStorage.getItem(SESSION_KEY);
+    if (!sessionId) {
+      return { success: false, error: 'No stored session' };
+    }
+
+    // Check if we have an active Supabase session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (session) {
+      // Session is still valid
+      return {
+        success: true,
+        userId: session.user.id,
+        email: session.user.email,
+      };
+    }
+
+    // Try to refresh the session
+    const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+
+    if (refreshedSession) {
+      return {
+        success: true,
+        userId: refreshedSession.user.id,
+        email: refreshedSession.user.email,
+      };
+    }
+
+    // Session couldn't be restored
+    return { success: false, error: 'Session expired' };
+  } catch (error) {
+    console.error('Restore session error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
  * Parent logout
  */
 export const parentLogout = async () => {
@@ -289,6 +332,7 @@ export default {
   parentSignup,
   parentLogin,
   getParentSession,
+  restoreParentSession,
   parentLogout,
   getOrCreateKidCode,
   validateKidPin,

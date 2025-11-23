@@ -11,6 +11,9 @@ import {
   TouchableOpacity,
   SafeAreaView,
   TextInput,
+  PanResponder,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
@@ -18,6 +21,8 @@ import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 const TRANSITIONS = [
   { id: 'none', label: 'None', icon: 'remove-circle' },
@@ -61,6 +66,59 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
   const [showTextPreview, setShowTextPreview] = useState(true);
   const [textPosition, setTextPosition] = useState('bottom'); // top, middle, bottom
   const [selectedFrame, setSelectedFrame] = useState('none');
+  const [isDraggable, setIsDraggable] = useState(false);
+
+  // Draggable text position (percentage-based for flexibility)
+  const [textPosX, setTextPosX] = useState(50); // 0-100% from left
+  const [textPosY, setTextPosY] = useState(85); // 0-100% from top
+
+  // Animated values for smooth dragging
+  const pan = useRef(new Animated.ValueXY()).current;
+  const videoContainerRef = useRef(null);
+  const [containerLayout, setContainerLayout] = useState({ width: 200, height: 350 });
+
+  // PanResponder for draggable text
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => isDraggable,
+      onMoveShouldSetPanResponder: () => isDraggable,
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: pan.x._value,
+          y: pan.y._value,
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: (e, gesture) => {
+        pan.flattenOffset();
+        // Calculate percentage position
+        const newX = Math.max(10, Math.min(90, textPosX + (gesture.dx / containerLayout.width) * 100));
+        const newY = Math.max(10, Math.min(90, textPosY + (gesture.dy / containerLayout.height) * 100));
+        setTextPosX(newX);
+        setTextPosY(newY);
+        pan.setValue({ x: 0, y: 0 });
+      },
+    })
+  ).current;
+
+  // Update preset position when buttons are pressed
+  const setPresetPosition = (position) => {
+    setTextPosition(position);
+    setIsDraggable(false);
+    if (position === 'top') {
+      setTextPosX(50);
+      setTextPosY(10);
+    } else if (position === 'middle') {
+      setTextPosX(50);
+      setTextPosY(45);
+    } else {
+      setTextPosX(50);
+      setTextPosY(85);
+    }
+  };
 
   const handleAddText = () => {
     if (overlayText.trim()) {
@@ -83,7 +141,9 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
       transition: selectedTransition,
       overlayText,
       textColor: selectedTextColor,
-      textPosition,
+      textPosition: isDraggable ? 'custom' : textPosition,
+      textPosX,
+      textPosY,
       frame: selectedFrame,
     });
   };
@@ -142,16 +202,23 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
       />
 
       <ScrollView style={{ flex: 1 }}>
-        {/* Video Preview */}
+        {/* Video Preview - Portrait aspect ratio for vertical videos */}
         <View
           style={{
             backgroundColor: '#000000',
-            height: 200,
+            aspectRatio: 9 / 16,
+            maxHeight: 350,
+            alignSelf: 'center',
+            width: '60%',
             justifyContent: 'center',
             alignItems: 'center',
             margin: theme.spacing.md,
             borderRadius: 12,
             overflow: 'hidden',
+          }}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            setContainerLayout({ width, height });
           }}
         >
           <Video
@@ -168,30 +235,81 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
 
           {/* Text Overlay Preview */}
           {showTextPreview && overlayText && (
-            <View
-              style={{
-                position: 'absolute',
-                width: '100%',
-                justifyContent: textPosition === 'top' ? 'flex-start' : textPosition === 'middle' ? 'center' : 'flex-end',
-                alignItems: 'center',
-                paddingVertical: theme.spacing.md,
-              }}
-            >
-              <Text
+            isDraggable ? (
+              <Animated.View
+                {...panResponder.panHandlers}
                 style={{
-                  fontSize: isKidsEdition ? 20 : 16,
-                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-                  color: TEXT_COLORS.find(c => c.id === selectedTextColor)?.hex || '#FFFFFF',
-                  textAlign: 'center',
+                  position: 'absolute',
+                  left: `${textPosX}%`,
+                  top: `${textPosY}%`,
+                  transform: [
+                    { translateX: pan.x },
+                    { translateY: pan.y },
+                    { translateX: -50 },
+                    { translateY: -50 },
+                  ],
                   paddingHorizontal: theme.spacing.md,
-                  textShadowColor: 'rgba(0,0,0,0.5)',
-                  textShadowOffset: { width: 1, height: 1 },
-                  textShadowRadius: 3,
                 }}
               >
-                {overlayText}
-              </Text>
-            </View>
+                <View style={{
+                  borderWidth: 2,
+                  borderColor: theme.brandColors.coral,
+                  borderStyle: 'dashed',
+                  borderRadius: 8,
+                  padding: 4,
+                }}>
+                  <Text
+                    style={{
+                      fontSize: isKidsEdition ? 20 : 16,
+                      fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                      color: TEXT_COLORS.find(c => c.id === selectedTextColor)?.hex || '#FFFFFF',
+                      textAlign: 'center',
+                      paddingHorizontal: theme.spacing.md,
+                      paddingVertical: 4,
+                      backgroundColor: 'rgba(0,0,0,0.3)',
+                      borderRadius: 4,
+                      overflow: 'hidden',
+                      textShadowColor: 'rgba(0,0,0,0.5)',
+                      textShadowOffset: { width: 1, height: 1 },
+                      textShadowRadius: 3,
+                    }}
+                  >
+                    {overlayText}
+                  </Text>
+                </View>
+              </Animated.View>
+            ) : (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: textPosition === 'top' ? 12 : textPosition === 'middle' ? '40%' : undefined,
+                  bottom: textPosition === 'bottom' ? 12 : undefined,
+                  left: 0,
+                  right: 0,
+                  alignItems: 'center',
+                  paddingHorizontal: theme.spacing.md,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 20 : 16,
+                    fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                    color: TEXT_COLORS.find(c => c.id === selectedTextColor)?.hex || '#FFFFFF',
+                    textAlign: 'center',
+                    paddingHorizontal: theme.spacing.md,
+                    paddingVertical: 4,
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    textShadowColor: 'rgba(0,0,0,0.5)',
+                    textShadowOffset: { width: 1, height: 1 },
+                    textShadowRadius: 3,
+                  }}
+                >
+                  {overlayText}
+                </Text>
+              </View>
+            )
           )}
         </View>
 
@@ -244,12 +362,12 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             {['top', 'middle', 'bottom'].map(position => (
               <TouchableOpacity
                 key={position}
-                onPress={() => setTextPosition(position)}
+                onPress={() => setPresetPosition(position)}
                 style={{
                   flex: 1,
                   paddingVertical: theme.spacing.sm,
                   borderRadius: 8,
-                  backgroundColor: textPosition === position ? theme.brandColors.coral : theme.neutralColors.lightGray,
+                  backgroundColor: !isDraggable && textPosition === position ? theme.brandColors.coral : theme.neutralColors.lightGray,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
@@ -258,7 +376,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                   style={{
                     fontSize: isKidsEdition ? 12 : 11,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: textPosition === position ? '#FFFFFF' : theme.neutralColors.mediumGray,
+                    color: !isDraggable && textPosition === position ? '#FFFFFF' : theme.neutralColors.mediumGray,
                     textTransform: 'capitalize',
                   }}
                 >
@@ -266,7 +384,49 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                 </Text>
               </TouchableOpacity>
             ))}
+            {/* Drag option */}
+            <TouchableOpacity
+              onPress={() => setIsDraggable(true)}
+              style={{
+                flex: 1,
+                paddingVertical: theme.spacing.sm,
+                borderRadius: 8,
+                backgroundColor: isDraggable ? theme.brandColors.teal : theme.neutralColors.lightGray,
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexDirection: 'row',
+                gap: 4,
+              }}
+            >
+              <Ionicons
+                name="move"
+                size={14}
+                color={isDraggable ? '#FFFFFF' : theme.neutralColors.mediumGray}
+              />
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 12 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: isDraggable ? '#FFFFFF' : theme.neutralColors.mediumGray,
+                }}
+              >
+                Drag
+              </Text>
+            </TouchableOpacity>
           </View>
+          {isDraggable && (
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 11 : 10,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.brandColors.teal,
+                marginBottom: theme.spacing.sm,
+                fontStyle: 'italic',
+              }}
+            >
+              Drag the text on the video to position it anywhere
+            </Text>
+          )}
 
           {/* Text Color Selection */}
           <Text

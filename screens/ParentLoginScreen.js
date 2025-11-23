@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,7 +22,14 @@ import { TextField } from '../components/TextField';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { parentLogin } from '../services/authService';
+import { parentLogin, restoreParentSession } from '../services/authService';
+import {
+  isBiometricSupported,
+  isBiometricLoginEnabled,
+  getBiometricTypeName,
+  attemptBiometricLogin,
+  enableBiometricLogin,
+} from '../services/biometricService';
 
 export const ParentLoginScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
@@ -37,10 +45,63 @@ export const ParentLoginScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Load saved email on mount
+  // Biometric state
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricName, setBiometricName] = useState('Face ID');
+
+  // Load saved email and check biometric availability on mount
   useEffect(() => {
     loadSavedEmail();
+    checkBiometricAvailability();
   }, []);
+
+  const checkBiometricAvailability = async () => {
+    try {
+      const isSupported = await isBiometricSupported();
+      const isEnabled = await isBiometricLoginEnabled();
+
+      if (isSupported && isEnabled) {
+        setBiometricAvailable(true);
+        const name = await getBiometricTypeName();
+        setBiometricName(name);
+      }
+    } catch (error) {
+      console.error('Error checking biometric availability:', error);
+    }
+  };
+
+  // Handle biometric login
+  const handleBiometricLogin = async () => {
+    setError(null);
+
+    try {
+      setLoading(true);
+
+      const result = await attemptBiometricLogin();
+
+      if (!result.success) {
+        if (result.error !== 'Authentication cancelled') {
+          setError(result.error);
+        }
+        return;
+      }
+
+      // Restore session using the stored user ID
+      const sessionResult = await restoreParentSession();
+
+      if (!sessionResult.success) {
+        setError('Session expired. Please log in with email and password.');
+        return;
+      }
+
+      console.log('Biometric login successful');
+    } catch (err) {
+      console.error('Biometric login error:', err);
+      setError('Biometric login failed. Please try again or use email/password.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadSavedEmail = async () => {
     try {
@@ -95,6 +156,34 @@ export const ParentLoginScreen = ({ navigation }) => {
         await AsyncStorage.setItem('parentEmail', email);
       } else {
         await AsyncStorage.removeItem('parentEmail');
+      }
+
+      // Check if biometric is supported but not yet enabled
+      const biometricSupported = await isBiometricSupported();
+      const biometricEnabled = await isBiometricLoginEnabled();
+
+      if (biometricSupported && !biometricEnabled) {
+        const biometricType = await getBiometricTypeName();
+        // Prompt user to enable biometric login
+        Alert.alert(
+          `Enable ${biometricType}?`,
+          `Would you like to use ${biometricType} for faster sign-in next time?`,
+          [
+            {
+              text: 'Not Now',
+              style: 'cancel',
+            },
+            {
+              text: 'Enable',
+              onPress: async () => {
+                const enableResult = await enableBiometricLogin(result.userId);
+                if (enableResult.success) {
+                  console.log(`✅ ${biometricType} enabled for login`);
+                }
+              },
+            },
+          ]
+        );
       }
 
       // Session is stored in AsyncStorage
@@ -188,6 +277,7 @@ export const ParentLoginScreen = ({ navigation }) => {
             keyboardType="email-address"
             autoCapitalize="none"
             textContentType="emailAddress"
+            autoComplete="email"
             error={validationErrors.email}
             required
           />
@@ -201,6 +291,7 @@ export const ParentLoginScreen = ({ navigation }) => {
             showPasswordToggle
             autoCapitalize="none"
             textContentType="password"
+            autoComplete="password"
             error={validationErrors.password}
             required
           />
@@ -279,6 +370,42 @@ export const ParentLoginScreen = ({ navigation }) => {
             disabled={loading}
             style={{ marginBottom: theme.spacing.md }}
           />
+
+          {/* Biometric Login Button */}
+          {biometricAvailable && (
+            <TouchableOpacity
+              onPress={handleBiometricLogin}
+              disabled={loading}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: theme.spacing.md,
+                marginBottom: theme.spacing.md,
+                borderWidth: 1.5,
+                borderColor: theme.brandColors.teal,
+                borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+                backgroundColor: 'transparent',
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              <Ionicons
+                name={biometricName === 'Face ID' ? 'scan-outline' : 'finger-print-outline'}
+                size={24}
+                color={theme.brandColors.teal}
+              />
+              <Text
+                style={{
+                  marginLeft: theme.spacing.sm,
+                  fontSize: isKidsEdition ? 16 : 14,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: theme.brandColors.teal,
+                }}
+              >
+                Sign in with {biometricName}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* Signup Link */}
           <View style={[styles.signupLinkContainer, { marginBottom: theme.spacing.lg }]}>

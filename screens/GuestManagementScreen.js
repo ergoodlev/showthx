@@ -131,52 +131,149 @@ export const GuestManagementScreen = ({ navigation, route }) => {
     }
   };
 
+  // Enhanced CSV parser with flexible column matching and delimiter detection
   const parseCSV = (csvText) => {
     try {
-      const lines = csvText.trim().split('\n');
+      const lines = csvText.trim().split(/\r?\n/);
       if (lines.length < 2) {
         throw new Error('CSV must have header row and at least one data row');
       }
 
+      // Detect delimiter (comma, tab, semicolon, or pipe)
       const headerLine = lines[0];
-      const headers = headerLine.split(',').map(h => h.trim().toLowerCase());
+      let delimiter = ',';
+      if (headerLine.includes('\t')) delimiter = '\t';
+      else if (headerLine.includes(';') && !headerLine.includes(',')) delimiter = ';';
+      else if (headerLine.includes('|') && !headerLine.includes(',')) delimiter = '|';
 
+      console.log('📋 Detected delimiter:', delimiter === '\t' ? 'TAB' : delimiter);
+
+      // Parse a line handling quoted fields
+      const parseLine = (line) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            // Handle escaped quotes
+            if (inQuotes && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === delimiter && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
+
+      const headers = parseLine(headerLine).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
       console.log('📋 CSV Headers found:', headers);
 
-      // Find name and email columns (flexible matching)
-      const nameIndex = headers.findIndex(h =>
-        h.includes('name') || h.includes('guest') || h.includes('attendee')
-      );
-      const emailIndex = headers.findIndex(h =>
-        h.includes('email') || h.includes('mail') || h.includes('address')
-      );
+      // Flexible column matching for various CSV formats
+      const findColumnIndex = (possibleNames) => {
+        return headers.findIndex(h => possibleNames.some(name => h.includes(name)));
+      };
 
-      if (nameIndex === -1 || emailIndex === -1) {
-        throw new Error('CSV must have columns with "name" and "email" in the header');
+      // Name columns - support "name", "fullname", "guestname", "attendee", or separate first/last
+      const fullNameIndex = findColumnIndex(['fullname', 'name', 'guest', 'attendee', 'recipient', 'person']);
+      const firstNameIndex = findColumnIndex(['first', 'fname', 'given']);
+      const lastNameIndex = findColumnIndex(['last', 'lname', 'surname', 'family']);
+
+      // Email columns
+      const emailIndex = findColumnIndex(['email', 'mail', 'emailaddress']);
+
+      // Phone columns (optional)
+      const phoneIndex = findColumnIndex(['phone', 'mobile', 'cell', 'tel', 'contact']);
+
+      // Validate we can find email
+      if (emailIndex === -1) {
+        throw new Error('CSV must have an "email" column. Found columns: ' + headers.join(', '));
       }
 
-      console.log(`📋 Name column index: ${nameIndex}, Email column index: ${emailIndex}`);
+      // Check if we have name info
+      const hasFullName = fullNameIndex !== -1;
+      const hasFirstLast = firstNameIndex !== -1 || lastNameIndex !== -1;
+      if (!hasFullName && !hasFirstLast) {
+        throw new Error('CSV must have a "name" column or "first name"/"last name" columns. Found: ' + headers.join(', '));
+      }
+
+      console.log('📋 Column mapping:', {
+        fullName: hasFullName ? fullNameIndex : 'N/A',
+        firstName: firstNameIndex !== -1 ? firstNameIndex : 'N/A',
+        lastName: lastNameIndex !== -1 ? lastNameIndex : 'N/A',
+        email: emailIndex,
+        phone: phoneIndex !== -1 ? phoneIndex : 'N/A',
+      });
 
       // Parse data rows
       const parsedGuests = [];
+      const errors = [];
+
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue; // Skip empty lines
 
-        const cols = line.split(',').map(c => c.trim());
-        const name = cols[nameIndex];
-        const email = cols[emailIndex];
+        try {
+          const cols = parseLine(line);
 
-        if (name && email) {
-          parsedGuests.push({ name, email });
+          // Build name from available columns
+          let name = '';
+          if (hasFullName && cols[fullNameIndex]) {
+            name = cols[fullNameIndex].trim();
+          } else if (hasFirstLast) {
+            const firstName = firstNameIndex !== -1 ? (cols[firstNameIndex] || '').trim() : '';
+            const lastName = lastNameIndex !== -1 ? (cols[lastNameIndex] || '').trim() : '';
+            name = `${firstName} ${lastName}`.trim();
+          }
+
+          // Get email (clean it)
+          const email = (cols[emailIndex] || '').trim().toLowerCase();
+
+          // Get phone if available
+          const phone = phoneIndex !== -1 ? (cols[phoneIndex] || '').trim() : null;
+
+          // Validate
+          if (!name) {
+            errors.push(`Row ${i + 1}: Missing name`);
+            continue;
+          }
+          if (!email) {
+            errors.push(`Row ${i + 1}: Missing email`);
+            continue;
+          }
+
+          // Basic email validation
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) {
+            errors.push(`Row ${i + 1}: Invalid email "${email}"`);
+            continue;
+          }
+
+          parsedGuests.push({ name, email, phone });
+        } catch (rowError) {
+          errors.push(`Row ${i + 1}: ${rowError.message}`);
         }
       }
 
       if (parsedGuests.length === 0) {
-        throw new Error('No valid guest records found in CSV');
+        const errorSummary = errors.length > 0 ? `\nErrors:\n${errors.slice(0, 5).join('\n')}` : '';
+        throw new Error(`No valid guest records found in CSV.${errorSummary}`);
       }
 
-      return parsedGuests;
+      if (errors.length > 0) {
+        console.log(`⚠️ ${errors.length} rows had issues:`, errors.slice(0, 5));
+      }
+
+      return { guests: parsedGuests, warnings: errors };
     } catch (error) {
       throw new Error(`CSV parsing error: ${error.message}`);
     }
@@ -210,8 +307,8 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       const csvText = await response.text();
 
       // Parse CSV
-      const parsedGuests = parseCSV(csvText);
-      console.log(`📋 Parsed ${parsedGuests.length} guests from CSV`);
+      const { guests: parsedGuests, warnings } = parseCSV(csvText);
+      console.log(`📋 Parsed ${parsedGuests.length} guests from CSV (${warnings.length} warnings)`);
 
       // Validate and insert
       let insertedCount = 0;
@@ -234,14 +331,20 @@ export const GuestManagementScreen = ({ navigation, route }) => {
           }
 
           // Insert guest
+          const guestData = {
+            parent_id: user.id,
+            name: guest.name,
+            email: guest.email,
+            created_at: new Date().toISOString(),
+          };
+          // Add phone if available
+          if (guest.phone) {
+            guestData.phone = guest.phone;
+          }
+
           const { data, error } = await supabase
             .from('guests')
-            .insert({
-              parent_id: user.id,
-              name: guest.name,
-              email: guest.email,
-              created_at: new Date().toISOString(),
-            })
+            .insert(guestData)
             .select()
             .single();
 
@@ -259,10 +362,16 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       // Reload guests
       await loadGuests();
 
-      Alert.alert(
-        'Import Complete',
-        `Added ${insertedCount} guest${insertedCount !== 1 ? 's' : ''}\n${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} skipped`
-      );
+      // Build detailed message
+      let message = `Added ${insertedCount} guest${insertedCount !== 1 ? 's' : ''}`;
+      if (skippedCount > 0) {
+        message += `\n${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} skipped`;
+      }
+      if (warnings.length > 0) {
+        message += `\n${warnings.length} row${warnings.length !== 1 ? 's' : ''} had issues`;
+      }
+
+      Alert.alert('Import Complete', message);
     } catch (error) {
       console.error('Error importing CSV:', error);
       const errorMsg = error.message || 'Failed to import CSV';

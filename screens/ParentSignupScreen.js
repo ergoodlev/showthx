@@ -215,6 +215,8 @@ export const ParentSignupScreen = ({ navigation }) => {
             placeholder="Your name"
             value={fullName}
             onChangeText={setFullName}
+            textContentType="name"
+            autoComplete="name"
             error={validationErrors.fullName}
             required
           />
@@ -227,6 +229,7 @@ export const ParentSignupScreen = ({ navigation }) => {
             keyboardType="email-address"
             autoCapitalize="none"
             textContentType="emailAddress"
+            autoComplete="email"
             error={validationErrors.email}
             required
           />
@@ -239,7 +242,8 @@ export const ParentSignupScreen = ({ navigation }) => {
             secureTextEntry
             showPasswordToggle
             autoCapitalize="none"
-            textContentType="password"
+            textContentType="newPassword"
+            autoComplete="password-new"
             error={validationErrors.password}
             required
           />
@@ -252,7 +256,8 @@ export const ParentSignupScreen = ({ navigation }) => {
             secureTextEntry
             showPasswordToggle
             autoCapitalize="none"
-            textContentType="password"
+            textContentType="newPassword"
+            autoComplete="password-new"
             error={validationErrors.confirmPassword}
             required
           />
