@@ -5,6 +5,11 @@
 -- This migration updates the function to match actual schema
 -- ============================================
 
+-- Drop ALL existing versions of the function (handles "function not unique" error)
+DROP FUNCTION IF EXISTS public.submit_video_from_kid(UUID, UUID, UUID, TEXT, TEXT, JSONB);
+DROP FUNCTION IF EXISTS public.submit_video_from_kid(UUID, UUID, UUID, TEXT, JSONB);
+
+-- Now create the new version without storage_path
 CREATE OR REPLACE FUNCTION public.submit_video_from_kid(
   p_child_id UUID,
   p_gift_id UUID,
