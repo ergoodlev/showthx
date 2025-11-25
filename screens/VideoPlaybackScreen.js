@@ -57,7 +57,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
   };
 
   const handleProceed = () => {
-    navigation?.navigate('MusicSelection', {
+    navigation?.navigate('FrameSelection', {
       videoUri,
       giftId,
       giftName,
@@ -249,7 +249,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
                 fontWeight: '600',
               }}
             >
-              Add Music
+              Choose Frame
             </Text>
           </TouchableOpacity>
         </View>

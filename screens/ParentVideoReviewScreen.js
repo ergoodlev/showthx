@@ -214,7 +214,10 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
         showBack={true}
       />
 
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
         {/* Video Preview */}
         <View
           style={{

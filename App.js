@@ -11,6 +11,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Audio } from 'expo-av';
 import * as Font from 'expo-font';
 import {
   Nunito_400Regular,
@@ -57,6 +58,17 @@ const AppContent = () => {
 
   const loadFonts = async () => {
     try {
+      // Initialize audio mode first (CRITICAL for iOS)
+      console.log('🎵 Initializing audio mode at app startup...');
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        allowsRecordingIOS: true, // MUST be true to support both video recording and music playback
+      });
+      console.log('✅ Audio mode initialized successfully');
+
       await Font.loadAsync({
         // Kids Edition Font
         'Nunito_Regular': Nunito_400Regular,

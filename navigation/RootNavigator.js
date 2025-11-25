@@ -32,6 +32,7 @@ import KidPendingGiftsScreen from '../screens/KidPendingGiftsScreen';
 import FrameDecorationScreen from '../screens/FrameDecorationScreen';
 import VideoRecordingScreen from '../screens/VideoRecordingScreen';
 import VideoPlaybackScreen from '../screens/VideoPlaybackScreen';
+import FrameSelectionScreen from '../screens/FrameSelectionScreen';
 import MusicSelectionScreen from '../screens/MusicSelectionScreen';
 import VideoCustomizationScreen from '../screens/VideoCustomizationScreen';
 import VideoConfirmationScreen from '../screens/VideoConfirmationScreen';
@@ -102,6 +103,7 @@ const KidAppStack = () => {
       <Stack.Screen name="FrameDecoration" component={FrameDecorationScreen} />
       <Stack.Screen name="VideoRecording" component={VideoRecordingScreen} />
       <Stack.Screen name="VideoPlayback" component={VideoPlaybackScreen} />
+      <Stack.Screen name="FrameSelection" component={FrameSelectionScreen} />
       <Stack.Screen name="MusicSelection" component={MusicSelectionScreen} />
       <Stack.Screen name="VideoCustomization" component={VideoCustomizationScreen} />
       <Stack.Screen name="VideoConfirmation" component={VideoConfirmationScreen} />
@@ -246,95 +248,9 @@ export const RootNavigator = () => {
   );
 };
 
-// Auth Choice Screen - ShowThx branded welcome (native splash handles initial display)
+// Auth Choice Screen - ShowThx branded welcome
 const AuthChoiceScreen = ({ navigation }) => {
   const { theme, isKidsEdition } = useEdition();
-  const [attemptingBiometric, setAttemptingBiometric] = React.useState(false);
-  const [biometricChecked, setBiometricChecked] = React.useState(false);
-
-  React.useEffect(() => {
-    // Attempt biometric login on startup
-    checkBiometricLogin();
-  }, []);
-
-  const checkBiometricLogin = async () => {
-    try {
-      const { isBiometricLoginEnabled, attemptBiometricLogin } = require('../services/biometricService');
-      const { parentLogin, restoreParentSession } = require('../services/authService');
-
-      const isEnabled = await isBiometricLoginEnabled();
-      if (!isEnabled) {
-        setBiometricChecked(true);
-        return;
-      }
-
-      setAttemptingBiometric(true);
-      const result = await attemptBiometricLogin();
-
-      if (result.success) {
-        if (result.hasCredentials && result.email && result.password) {
-          // Use stored credentials for full re-authentication
-          console.log('🔐 Using stored credentials for login...');
-          const loginResult = await parentLogin(result.email, result.password);
-          if (loginResult.success) {
-            console.log('✅ Biometric login with credentials successful');
-            // Session will be detected by RootNavigator polling
-          } else {
-            console.log('❌ Credential login failed:', loginResult.error);
-          }
-        } else {
-          // Try session restore as fallback
-          const sessionResult = await restoreParentSession();
-          if (sessionResult.success) {
-            console.log('✅ Biometric session restore successful');
-          } else {
-            console.log('⚠️ Session expired - credentials not stored');
-          }
-        }
-      }
-    } catch (error) {
-      console.log('Biometric auto-login skipped:', error.message);
-    } finally {
-      setAttemptingBiometric(false);
-      setBiometricChecked(true);
-    }
-  };
-
-  // Show loading indicator while attempting biometric auth
-  if (attemptingBiometric) {
-    return (
-      <LinearGradient
-        colors={['#1e293b', '#0f172a', '#000000']}
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <LinearGradient
-          colors={['#06b6d4', '#0891b2']}
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 20,
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginBottom: 20,
-            shadowColor: '#06b6d4',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.4,
-            shadowRadius: 16,
-          }}
-        >
-          <Ionicons name="videocam" size={44} color="white" />
-        </LinearGradient>
-        <ActivityIndicator size="small" color="#06b6d4" style={{ marginTop: 20 }} />
-        <Text style={{ color: '#64748b', marginTop: 12, fontSize: 14 }}>
-          Authenticating...
-        </Text>
-      </LinearGradient>
-    );
-  }
 
   return (
     <LinearGradient

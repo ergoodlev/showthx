@@ -206,23 +206,6 @@ export const playMusicPreview = async (track) => {
     await stopMusicPreview();
     console.log('🎵 [MusicService] Stopped previous track');
 
-    // Configure audio session for music playback
-    console.log('🎵 [MusicService] Configuring audio mode...');
-    try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-        allowsRecordingIOS: false,
-      });
-      console.log('✅ [MusicService] Audio mode configured successfully');
-    } catch (audioModeError) {
-      console.warn('⚠️ [MusicService] Audio mode config warning:', audioModeError);
-      console.warn('⚠️ [MusicService] Continuing anyway...');
-      // Continue anyway - non-fatal
-    }
-
     // Validate track URL
     if (!track?.url) {
       console.error('❌ [MusicService] No track URL provided');
