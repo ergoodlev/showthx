@@ -218,7 +218,6 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           p_gift_id: giftId,
           p_parent_id: parentId,
           p_video_url: uploadResult.url,
-          p_storage_path: uploadResult.path,
           p_metadata: {
             music_id: musicId,
             frame: frame,

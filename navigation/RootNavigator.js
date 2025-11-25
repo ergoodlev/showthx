@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ActivityIndicator, View, Text, TouchableOpacity, AppState, Animated } from 'react-native';
+import { ActivityIndicator, View, Text, TouchableOpacity, AppState, Animated, Image } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -120,7 +120,7 @@ export const RootNavigator = () => {
 
   const loadSessions = async () => {
     const startTime = Date.now();
-    const MIN_SPLASH_DURATION = 4500; // 4.5 seconds minimum
+    const MIN_SPLASH_DURATION = 4000; // 4 seconds minimum
 
     try {
       // Check for parent session
@@ -147,7 +147,8 @@ export const RootNavigator = () => {
 
   const handleAppStateChange = async (nextAppState) => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-      // App has come to foreground - reload sessions
+      // App has come to foreground - show splash and reload sessions
+      setLoading(true);
       await loadSessions();
     }
     appState.current = nextAppState;
@@ -175,9 +176,46 @@ export const RootNavigator = () => {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.neutralColors.white }}>
-        <ActivityIndicator size="large" color={theme.brandColors.coral} />
-      </View>
+      <LinearGradient
+        colors={['#1e293b', '#0f172a', '#000000']}
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <Image
+          source={require('../assets/icon.png')}
+          style={{
+            width: 140,
+            height: 140,
+            marginBottom: 24,
+          }}
+          resizeMode="contain"
+        />
+        <Text
+          style={{
+            fontSize: 42,
+            fontWeight: '700',
+            color: '#ffffff',
+            letterSpacing: -0.5,
+            marginBottom: 12,
+          }}
+        >
+          ShowThx
+        </Text>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: '700',
+            color: '#06b6d4',
+            letterSpacing: 2,
+            textTransform: 'uppercase',
+          }}
+        >
+          #REELYTHANKFUL
+        </Text>
+      </LinearGradient>
     );
   }
 
@@ -310,23 +348,15 @@ const AuthChoiceScreen = ({ navigation }) => {
     >
       {/* Logo Section */}
       <View style={{ alignItems: 'center', marginBottom: 48 }}>
-        <LinearGradient
-          colors={['#06b6d4', '#0891b2']}
+        <Image
+          source={require('../assets/icon.png')}
           style={{
-            width: 80,
-            height: 80,
-            borderRadius: 20,
-            justifyContent: 'center',
-            alignItems: 'center',
+            width: 120,
+            height: 120,
             marginBottom: 20,
-            shadowColor: '#06b6d4',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.4,
-            shadowRadius: 16,
           }}
-        >
-          <Ionicons name="videocam" size={44} color="white" />
-        </LinearGradient>
+          resizeMode="contain"
+        />
         <Text
           style={{
             fontSize: 36,

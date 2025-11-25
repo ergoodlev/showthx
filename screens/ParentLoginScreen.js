@@ -253,8 +253,8 @@ export const ParentLoginScreen = ({ navigation }) => {
             <Image
               source={require('../assets/icon.png')}
               style={{
-                width: 80,
-                height: 80,
+                width: 140,
+                height: 140,
                 marginBottom: theme.spacing.md,
               }}
               resizeMode="contain"
