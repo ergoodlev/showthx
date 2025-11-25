@@ -13,18 +13,35 @@ CREATE TABLE IF NOT EXISTS frame_templates (
   name TEXT NOT NULL,
   description TEXT,
 
-  -- Frame appearance settings
+  -- Frame shape (parent chooses shape, kids decorate)
+  frame_shape TEXT NOT NULL DEFAULT 'rectangle',
+  -- Options: 'rectangle', 'rounded', 'polaroid', 'scalloped', 'playful'
+
+  -- Parent-defined custom text overlay (kids cannot change this)
+  custom_text TEXT DEFAULT '',
+  -- Example: "Thanks for coming to my party!" or "Thank you so much!"
+  custom_text_position TEXT DEFAULT 'bottom',
+  -- Options: 'top', 'bottom'
+  custom_text_color TEXT DEFAULT '#FFFFFF',
+  custom_text_font TEXT DEFAULT 'default',
+  -- Options: 'default', 'playful', 'elegant', 'bold'
+
+  -- Frame appearance settings (legacy - kept for backwards compatibility)
   frame_type TEXT NOT NULL DEFAULT 'minimal',
   -- Options: 'gradient-glow', 'neon-border', 'soft-vignette', 'celebration', 'minimal', 'custom'
 
   -- Colors (hex values)
-  primary_color TEXT DEFAULT '#FF6B6B',
-  secondary_color TEXT DEFAULT '#FFD93D',
+  primary_color TEXT DEFAULT '#06b6d4',
+  secondary_color TEXT DEFAULT '#0891b2',
   border_color TEXT DEFAULT '#FFFFFF',
 
-  -- Pattern overlay
+  -- Pattern overlay (decorations kids can add)
   pattern TEXT DEFAULT 'none',
   -- Options: 'none', 'balloons', 'stars', 'smiles', 'confetti', 'hearts'
+
+  -- Kid decoration settings (stored when kid decorates the frame)
+  kid_decorations JSONB DEFAULT '{}'::jsonb,
+  -- Structure: { emojis: [{emoji, x, y}], texture: 'sparkle', fill_color: '#FFD700' }
 
   -- Text defaults for this frame
   default_text_position TEXT DEFAULT 'bottom',

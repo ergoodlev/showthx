@@ -23,6 +23,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const isKidsEdition = edition === 'kids';
   const giftId = route?.params?.giftId;
   const giftName = route?.params?.giftName;
+  const frameTemplate = route?.params?.frameTemplate || null;
+  const decorations = route?.params?.decorations || null;
 
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -91,6 +93,100 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     setFacing(current => current === 'back' ? 'front' : 'back');
   };
 
+  // Render frame overlay on camera
+  const renderFrameOverlay = () => {
+    if (!frameTemplate) return null;
+
+    const shape = frameTemplate.frame_shape || 'rounded';
+    const borderRadius = shape === 'rectangle' ? 0 : shape === 'rounded' ? 20 : shape === 'polaroid' ? 4 : shape === 'playful' ? 30 : 8;
+    const frameColor = frameTemplate.primary_color || '#06b6d4';
+    const customText = frameTemplate.custom_text || '';
+    const textPosition = frameTemplate.custom_text_position || 'bottom';
+    const textColor = frameTemplate.custom_text_color || '#FFFFFF';
+
+    return (
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
+        {/* Frame border */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            right: 8,
+            bottom: 8,
+            borderRadius,
+            borderWidth: 4,
+            borderColor: frameColor,
+            backgroundColor: decorations?.fillColor ? `${decorations.fillColor}20` : 'transparent',
+          }}
+        />
+
+        {/* Decorations: emojis placed by kids */}
+        {decorations?.emojis?.map((emoji, idx) => (
+          <Text
+            key={idx}
+            style={{
+              position: 'absolute',
+              left: `${emoji.x}%`,
+              top: `${emoji.y}%`,
+              fontSize: 28,
+            }}
+          >
+            {emoji.emoji}
+          </Text>
+        ))}
+
+        {/* Texture pattern overlay */}
+        {decorations?.texture && decorations.texture !== 'none' && (
+          <View style={[StyleSheet.absoluteFill, { opacity: 0.3 }]}>
+            {[...Array(8)].map((_, i) => (
+              <Ionicons
+                key={i}
+                name={decorations.texture === 'sparkle' ? 'sparkles' : decorations.texture === 'hearts' ? 'heart' : decorations.texture === 'stars' ? 'star' : 'ellipse'}
+                size={20}
+                color={frameColor}
+                style={{
+                  position: 'absolute',
+                  left: `${(i % 4) * 28 + 5}%`,
+                  top: `${Math.floor(i / 4) * 45 + 10}%`,
+                }}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Parent's custom text */}
+        {customText && (
+          <View
+            style={{
+              position: 'absolute',
+              left: 16,
+              right: 16,
+              [textPosition === 'top' ? 'top' : 'bottom']: textPosition === 'top' ? 20 : 70,
+              alignItems: 'center',
+            }}
+          >
+            <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+              <Text
+                style={{
+                  color: textColor,
+                  fontSize: 16,
+                  fontWeight: '600',
+                  textAlign: 'center',
+                  textShadowColor: 'rgba(0,0,0,0.8)',
+                  textShadowOffset: { width: 1, height: 1 },
+                  textShadowRadius: 2,
+                }}
+              >
+                {customText}
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   // Permission loading
   if (!permission) {
     return (
@@ -157,6 +253,9 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
               setCameraReady(true);
             }}
           />
+
+          {/* Frame overlay (from parent template + kid decorations) */}
+          {renderFrameOverlay()}
 
           {/* Loading indicator while camera initializes */}
           {!cameraReady && (

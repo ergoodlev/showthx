@@ -39,14 +39,13 @@ const TEXT_COLORS = [
   { id: 'yellow', label: 'Yellow', hex: '#FFD93D' },
 ];
 
-// Modern frame styles - clean, contemporary designs
+// Video overlay effects - simple, clean options
 const FRAMES = [
-  { id: 'none', label: 'None', icon: 'remove-circle-outline' },
-  { id: 'gradient-glow', label: 'Glow', icon: 'sunny-outline', colors: ['#FF6B6B', '#FFD93D'] },
-  { id: 'neon-border', label: 'Neon', icon: 'flashlight-outline', colors: ['#00F5FF', '#FF00FF'] },
-  { id: 'soft-vignette', label: 'Soft', icon: 'ellipse-outline', colors: ['#000000'] },
-  { id: 'celebration', label: 'Party', icon: 'sparkles-outline', colors: ['#FFD700', '#FF6B6B'] },
-  { id: 'minimal', label: 'Clean', icon: 'square-outline', colors: ['#FFFFFF'] },
+  { id: 'none', label: 'None', icon: 'close-circle-outline', description: 'No overlay' },
+  { id: 'minimal', label: 'Clean', icon: 'square-outline', description: 'Simple white border' },
+  { id: 'neon-border', label: 'Neon', icon: 'flashlight-outline', description: 'Glowing edge' },
+  { id: 'soft-vignette', label: 'Cinematic', icon: 'film-outline', description: 'Dark edges' },
+  { id: 'celebration', label: 'Party', icon: 'sparkles-outline', description: 'Confetti dots' },
 ];
 
 export const VideoCustomizationScreen = ({ navigation, route }) => {
@@ -67,6 +66,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
   const [textPosition, setTextPosition] = useState('bottom'); // top, middle, bottom
   const [selectedFrame, setSelectedFrame] = useState('none');
   const [isDraggable, setIsDraggable] = useState(false);
+  const [isScrollEnabled, setIsScrollEnabled] = useState(true); // Control scroll during drag
 
   // Draggable text position (percentage-based for flexibility)
   const [textPosX, setTextPosX] = useState(50); // 0-100% from left
@@ -77,12 +77,26 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
   const videoContainerRef = useRef(null);
   const [containerLayout, setContainerLayout] = useState({ width: 200, height: 350 });
 
-  // PanResponder for draggable text
+  // Use refs to access current values in PanResponder callbacks
+  const isDraggableRef = useRef(isDraggable);
+  const textPosXRef = useRef(textPosX);
+  const textPosYRef = useRef(textPosY);
+  const containerLayoutRef = useRef(containerLayout);
+
+  // Keep refs in sync with state
+  isDraggableRef.current = isDraggable;
+  textPosXRef.current = textPosX;
+  textPosYRef.current = textPosY;
+  containerLayoutRef.current = containerLayout;
+
+  // PanResponder for draggable text - uses refs to get current values
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => isDraggable,
-      onMoveShouldSetPanResponder: () => isDraggable,
+      onStartShouldSetPanResponder: () => isDraggableRef.current,
+      onMoveShouldSetPanResponder: () => isDraggableRef.current,
       onPanResponderGrant: () => {
+        // Disable scrolling when dragging starts
+        setIsScrollEnabled(false);
         pan.setOffset({
           x: pan.x._value,
           y: pan.y._value,
@@ -93,10 +107,15 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
         useNativeDriver: false,
       }),
       onPanResponderRelease: (e, gesture) => {
+        // Re-enable scrolling when dragging ends
+        setIsScrollEnabled(true);
         pan.flattenOffset();
-        // Calculate percentage position
-        const newX = Math.max(10, Math.min(90, textPosX + (gesture.dx / containerLayout.width) * 100));
-        const newY = Math.max(10, Math.min(90, textPosY + (gesture.dy / containerLayout.height) * 100));
+        // Calculate percentage position using refs for current values
+        const layout = containerLayoutRef.current;
+        const currentX = textPosXRef.current;
+        const currentY = textPosYRef.current;
+        const newX = Math.max(10, Math.min(90, currentX + (gesture.dx / layout.width) * 100));
+        const newY = Math.max(10, Math.min(90, currentY + (gesture.dy / layout.height) * 100));
         setTextPosX(newX);
         setTextPosY(newY);
         pan.setValue({ x: 0, y: 0 });
@@ -148,45 +167,60 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
     });
   };
 
-  // Render frame overlay based on selection
+  // Render frame overlay based on selection - simplified and cleaner
   const renderFrameOverlay = () => {
-    const frame = FRAMES.find(f => f.id === selectedFrame);
-    if (!frame || selectedFrame === 'none') return null;
+    if (selectedFrame === 'none') return null;
+
+    const overlayStyles = {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      pointerEvents: 'none',
+    };
 
     switch (selectedFrame) {
-      case 'gradient-glow':
-        return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 40, backgroundColor: 'rgba(255,107,107,0.4)' }} />
-            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, backgroundColor: 'rgba(255,217,61,0.4)' }} />
-            <View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 8, backgroundColor: 'rgba(255,107,107,0.6)' }} />
-            <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 8, backgroundColor: 'rgba(255,217,61,0.6)' }} />
-          </View>
-        );
       case 'neon-border':
         return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 4, borderColor: '#00F5FF', borderRadius: 12, pointerEvents: 'none', shadowColor: '#00F5FF', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 10 }} />
+          <View style={[overlayStyles, {
+            borderWidth: 3,
+            borderColor: '#06b6d4',
+            borderRadius: 10,
+            shadowColor: '#06b6d4',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.9,
+            shadowRadius: 12,
+          }]} />
         );
       case 'soft-vignette':
         return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 50, backgroundColor: 'rgba(0,0,0,0.5)' }} />
-            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, backgroundColor: 'rgba(0,0,0,0.5)' }} />
+          <View style={overlayStyles}>
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 40, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+            <View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 15, backgroundColor: 'rgba(0,0,0,0.3)' }} />
+            <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 15, backgroundColor: 'rgba(0,0,0,0.3)' }} />
           </View>
         );
       case 'celebration':
         return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-            <View style={{ position: 'absolute', top: 8, left: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFD700' }} />
-            <View style={{ position: 'absolute', top: 8, right: 8, width: 16, height: 16, borderRadius: 8, backgroundColor: '#FF6B6B' }} />
-            <View style={{ position: 'absolute', bottom: 8, left: 20, width: 14, height: 14, borderRadius: 7, backgroundColor: '#FF6B6B' }} />
-            <View style={{ position: 'absolute', bottom: 12, right: 16, width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFD700' }} />
-            <View style={{ position: 'absolute', top: 40, right: 30, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFD700' }} />
+          <View style={overlayStyles}>
+            <View style={{ position: 'absolute', top: 10, left: 10, width: 12, height: 12, borderRadius: 6, backgroundColor: '#FFD700', opacity: 0.9 }} />
+            <View style={{ position: 'absolute', top: 10, right: 10, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF6B6B', opacity: 0.9 }} />
+            <View style={{ position: 'absolute', bottom: 10, left: 15, width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B5CF6', opacity: 0.9 }} />
+            <View style={{ position: 'absolute', bottom: 10, right: 15, width: 10, height: 10, borderRadius: 5, backgroundColor: '#06b6d4', opacity: 0.9 }} />
+            <View style={{ position: 'absolute', top: 30, right: 20, width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFD700', opacity: 0.8 }} />
+            <View style={{ position: 'absolute', bottom: 30, left: 25, width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF6B6B', opacity: 0.8 }} />
           </View>
         );
       case 'minimal':
         return (
-          <View style={{ position: 'absolute', top: 8, left: 8, right: 8, bottom: 8, borderWidth: 2, borderColor: 'rgba(255,255,255,0.8)', borderRadius: 8, pointerEvents: 'none' }} />
+          <View style={[overlayStyles, {
+            margin: 6,
+            borderWidth: 2,
+            borderColor: 'rgba(255,255,255,0.9)',
+            borderRadius: 6,
+          }]} />
         );
       default:
         return null;
@@ -201,7 +235,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
         showBack={true}
       />
 
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1 }} scrollEnabled={isScrollEnabled}>
         {/* Video Preview - Portrait aspect ratio for vertical videos */}
         <View
           style={{

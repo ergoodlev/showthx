@@ -54,28 +54,30 @@ export const sendParentWelcomeEmail = async (parentEmail, parentName) => {
         },
       ],
       from: { email: fromEmail },
-      subject: 'Welcome to ThankCast!',
+      subject: 'Welcome to ShowThx! #REELYTHANKFUL',
       content: [
         {
           type: 'text/html',
           value: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #FF6B6B;">Welcome to ThankCast!</h2>
+              <h2 style="color: #06b6d4;">Welcome to ShowThx!</h2>
+              <p style="color: #06b6d4; font-weight: bold; font-size: 16px;">#REELYTHANKFUL</p>
               <p>Hi ${parentName},</p>
-              <p>Thank you for signing up for ThankCast. We're excited to help you create and share special thank you videos with the people who matter most.</p>
+              <p>Thank you for signing up for ShowThx. We're excited to help you create and share special thank you videos with the people who matter most.</p>
 
-              <h3 style="color: #00A699;">Getting Started:</h3>
+              <h3 style="color: #06b6d4;">Getting Started:</h3>
               <ol>
                 <li>Create an event (birthday, holiday, etc.)</li>
                 <li>Add guests and gifts</li>
+                <li>Design a custom frame for your videos</li>
                 <li>Share a PIN with your children</li>
-                <li>Let them record thank you videos</li>
+                <li>Let them record and decorate thank you videos</li>
                 <li>Review and share with guests</li>
               </ol>
 
               <p style="color: #666; font-size: 14px;">If you have any questions, please don't hesitate to reach out to our support team.</p>
 
-              <p style="margin-top: 30px; color: #999; font-size: 12px;">Best regards,<br/>The ThankCast Team</p>
+              <p style="margin-top: 30px; color: #999; font-size: 12px;">Best regards,<br/>The ShowThx Team</p>
             </div>
           `,
         },
@@ -113,11 +115,11 @@ export const sendVideoReadyNotification = async (parentEmail, parentName, childN
           type: 'text/html',
           value: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #FF6B6B;">New Thank You Video Ready for Review</h2>
+              <h2 style="color: #06b6d4;">New Thank You Video Ready for Review</h2>
               <p>Hi ${parentName},</p>
               <p>${childName} has recorded a new thank you video for <strong>${giftName}</strong>!</p>
-              <p style="background: #f0f0f0; padding: 15px; border-radius: 8px;">Please log into ThankCast to review the video.</p>
-              <p style="margin-top: 30px; color: #999; font-size: 12px;">Best regards,<br/>The ThankCast Team</p>
+              <p style="background: #e0f2fe; padding: 15px; border-radius: 8px; border-left: 4px solid #06b6d4;">Please log into ShowThx to review the video before sharing.</p>
+              <p style="margin-top: 30px; color: #999; font-size: 12px;">Best regards,<br/>The ShowThx Team<br/>#REELYTHANKFUL</p>
             </div>
           `,
         },
@@ -132,11 +134,30 @@ export const sendVideoReadyNotification = async (parentEmail, parentName, childN
 };
 
 /**
- * Send video to guests via email
+ * Get default email template for video sharing
  */
-export const sendVideoToGuests = async (guestEmails, giftName, videoLink, expiresIn = '30 days') => {
+export const getDefaultVideoEmailTemplate = (giftName, childName = '') => {
+  return {
+    subject: `A Special Thank You Video for You!`,
+    greeting: `You've Received a Thank You Video!`,
+    message: childName
+      ? `${childName} has created a special video message just for you to say thank you.`
+      : `Someone special has created a video message just for you.`,
+    giftLabel: `Thank you for: ${giftName}`,
+    buttonText: `Watch the Video`,
+    signOff: `With gratitude,`,
+  };
+};
+
+/**
+ * Send video to guests via email with customizable content
+ */
+export const sendVideoToGuests = async (guestEmails, giftName, videoLink, expiresIn = '30 days', customTemplate = null) => {
   try {
     const fromEmail = Constants.expoConfig?.extra?.FROM_EMAIL || 'ericgoodlev@gmail.com';
+
+    // Use custom template or default
+    const template = customTemplate || getDefaultVideoEmailTemplate(giftName);
 
     // SendGrid accepts multiple recipients in one request
     const msg = {
@@ -144,20 +165,21 @@ export const sendVideoToGuests = async (guestEmails, giftName, videoLink, expire
         to: [{ email }],
       })),
       from: { email: fromEmail },
-      subject: `A Special Thank You Video for You!`,
+      subject: template.subject,
       content: [
         {
           type: 'text/html',
           value: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #FF6B6B;">You've Received a Thank You Video!</h2>
-              <p>Someone special has created a video message just for you.</p>
-              <p style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Gift:</strong> ${giftName}</p>
+              <h2 style="color: #06b6d4;">${template.greeting}</h2>
+              <p style="color: #06b6d4; font-weight: bold;">#REELYTHANKFUL</p>
+              <p>${template.message}</p>
+              <p style="background: #e0f2fe; padding: 15px; border-radius: 8px; border-left: 4px solid #06b6d4;"><strong>${template.giftLabel}</strong></p>
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${videoLink}" style="background: #FF6B6B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; display: inline-block;">Watch the Video</a>
+                <a href="${videoLink}" style="background: #06b6d4; color: white; padding: 14px 36px; text-decoration: none; border-radius: 12px; display: inline-block; font-weight: bold;">${template.buttonText}</a>
               </div>
               <p style="color: #666; font-size: 14px;"><strong>Important:</strong> This link expires in ${expiresIn}.</p>
-              <p style="margin-top: 30px; color: #999; font-size: 12px;">Best regards,<br/>The ThankCast Team</p>
+              <p style="margin-top: 30px; color: #999; font-size: 12px;">${template.signOff}<br/>The ShowThx Team</p>
             </div>
           `,
         },
@@ -179,4 +201,5 @@ export default {
   sendParentWelcomeEmail,
   sendVideoReadyNotification,
   sendVideoToGuests,
+  getDefaultVideoEmailTemplate,
 };

@@ -14,6 +14,7 @@ import {
   Platform,
   SafeAreaView,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -86,7 +87,24 @@ export const ParentLoginScreen = ({ navigation }) => {
         return;
       }
 
-      // Restore session using the stored user ID
+      // If credentials are available, use them for full re-authentication
+      if (result.hasCredentials && result.email && result.password) {
+        console.log('🔐 Biometric login with stored credentials - performing full login');
+        const loginResult = await parentLogin(result.email, result.password);
+
+        if (!loginResult.success) {
+          // Credentials may have changed - prompt user to log in manually
+          setError('Your password has changed. Please log in with your current password.');
+          return;
+        }
+
+        console.log('✅ Biometric login successful with full authentication');
+        // RootNavigator will detect session and switch to ParentAppStack
+        return;
+      }
+
+      // Fallback: Try to restore session (less secure, may not work if session expired)
+      console.log('⚠️ No stored credentials - attempting session restore');
       const sessionResult = await restoreParentSession();
 
       if (!sessionResult.success) {
@@ -94,9 +112,9 @@ export const ParentLoginScreen = ({ navigation }) => {
         return;
       }
 
-      console.log('Biometric login successful');
+      console.log('✅ Biometric login successful with session restore');
     } catch (err) {
-      console.error('Biometric login error:', err);
+      console.error('❌ Biometric login error:', err);
       setError('Biometric login failed. Please try again or use email/password.');
     } finally {
       setLoading(false);
@@ -176,9 +194,10 @@ export const ParentLoginScreen = ({ navigation }) => {
             {
               text: 'Enable',
               onPress: async () => {
-                const enableResult = await enableBiometricLogin(result.userId);
+                // Pass credentials for secure storage - enables true "remember me"
+                const enableResult = await enableBiometricLogin(result.userId, email, password);
                 if (enableResult.success) {
-                  console.log(`✅ ${biometricType} enabled for login`);
+                  console.log(`✅ ${biometricType} enabled with secure credential storage`);
                 }
               },
             },
@@ -229,8 +248,17 @@ export const ParentLoginScreen = ({ navigation }) => {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* Header with ShowThx branding */}
           <View style={[styles.header, { marginBottom: theme.spacing.lg }]}>
+            <Image
+              source={require('../assets/icon.png')}
+              style={{
+                width: 80,
+                height: 80,
+                marginBottom: theme.spacing.md,
+              }}
+              resizeMode="contain"
+            />
             <Text
               style={[
                 styles.title,
@@ -238,11 +266,23 @@ export const ParentLoginScreen = ({ navigation }) => {
                   fontSize: isKidsEdition ? 28 : 24,
                   color: theme.neutralColors.dark,
                   fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-                  marginBottom: theme.spacing.sm,
+                  marginBottom: theme.spacing.xs,
                 },
               ]}
             >
-              Welcome Back
+              Welcome to ShowThx
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: '#06b6d4',
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+                marginBottom: theme.spacing.sm,
+              }}
+            >
+              #REELYTHANKFUL
             </Text>
             <Text
               style={[
@@ -254,7 +294,7 @@ export const ParentLoginScreen = ({ navigation }) => {
                 },
               ]}
             >
-              Sign in to your account
+              Sign in to continue
             </Text>
           </View>
 

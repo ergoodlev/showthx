@@ -1,9 +1,10 @@
 /**
  * MusicSelectionScreen
  * Select background music for recorded thank you video
+ * Uses royalty-free Mixkit tracks
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,27 +13,22 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { useFocusEffect } from '@react-navigation/native';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
-
-// Mock music library - in production, fetch from Supabase
-const MUSIC_LIBRARY = [
-  { id: '1', title: 'Happy Celebration', artist: 'Studio Tracks', mood: 'Happy', duration: 120, url: 'https://example.com/music/happy1.mp3' },
-  { id: '2', title: 'Grateful Feels', artist: 'Uplifting Music', mood: 'Uplifting', duration: 140, url: 'https://example.com/music/uplifting1.mp3' },
-  { id: '3', title: 'Warm Moments', artist: 'Emotion Music', mood: 'Calm', duration: 130, url: 'https://example.com/music/calm1.mp3' },
-  { id: '4', title: 'Sunshine Joy', artist: 'Happy Tunes', mood: 'Happy', duration: 110, url: 'https://example.com/music/happy2.mp3' },
-  { id: '5', title: 'Energetic Vibes', artist: 'Upbeat Music', mood: 'Energetic', duration: 150, url: 'https://example.com/music/energetic1.mp3' },
-  { id: '6', title: 'Peaceful Melody', artist: 'Zen Sounds', mood: 'Calm', duration: 135, url: 'https://example.com/music/calm2.mp3' },
-  { id: '7', title: 'Celebratory Joy', artist: 'Party Music', mood: 'Celebratory', duration: 125, url: 'https://example.com/music/celebratory1.mp3' },
-  { id: '8', title: 'Uplifting Sunrise', artist: 'New Day Music', mood: 'Uplifting', duration: 120, url: 'https://example.com/music/uplifting2.mp3' },
-];
-
-const MOODS = ['All', 'Happy', 'Calm', 'Energetic', 'Uplifting', 'Celebratory'];
+import {
+  getMusicLibrary,
+  getMusicByMood,
+  playMusicPreview,
+  stopMusicPreview,
+  formatDuration,
+  MUSIC_MOODS,
+} from '../services/musicService';
 
 export const MusicSelectionScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -41,60 +37,111 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
   const giftId = route?.params?.giftId;
   const giftName = route?.params?.giftName;
 
-  const soundRef = useRef(null);
   const [selectedMood, setSelectedMood] = useState('All');
   const [selectedMusic, setSelectedMusic] = useState(null);
   const [loading, setLoading] = useState(false);
   const [previewPlaying, setPreviewPlaying] = useState(null);
-  const [filteredMusics, setFilteredMusics] = useState(MUSIC_LIBRARY);
+  const [previewLoading, setPreviewLoading] = useState(null);
+  const [musicLibrary, setMusicLibrary] = useState([]);
+  const [filteredMusics, setFilteredMusics] = useState([]);
 
+  // Load music library on mount
   useEffect(() => {
-    // Filter music by mood
-    if (selectedMood === 'All') {
-      setFilteredMusics(MUSIC_LIBRARY);
-    } else {
-      setFilteredMusics(MUSIC_LIBRARY.filter(m => m.mood === selectedMood));
-    }
-  }, [selectedMood]);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-    };
+    const library = getMusicLibrary();
+    setMusicLibrary(library);
+    setFilteredMusics(library);
   }, []);
 
-  const handlePlayPreview = (music) => {
-    // Music preview coming soon - show friendly message
-    Alert.alert(
-      '🎵 Preview Coming Soon',
-      `"${music.title}" by ${music.artist}\n\nMusic previews will be available in a future update. For now, select a track and it will be noted for the video.`,
-      [{ text: 'Got it!', style: 'default' }]
-    );
+  // Filter music when mood changes
+  useEffect(() => {
+    const filtered = getMusicByMood(selectedMood);
+    setFilteredMusics(filtered);
+  }, [selectedMood]);
+
+  // Stop music when leaving the screen
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        // Cleanup: stop music when screen loses focus
+        stopMusicPreview();
+        setPreviewPlaying(null);
+      };
+    }, [])
+  );
+
+  const handlePlayPreview = async (music) => {
+    try {
+      // If same track is playing, stop it
+      if (previewPlaying === music.id) {
+        await stopMusicPreview();
+        setPreviewPlaying(null);
+        return;
+      }
+
+      // Stop current preview if any
+      if (previewPlaying) {
+        await stopMusicPreview();
+        setPreviewPlaying(null);
+      }
+
+      // Start loading indicator
+      setPreviewLoading(music.id);
+
+      // Play the new track
+      const result = await playMusicPreview(music);
+
+      setPreviewLoading(null);
+
+      if (result.success) {
+        setPreviewPlaying(music.id);
+      } else {
+        Alert.alert(
+          'Playback Error',
+          'Could not play this track. Please try another one.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Preview error:', error);
+      setPreviewLoading(null);
+      setPreviewPlaying(null);
+    }
   };
 
   const handleSelectMusic = (music) => {
     setSelectedMusic(music);
   };
 
-  const handleNoMusic = () => {
+  const handleNoMusic = async () => {
+    // Stop any playing preview
+    if (previewPlaying) {
+      await stopMusicPreview();
+      setPreviewPlaying(null);
+    }
     setSelectedMusic(null);
   };
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
+    // Stop any playing preview before navigating
+    if (previewPlaying) {
+      await stopMusicPreview();
+      setPreviewPlaying(null);
+    }
+
     navigation?.navigate('VideoCustomization', {
       videoUri,
       giftId,
       giftName,
       musicId: selectedMusic?.id,
       musicTitle: selectedMusic?.title,
+      musicUrl: selectedMusic?.url,
     });
   };
 
   const renderMusicCard = ({ item }) => {
     const isSelected = selectedMusic?.id === item.id;
+    const isPlaying = previewPlaying === item.id;
+    const isLoadingPreview = previewLoading === item.id;
 
     return (
       <TouchableOpacity
@@ -123,28 +170,40 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
           >
             {item.title}
           </Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text
-              style={{
-                fontSize: isKidsEdition ? 12 : 11,
-                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: isSelected ? 'rgba(255,255,255,0.8)' : theme.neutralColors.mediumGray,
-              }}
-            >
-              {item.artist}
-            </Text>
-            <Text
-              style={{
-                fontSize: isKidsEdition ? 12 : 11,
-                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: isSelected ? 'rgba(255,255,255,0.8)' : theme.neutralColors.mediumGray,
-              }}
-            >
-              {item.duration}s
-            </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View
+                style={{
+                  backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(0,166,153,0.1)',
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 10,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 11 : 10,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: isSelected ? 'rgba(255,255,255,0.9)' : theme.brandColors.teal,
+                  }}
+                >
+                  {item.mood}
+                </Text>
+              </View>
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 12 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: isSelected ? 'rgba(255,255,255,0.8)' : theme.neutralColors.mediumGray,
+                }}
+              >
+                {formatDuration(item.duration)}
+              </Text>
+            </View>
           </View>
         </View>
 
+        {/* Play/Pause button */}
         <TouchableOpacity
           onPress={() => handlePlayPreview(item)}
           style={{
@@ -152,16 +211,24 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
             width: 48,
             height: 48,
             borderRadius: 24,
-            backgroundColor: isSelected ? 'rgba(255,255,255,0.3)' : theme.brandColors.coral,
+            backgroundColor: isPlaying
+              ? theme.brandColors.teal
+              : isSelected
+              ? 'rgba(255,255,255,0.3)'
+              : theme.brandColors.coral,
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
-          <Ionicons
-            name={previewPlaying === item.id ? 'pause' : 'play'}
-            size={24}
-            color={isSelected ? '#FFFFFF' : '#FFFFFF'}
-          />
+          {isLoadingPreview ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons
+              name={isPlaying ? 'pause' : 'play'}
+              size={24}
+              color="#FFFFFF"
+            />
+          )}
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -176,7 +243,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
       />
 
       <ScrollView style={{ flex: 1 }}>
-        {/* Coming Soon Banner */}
+        {/* Mixkit Info Banner */}
         <View
           style={{
             backgroundColor: 'rgba(78, 205, 196, 0.15)',
@@ -198,7 +265,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
                 color: theme.brandColors.teal,
               }}
             >
-              Music Integration Coming Soon!
+              Royalty-Free Music
             </Text>
             <Text
               style={{
@@ -208,7 +275,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
                 marginTop: 2,
               }}
             >
-              Select your preferred track. Full audio will be added in a future update.
+              Tap play to preview any track, then select it for your video.
             </Text>
           </View>
         </View>
@@ -228,7 +295,7 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ flexDirection: 'row', paddingHorizontal: theme.spacing.md, gap: theme.spacing.sm }}>
-              {MOODS.map(mood => (
+              {MUSIC_MOODS.map(mood => (
                 <TouchableOpacity
                   key={mood}
                   onPress={() => setSelectedMood(mood)}
@@ -265,10 +332,17 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
             padding: theme.spacing.md,
             marginHorizontal: theme.spacing.md,
             marginBottom: theme.spacing.lg,
+            flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
+            gap: theme.spacing.sm,
           }}
         >
+          <Ionicons
+            name="volume-mute"
+            size={20}
+            color={selectedMusic === null ? '#FFFFFF' : theme.neutralColors.mediumGray}
+          />
           <Text
             style={{
               fontSize: isKidsEdition ? 16 : 14,
@@ -279,6 +353,19 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
             No Music
           </Text>
         </TouchableOpacity>
+
+        {/* Track Count */}
+        <Text
+          style={{
+            fontSize: isKidsEdition ? 12 : 11,
+            fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+            color: theme.neutralColors.mediumGray,
+            marginLeft: theme.spacing.md,
+            marginBottom: theme.spacing.sm,
+          }}
+        >
+          {filteredMusics.length} track{filteredMusics.length !== 1 ? 's' : ''} available
+        </Text>
 
         {/* Music List */}
         <FlatList
@@ -300,6 +387,30 @@ export const MusicSelectionScreen = ({ navigation, route }) => {
           borderTopColor: theme.neutralColors.lightGray,
         }}
       >
+        {selectedMusic && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(255, 107, 107, 0.1)',
+              padding: theme.spacing.sm,
+              borderRadius: 8,
+              marginBottom: theme.spacing.md,
+            }}
+          >
+            <Ionicons name="checkmark-circle" size={20} color={theme.brandColors.coral} />
+            <Text
+              style={{
+                fontSize: 12,
+                color: theme.brandColors.coral,
+                marginLeft: 6,
+                fontWeight: '600',
+              }}
+            >
+              Selected: {selectedMusic.title}
+            </Text>
+          </View>
+        )}
         <ThankCastButton
           title="Next: Customize"
           onPress={handleProceed}

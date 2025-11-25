@@ -11,7 +11,12 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
+  Text,
+  Modal,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { TextField } from '../components/TextField';
@@ -30,7 +35,9 @@ export const EventManagementScreen = ({ navigation, route }) => {
   // Form state
   const [name, setName] = useState(existingEvent?.name || '');
   const [eventType, setEventType] = useState(existingEvent?.event_type || 'birthday');
-  const [eventDate, setEventDate] = useState(existingEvent?.event_date || '');
+  const [eventDate, setEventDate] = useState(
+    existingEvent?.event_date ? new Date(existingEvent.event_date) : new Date()
+  );
   const [location, setLocation] = useState(existingEvent?.location || '');
   const [description, setDescription] = useState(existingEvent?.description || '');
 
@@ -38,6 +45,32 @@ export const EventManagementScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Format date for display
+  const formatDate = (date) => {
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  // Format date for database (YYYY-MM-DD)
+  const formatDateForDB = (date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  // Handle date change
+  const handleDateChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (selectedDate) {
+      setEventDate(selectedDate);
+    }
+  };
 
   // Validation
   const validateForm = () => {
@@ -47,7 +80,8 @@ export const EventManagementScreen = ({ navigation, route }) => {
       errors.name = 'Event name is required';
     }
 
-    if (!eventDate.trim()) {
+    // eventDate is always a Date object now, so just check if it's valid
+    if (!eventDate || isNaN(eventDate.getTime())) {
       errors.eventDate = 'Event date is required';
     }
 
@@ -81,7 +115,7 @@ export const EventManagementScreen = ({ navigation, route }) => {
       const eventData = {
         name,
         event_type: eventType,
-        event_date: eventDate,
+        event_date: formatDateForDB(eventDate),
         location: location || null,
         description: description || null,
       };
@@ -171,14 +205,63 @@ export const EventManagementScreen = ({ navigation, route }) => {
             onChangeText={setEventType}
           />
 
-          <TextField
-            label="Event Date"
-            placeholder="YYYY-MM-DD"
-            value={eventDate}
-            onChangeText={setEventDate}
-            error={validationErrors.eventDate}
-            required
-          />
+          {/* Date Picker Field */}
+          <View style={styles.dateFieldContainer}>
+            <Text style={styles.dateLabel}>Event Date <Text style={styles.required}>*</Text></Text>
+            <TouchableOpacity
+              style={[
+                styles.dateButton,
+                validationErrors.eventDate && styles.dateButtonError,
+              ]}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.dateButtonText}>{formatDate(eventDate)}</Text>
+            </TouchableOpacity>
+            {validationErrors.eventDate && (
+              <Text style={styles.errorText}>{validationErrors.eventDate}</Text>
+            )}
+          </View>
+
+          {/* Date Picker Modal for iOS */}
+          {Platform.OS === 'ios' && showDatePicker && (
+            <Modal
+              transparent
+              animationType="slide"
+              visible={showDatePicker}
+              onRequestClose={() => setShowDatePicker(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <Text style={styles.modalCancel}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.modalTitle}>Select Date</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <Text style={styles.modalDone}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={eventDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleDateChange}
+                    style={styles.datePicker}
+                  />
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {/* Date Picker for Android (inline) */}
+          {Platform.OS === 'android' && showDatePicker && (
+            <DateTimePicker
+              value={eventDate}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+            />
+          )}
 
           <TextField
             label="Location"
@@ -195,6 +278,28 @@ export const EventManagementScreen = ({ navigation, route }) => {
             multiline={true}
             numberOfLines={4}
           />
+
+          {/* Frame Creation Section */}
+          <View style={styles.frameSection}>
+            <View style={styles.frameSectionHeader}>
+              <Ionicons name="image-outline" size={24} color="#06b6d4" />
+              <View style={styles.frameSectionText}>
+                <Text style={styles.frameSectionTitle}>Event Frame</Text>
+                <Text style={styles.frameSectionDesc}>
+                  Create a custom video frame for this event
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.createFrameButton}
+              onPress={() => navigation?.navigate('FrameCreation', {
+                eventName: name || 'New Event',
+              })}
+            >
+              <Ionicons name="add-circle" size={20} color="#06b6d4" />
+              <Text style={styles.createFrameText}>Create Frame</Text>
+            </TouchableOpacity>
+          </View>
 
           <ThankCastButton
             title={mode === 'create' ? 'Create Event' : 'Save Changes'}
@@ -214,6 +319,118 @@ export const EventManagementScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  dateFieldContainer: {
+    marginBottom: 16,
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  required: {
+    color: '#EF4444',
+  },
+  dateButton: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  dateButtonError: {
+    borderColor: '#EF4444',
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  modalCancel: {
+    fontSize: 17,
+    color: '#6B7280',
+  },
+  modalDone: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#06b6d4',
+  },
+  datePicker: {
+    height: 216,
+  },
+  frameSection: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  frameSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  frameSectionText: {
+    flex: 1,
+  },
+  frameSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0F766E',
+    marginBottom: 2,
+  },
+  frameSectionDesc: {
+    fontSize: 13,
+    color: '#5EEAD4',
+  },
+  createFrameButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#06b6d4',
+  },
+  createFrameText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#06b6d4',
   },
 });
 

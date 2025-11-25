@@ -20,34 +20,55 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { height: screenHeight } = Dimensions.get('window');
 
+const MINIMUM_SPLASH_TIME = 3500; // 3.5 seconds minimum display time
+
 export default function SplashScreen({ onLoginPressed, onSignUpPressed, onCheckingUser }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasConsent, setHasConsent] = useState(false);
   const logoScale = React.useRef(new Animated.Value(0.5)).current;
   const contentOpacity = React.useRef(new Animated.Value(0)).current;
+  const taglineOpacity = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    checkUserStatus();
+    const startTime = Date.now();
+
+    const initializeApp = async () => {
+      try {
+        if (onCheckingUser) {
+          onCheckingUser();
+        }
+        const consent = await AsyncStorage.getItem('parentalConsentGiven');
+        setHasConsent(consent === 'true');
+
+        // Calculate remaining time to meet minimum splash duration
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, MINIMUM_SPLASH_TIME - elapsedTime);
+
+        // Wait for minimum time before showing content
+        setTimeout(() => {
+          setIsLoading(false);
+        }, remainingTime);
+      } catch (error) {
+        console.error('Error checking user status:', error);
+        // Still wait minimum time even on error
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, MINIMUM_SPLASH_TIME - elapsedTime);
+        setTimeout(() => setIsLoading(false), remainingTime);
+      }
+    };
+
+    initializeApp();
     animateLogo();
   }, []);
-
-  const checkUserStatus = async () => {
-    try {
-      if (onCheckingUser) {
-        onCheckingUser();
-      }
-      const consent = await AsyncStorage.getItem('parentalConsentGiven');
-      setHasConsent(consent === 'true');
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error checking user status:', error);
-      setIsLoading(false);
-    }
-  };
 
   const animateLogo = () => {
     Animated.sequence([
       Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(taglineOpacity, {
         toValue: 1,
         duration: 800,
         useNativeDriver: true,
@@ -105,7 +126,14 @@ export default function SplashScreen({ onLoginPressed, onSignUpPressed, onChecki
             </LinearGradient>
           </View>
           <Text style={styles.appTitle}>ShowThx</Text>
-          <Text style={styles.appSubtitle}>Thank You Videos Made Easy</Text>
+          <Animated.Text
+            style={[
+              styles.appTagline,
+              { opacity: taglineOpacity },
+            ]}
+          >
+            #REELYTHANKFUL
+          </Animated.Text>
         </Animated.View>
 
         {/* Content Section */}
@@ -257,16 +285,18 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   appTitle: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
     color: '#ffffff',
     letterSpacing: -0.5,
   },
-  appSubtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 8,
-    fontWeight: '500',
+  appTagline: {
+    fontSize: 18,
+    color: '#06b6d4',
+    marginTop: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   contentSection: {
     flex: 1,

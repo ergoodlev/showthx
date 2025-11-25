@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
+      "backgroundColor": "#0f172a"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.EricGoodlev.ShowThx",
-      "buildNumber": "5",
+      "buildNumber": "23",
       "infoPlist": {
         "NSCameraUsageDescription": "ShowThx needs access to your camera to record thank you videos.",
         "NSMicrophoneUsageDescription": "ShowThx needs access to your microphone to record audio for your thank you videos.",

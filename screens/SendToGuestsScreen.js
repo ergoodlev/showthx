@@ -12,6 +12,10 @@ import {
   SafeAreaView,
   FlatList,
   Switch,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEdition } from '../context/EditionContext';
@@ -19,8 +23,9 @@ import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { supabase } from '../supabaseClient';
-import { sendVideoToGuests } from '../services/emailService';
+import { sendVideoToGuests, getDefaultVideoEmailTemplate } from '../services/emailService';
 import { updateGift } from '../services/databaseService';
+import { sendVideoViaSMS, checkSMSAvailable } from '../services/smsService';
 
 export const SendToGuestsScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -33,6 +38,22 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [guests, setGuests] = useState([]);
   const [selectedGuests, setSelectedGuests] = useState(new Set());
   const [fetchingGuests, setFetchingGuests] = useState(true);
+  const [sendMethod, setSendMethod] = useState('email'); // 'email' or 'sms'
+  const [smsAvailable, setSmsAvailable] = useState(false);
+
+  // Email customization state
+  const [showEmailCustomizer, setShowEmailCustomizer] = useState(false);
+  const [emailTemplate, setEmailTemplate] = useState(() => getDefaultVideoEmailTemplate(giftName));
+  const [childName, setChildName] = useState('');
+
+  // Check SMS availability on mount
+  useEffect(() => {
+    const checkSms = async () => {
+      const available = await checkSMSAvailable();
+      setSmsAvailable(available);
+    };
+    checkSms();
+  }, []);
 
   // Fetch guests for this event on mount
   useEffect(() => {
@@ -105,20 +126,50 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
     try {
       setLoading(true);
 
-      const selectedGuestEmails = guests
-        .filter(g => selectedGuests.has(g.id))
-        .map(g => g.email);
+      const selectedGuestData = guests.filter(g => selectedGuests.has(g.id));
 
-      // Send emails via SendGrid
-      const emailResult = await sendVideoToGuests(
-        selectedGuestEmails,
-        giftName,
-        videoUri,
-        '30 days'
-      );
+      if (sendMethod === 'email') {
+        // Send via email with custom template
+        const selectedGuestEmails = selectedGuestData.map(g => g.email);
 
-      if (!emailResult.success) {
-        throw new Error(emailResult.error || 'Failed to send emails');
+        const emailResult = await sendVideoToGuests(
+          selectedGuestEmails,
+          giftName,
+          videoUri,
+          '30 days',
+          emailTemplate // Pass custom template
+        );
+
+        if (!emailResult.success) {
+          throw new Error(emailResult.error || 'Failed to send emails');
+        }
+      } else if (sendMethod === 'sms') {
+        // Send via SMS - opens native SMS composer
+        const phoneNumbers = selectedGuestData
+          .filter(g => g.phone)
+          .map(g => g.phone);
+
+        if (phoneNumbers.length === 0) {
+          alert('Selected guests do not have phone numbers. Please use email instead.');
+          setLoading(false);
+          return;
+        }
+
+        const smsResult = await sendVideoViaSMS(
+          phoneNumbers,
+          giftName,
+          videoUri
+        );
+
+        if (!smsResult.success && smsResult.error !== 'Message was cancelled') {
+          throw new Error(smsResult.error || 'Failed to open SMS');
+        }
+
+        // If cancelled, don't proceed
+        if (smsResult.error === 'Message was cancelled') {
+          setLoading(false);
+          return;
+        }
       }
 
       // Update gift status to 'sent'
@@ -137,6 +188,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
       navigation?.navigate('SendSuccess', {
         giftName,
         guestCount: selectedGuests.size,
+        sendMethod,
       });
     } catch (error) {
       console.error('Error sending to guests:', error);
@@ -241,6 +293,132 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           >
             {giftName}
           </Text>
+        </View>
+
+        {/* Send Method Selector */}
+        <View
+          style={{
+            marginHorizontal: theme.spacing.md,
+            marginBottom: theme.spacing.lg,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 14 : 12,
+              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+              color: theme.neutralColors.dark,
+              marginBottom: theme.spacing.sm,
+            }}
+          >
+            Send via
+          </Text>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <TouchableOpacity
+              onPress={() => setSendMethod('email')}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: theme.spacing.md,
+                borderRadius: 8,
+                backgroundColor: sendMethod === 'email' ? theme.brandColors.coral : theme.neutralColors.lightGray,
+                borderWidth: 2,
+                borderColor: sendMethod === 'email' ? theme.brandColors.coral : 'transparent',
+              }}
+            >
+              <Ionicons
+                name="mail"
+                size={20}
+                color={sendMethod === 'email' ? '#FFFFFF' : theme.neutralColors.mediumGray}
+              />
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 14 : 12,
+                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
+                  color: sendMethod === 'email' ? '#FFFFFF' : theme.neutralColors.dark,
+                }}
+              >
+                Email
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => smsAvailable && setSendMethod('sms')}
+              disabled={!smsAvailable}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: theme.spacing.md,
+                borderRadius: 8,
+                backgroundColor: sendMethod === 'sms' ? theme.brandColors.teal : theme.neutralColors.lightGray,
+                borderWidth: 2,
+                borderColor: sendMethod === 'sms' ? theme.brandColors.teal : 'transparent',
+                opacity: smsAvailable ? 1 : 0.5,
+              }}
+            >
+              <Ionicons
+                name="chatbubble"
+                size={20}
+                color={sendMethod === 'sms' ? '#FFFFFF' : theme.neutralColors.mediumGray}
+              />
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 14 : 12,
+                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
+                  color: sendMethod === 'sms' ? '#FFFFFF' : theme.neutralColors.dark,
+                }}
+              >
+                SMS
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {!smsAvailable && (
+            <Text
+              style={{
+                fontSize: 10,
+                color: theme.neutralColors.mediumGray,
+                marginTop: 4,
+                fontStyle: 'italic',
+              }}
+            >
+              SMS not available on this device
+            </Text>
+          )}
+
+          {/* Customize Email Button */}
+          {sendMethod === 'email' && (
+            <TouchableOpacity
+              onPress={() => setShowEmailCustomizer(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: theme.spacing.md,
+                paddingVertical: theme.spacing.sm,
+                borderWidth: 1,
+                borderColor: theme.brandColors.teal,
+                borderRadius: 8,
+                backgroundColor: 'rgba(0, 166, 153, 0.05)',
+              }}
+            >
+              <Ionicons name="create-outline" size={18} color={theme.brandColors.teal} />
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 13 : 12,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: theme.brandColors.teal,
+                  marginLeft: 6,
+                }}
+              >
+                Customize Email Message
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Select All Option */}
@@ -393,6 +571,310 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
       )}
 
       <LoadingSpinner visible={loading} message="Sending videos..." fullScreen />
+
+      {/* Email Customization Modal */}
+      <Modal
+        visible={showEmailCustomizer}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEmailCustomizer(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: theme.spacing.md,
+                paddingVertical: theme.spacing.md,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.neutralColors.lightGray,
+              }}
+            >
+              <TouchableOpacity onPress={() => setShowEmailCustomizer(false)}>
+                <Text style={{ fontSize: 16, color: theme.neutralColors.mediumGray }}>Cancel</Text>
+              </TouchableOpacity>
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 18 : 16,
+                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
+                  color: theme.neutralColors.dark,
+                }}
+              >
+                Customize Email
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowEmailCustomizer(false);
+                }}
+              >
+                <Text style={{ fontSize: 16, color: theme.brandColors.teal, fontWeight: '600' }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ flex: 1, padding: theme.spacing.md }}>
+              {/* Subject */}
+              <View style={{ marginBottom: theme.spacing.lg }}>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 14 : 12,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.dark,
+                    marginBottom: theme.spacing.sm,
+                  }}
+                >
+                  Email Subject
+                </Text>
+                <TextInput
+                  value={emailTemplate.subject}
+                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, subject: text })}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.neutralColors.lightGray,
+                    borderRadius: 8,
+                    padding: theme.spacing.md,
+                    fontSize: 14,
+                    color: theme.neutralColors.dark,
+                  }}
+                  placeholder="Email subject line"
+                />
+              </View>
+
+              {/* Greeting */}
+              <View style={{ marginBottom: theme.spacing.lg }}>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 14 : 12,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.dark,
+                    marginBottom: theme.spacing.sm,
+                  }}
+                >
+                  Greeting/Headline
+                </Text>
+                <TextInput
+                  value={emailTemplate.greeting}
+                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, greeting: text })}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.neutralColors.lightGray,
+                    borderRadius: 8,
+                    padding: theme.spacing.md,
+                    fontSize: 14,
+                    color: theme.neutralColors.dark,
+                  }}
+                  placeholder="Email headline"
+                />
+              </View>
+
+              {/* Message */}
+              <View style={{ marginBottom: theme.spacing.lg }}>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 14 : 12,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.dark,
+                    marginBottom: theme.spacing.sm,
+                  }}
+                >
+                  Message
+                </Text>
+                <TextInput
+                  value={emailTemplate.message}
+                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, message: text })}
+                  multiline
+                  numberOfLines={3}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.neutralColors.lightGray,
+                    borderRadius: 8,
+                    padding: theme.spacing.md,
+                    fontSize: 14,
+                    color: theme.neutralColors.dark,
+                    minHeight: 80,
+                    textAlignVertical: 'top',
+                  }}
+                  placeholder="Your message to guests"
+                />
+              </View>
+
+              {/* Gift Label */}
+              <View style={{ marginBottom: theme.spacing.lg }}>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 14 : 12,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.dark,
+                    marginBottom: theme.spacing.sm,
+                  }}
+                >
+                  Gift Label
+                </Text>
+                <TextInput
+                  value={emailTemplate.giftLabel}
+                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, giftLabel: text })}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.neutralColors.lightGray,
+                    borderRadius: 8,
+                    padding: theme.spacing.md,
+                    fontSize: 14,
+                    color: theme.neutralColors.dark,
+                  }}
+                  placeholder="e.g., Thank you for: [Gift Name]"
+                />
+              </View>
+
+              {/* Button Text */}
+              <View style={{ marginBottom: theme.spacing.lg }}>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 14 : 12,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.dark,
+                    marginBottom: theme.spacing.sm,
+                  }}
+                >
+                  Button Text
+                </Text>
+                <TextInput
+                  value={emailTemplate.buttonText}
+                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, buttonText: text })}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.neutralColors.lightGray,
+                    borderRadius: 8,
+                    padding: theme.spacing.md,
+                    fontSize: 14,
+                    color: theme.neutralColors.dark,
+                  }}
+                  placeholder="e.g., Watch the Video"
+                />
+              </View>
+
+              {/* Sign Off */}
+              <View style={{ marginBottom: theme.spacing.lg }}>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 14 : 12,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.dark,
+                    marginBottom: theme.spacing.sm,
+                  }}
+                >
+                  Sign Off
+                </Text>
+                <TextInput
+                  value={emailTemplate.signOff}
+                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, signOff: text })}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.neutralColors.lightGray,
+                    borderRadius: 8,
+                    padding: theme.spacing.md,
+                    fontSize: 14,
+                    color: theme.neutralColors.dark,
+                  }}
+                  placeholder="e.g., With gratitude,"
+                />
+              </View>
+
+              {/* Reset to Default */}
+              <TouchableOpacity
+                onPress={() => setEmailTemplate(getDefaultVideoEmailTemplate(giftName))}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: theme.spacing.md,
+                  marginBottom: theme.spacing.xl,
+                }}
+              >
+                <Ionicons name="refresh-outline" size={18} color={theme.neutralColors.mediumGray} />
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: theme.neutralColors.mediumGray,
+                    marginLeft: 6,
+                  }}
+                >
+                  Reset to Default
+                </Text>
+              </TouchableOpacity>
+
+              {/* Email Preview */}
+              <View style={{ marginBottom: theme.spacing.xl }}>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 14 : 12,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.dark,
+                    marginBottom: theme.spacing.sm,
+                  }}
+                >
+                  Preview
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: 8,
+                    padding: theme.spacing.md,
+                    borderWidth: 1,
+                    borderColor: theme.neutralColors.lightGray,
+                  }}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.brandColors.teal, marginBottom: 8 }}>
+                    {emailTemplate.greeting}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: theme.brandColors.teal, fontWeight: '600', marginBottom: 8 }}>
+                    #REELYTHANKFUL
+                  </Text>
+                  <Text style={{ fontSize: 14, color: theme.neutralColors.dark, marginBottom: 12 }}>
+                    {emailTemplate.message}
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: '#e0f2fe',
+                      padding: 12,
+                      borderRadius: 8,
+                      borderLeftWidth: 4,
+                      borderLeftColor: theme.brandColors.teal,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.neutralColors.dark }}>
+                      {emailTemplate.giftLabel}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: theme.brandColors.teal,
+                      paddingVertical: 12,
+                      paddingHorizontal: 24,
+                      borderRadius: 12,
+                      alignSelf: 'center',
+                      marginBottom: 12,
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>{emailTemplate.buttonText}</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: theme.neutralColors.mediumGray }}>
+                    {emailTemplate.signOff}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: theme.neutralColors.mediumGray }}>
+                    The ShowThx Team
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };

@@ -210,53 +210,47 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       }
       console.log('✅ Video uploaded:', uploadResult.url);
 
-      // Step 3: Create video record in database with pending_approval status
-      console.log('💾 Creating database record...');
-      const { data: videoData, error: videoError } = await supabase
-        .from('videos')
-        .insert({
-          child_id: kidSessionId,
-          gift_id: giftId,
-          parent_id: parentId,
-          status: 'pending_approval',
-          video_url: uploadResult.url,
-          storage_path: uploadResult.path,
-          recorded_at: new Date().toISOString(),
-          metadata: {
+      // Step 3: Create video record using secure function (bypasses RLS for kid submissions)
+      console.log('💾 Creating database record via secure function...');
+      const { data: videoId, error: videoError } = await supabase
+        .rpc('submit_video_from_kid', {
+          p_child_id: kidSessionId,
+          p_gift_id: giftId,
+          p_parent_id: parentId,
+          p_video_url: uploadResult.url,
+          p_storage_path: uploadResult.path,
+          p_metadata: {
             music_id: musicId,
+            frame: frame,
             customization: {
               text: overlayText,
               textColor,
               textPosition,
+              textPosX,
+              textPosY,
               transition,
             },
           },
-        })
-        .select()
-        .single();
+        });
 
       if (videoError) {
         console.error('❌ Error creating video record:', videoError);
+        // Provide user-friendly error message
+        if (videoError.message?.includes('child does not belong')) {
+          throw new Error('Session expired. Please log in again.');
+        } else if (videoError.message?.includes('gift does not belong')) {
+          throw new Error('This gift is not available. Please go back and try again.');
+        }
         throw videoError;
       }
 
-      console.log('✅ Video record created:', videoData);
+      console.log('✅ Video record created with ID:', videoId);
 
-      // Step 4: Update gift status to show video is pending approval
-      const { error: giftError } = await supabase
-        .from('gifts')
-        .update({
-          status: 'pending_approval',
-          recorded_at: new Date().toISOString(),
-        })
-        .eq('id', giftId);
-
-      if (giftError) {
-        console.error('❌ Error updating gift:', giftError);
-        throw giftError;
-      }
-
+      // Gift status is automatically updated by the secure function
       console.log('✅ Gift status updated to pending_approval');
+
+      // Create videoData object for navigation
+      const videoData = { id: videoId };
 
       // Navigate to success screen
       navigation?.navigate('VideoSuccess', {

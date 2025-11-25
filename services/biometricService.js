@@ -1,13 +1,17 @@
 /**
  * Biometric Authentication Service
  * Handles Face ID / Touch ID authentication on iOS
+ * Uses SecureStore for encrypted credential storage
  */
 
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BIOMETRIC_ENABLED_KEY = 'biometricEnabled';
 const BIOMETRIC_USER_KEY = 'biometricUserId';
+const SECURE_EMAIL_KEY = 'biometric_email';
+const SECURE_PASSWORD_KEY = 'biometric_password';
 
 /**
  * Check if device supports biometric authentication
@@ -138,8 +142,10 @@ export const isBiometricLoginEnabled = async () => {
 /**
  * Enable biometric login for a user
  * @param {string} userId - User ID to associate with biometric login
+ * @param {string} email - User's email for re-authentication
+ * @param {string} password - User's password for re-authentication
  */
-export const enableBiometricLogin = async (userId) => {
+export const enableBiometricLogin = async (userId, email = null, password = null) => {
   try {
     // First authenticate to confirm identity
     const biometricName = await getBiometricTypeName();
@@ -155,7 +161,15 @@ export const enableBiometricLogin = async (userId) => {
     await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true');
     await AsyncStorage.setItem(BIOMETRIC_USER_KEY, userId);
 
-    console.log('Biometric login enabled for user:', userId);
+    // Securely store credentials for re-authentication
+    if (email && password) {
+      await SecureStore.setItemAsync(SECURE_EMAIL_KEY, email);
+      await SecureStore.setItemAsync(SECURE_PASSWORD_KEY, password);
+      console.log('✅ Biometric login enabled with secure credential storage');
+    } else {
+      console.log('⚠️ Biometric enabled without credentials - session restore only');
+    }
+
     return { success: true };
   } catch (error) {
     console.error('Error enabling biometric login:', error);
@@ -170,11 +184,32 @@ export const disableBiometricLogin = async () => {
   try {
     await AsyncStorage.removeItem(BIOMETRIC_ENABLED_KEY);
     await AsyncStorage.removeItem(BIOMETRIC_USER_KEY);
-    console.log('Biometric login disabled');
+    // Clear secure credentials
+    await SecureStore.deleteItemAsync(SECURE_EMAIL_KEY);
+    await SecureStore.deleteItemAsync(SECURE_PASSWORD_KEY);
+    console.log('Biometric login disabled and credentials cleared');
     return { success: true };
   } catch (error) {
     console.error('Error disabling biometric login:', error);
     return { success: false, error: 'Failed to disable biometric login' };
+  }
+};
+
+/**
+ * Get stored credentials for biometric login
+ * @returns {Promise<{email: string, password: string} | null>}
+ */
+export const getStoredCredentials = async () => {
+  try {
+    const email = await SecureStore.getItemAsync(SECURE_EMAIL_KEY);
+    const password = await SecureStore.getItemAsync(SECURE_PASSWORD_KEY);
+    if (email && password) {
+      return { email, password };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting stored credentials:', error);
+    return null;
   }
 };
 
@@ -193,7 +228,7 @@ export const getBiometricUserId = async () => {
 
 /**
  * Attempt biometric login
- * Returns the user ID if successful, null otherwise
+ * Returns credentials if available, or just userId for session restore
  */
 export const attemptBiometricLogin = async () => {
   try {
@@ -209,7 +244,7 @@ export const attemptBiometricLogin = async () => {
       return { success: false, error: 'No user associated with biometric login' };
     }
 
-    // Authenticate
+    // Authenticate with biometrics
     const biometricName = await getBiometricTypeName();
     const authResult = await authenticateWithBiometrics(
       `Sign in with ${biometricName}`
@@ -219,7 +254,23 @@ export const attemptBiometricLogin = async () => {
       return authResult;
     }
 
-    return { success: true, userId };
+    // Get stored credentials for full re-authentication
+    const credentials = await getStoredCredentials();
+
+    if (credentials) {
+      console.log('✅ Biometric auth successful - credentials available for login');
+      return {
+        success: true,
+        userId,
+        email: credentials.email,
+        password: credentials.password,
+        hasCredentials: true
+      };
+    }
+
+    // No credentials stored - can only try session restore
+    console.log('⚠️ Biometric auth successful but no credentials stored');
+    return { success: true, userId, hasCredentials: false };
   } catch (error) {
     console.error('Biometric login attempt error:', error);
     return { success: false, error: 'Biometric login failed' };
@@ -236,5 +287,6 @@ export default {
   enableBiometricLogin,
   disableBiometricLogin,
   getBiometricUserId,
+  getStoredCredentials,
   attemptBiometricLogin,
 };
