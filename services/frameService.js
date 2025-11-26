@@ -120,7 +120,9 @@ export const FRAME_LIBRARY = [
     description: 'Party elements',
     preview: 'Balloons, gifts & smiles',
   },
-  // LOTTIE FRAMES (require downloads)
+  // LOTTIE FRAMES (commented out until JSON files are downloaded)
+  // Uncomment these after downloading Lottie files - see LOTTIE_DOWNLOAD_INSTRUCTIONS.md
+  /*
   {
     id: 'birthday-balloons',
     name: 'Birthday Balloons',
@@ -231,6 +233,7 @@ export const FRAME_LIBRARY = [
     description: 'Elegant thank you animation',
     preview: 'Sparkles and elegant effects',
   },
+  */
 ];
 
 // Category definitions
