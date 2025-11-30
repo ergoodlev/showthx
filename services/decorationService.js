@@ -3,21 +3,9 @@
  * Manages simple decorations that kids can place on their videos
  * These are simple icon stickers (stars, hearts, etc.) - NOT full frames
  *
- * Supports both emoji fallback and Lottie animations
- * If Lottie files exist in assets/lottie/decorations/, they will be used
- * Otherwise, falls back to emoji
+ * Currently uses emoji-based decorations
+ * Can be upgraded to Lottie animations later by uncommenting lottieSource
  */
-
-// Helper to safely load Lottie files
-const getLottieSource = (filename) => {
-  try {
-    // Try to load the Lottie file - will fail gracefully if file doesn't exist
-    return require(`../assets/lottie/decorations/${filename}`);
-  } catch (e) {
-    // File doesn't exist, return null to fallback to emoji
-    return null;
-  }
-};
 
 // Simple decorations for kids to place on videos
 export const DECORATIONS = [
@@ -25,8 +13,7 @@ export const DECORATIONS = [
     id: 'star',
     name: 'Star',
     emoji: '⭐',
-    lottieFilename: 'star.json',
-    lottieSource: getLottieSource('star.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'shapes',
     color: '#FFD700',
     description: 'Golden star',
@@ -35,8 +22,7 @@ export const DECORATIONS = [
     id: 'heart',
     name: 'Heart',
     emoji: '❤️',
-    lottieFilename: 'heart.json',
-    lottieSource: getLottieSource('heart.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'shapes',
     color: '#FF6B6B',
     description: 'Red heart',
@@ -45,8 +31,7 @@ export const DECORATIONS = [
     id: 'balloon',
     name: 'Balloon',
     emoji: '🎈',
-    lottieFilename: 'balloon.json',
-    lottieSource: getLottieSource('balloon.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'party',
     color: '#FF6B9D',
     description: 'Party balloon',
@@ -55,8 +40,7 @@ export const DECORATIONS = [
     id: 'confetti',
     name: 'Confetti',
     emoji: '🎊',
-    lottieFilename: 'confetti.json',
-    lottieSource: getLottieSource('confetti.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'party',
     color: '#FF69B4',
     description: 'Confetti popper',
@@ -65,8 +49,7 @@ export const DECORATIONS = [
     id: 'sparkle',
     name: 'Sparkle',
     emoji: '✨',
-    lottieFilename: 'sparkle.json',
-    lottieSource: getLottieSource('sparkle.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'shapes',
     color: '#FFD93D',
     description: 'Sparkles',
@@ -75,8 +58,7 @@ export const DECORATIONS = [
     id: 'gift',
     name: 'Gift',
     emoji: '🎁',
-    lottieFilename: 'gift.json',
-    lottieSource: getLottieSource('gift.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'party',
     color: '#FF6347',
     description: 'Gift box',
@@ -85,8 +67,7 @@ export const DECORATIONS = [
     id: 'smile',
     name: 'Smile',
     emoji: '😊',
-    lottieFilename: 'smile.json',
-    lottieSource: getLottieSource('smile.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'faces',
     color: '#FFD700',
     description: 'Smiley face',
@@ -95,8 +76,7 @@ export const DECORATIONS = [
     id: 'rainbow',
     name: 'Rainbow',
     emoji: '🌈',
-    lottieFilename: 'rainbow.json',
-    lottieSource: getLottieSource('rainbow.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'nature',
     color: '#FF69B4',
     description: 'Rainbow',
@@ -105,8 +85,7 @@ export const DECORATIONS = [
     id: 'flower',
     name: 'Flower',
     emoji: '🌸',
-    lottieFilename: 'flower.json',
-    lottieSource: getLottieSource('flower.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'nature',
     color: '#FFB6C1',
     description: 'Pretty flower',
@@ -115,8 +94,7 @@ export const DECORATIONS = [
     id: 'sun',
     name: 'Sun',
     emoji: '☀️',
-    lottieFilename: 'sun.json',
-    lottieSource: getLottieSource('sun.json'),
+    lottieSource: null, // TODO: Add Lottie file for animated version
     category: 'nature',
     color: '#FFD700',
     description: 'Sunny day',
