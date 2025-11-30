@@ -57,7 +57,8 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
   };
 
   const handleProceed = () => {
-    navigation?.navigate('FrameSelection', {
+    // Skip frame selection - kids add decorations, parents add frames later
+    navigation?.navigate('VideoCustomization', {
       videoUri,
       giftId,
       giftName,
