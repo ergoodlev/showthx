@@ -396,6 +396,36 @@ export const GiftManagementScreen = ({ navigation, route }) => {
                   style={{ margin: theme.spacing.md }}
                 />
               )}
+
+              {/* Event Management Buttons */}
+              <View style={{ paddingHorizontal, paddingTop: theme.spacing.md, gap: theme.spacing.sm }}>
+                <TouchableOpacity
+                  onPress={() => navigation?.navigate('GuestManagement', { eventId, eventName })}
+                  style={{
+                    backgroundColor: theme.brandColors.teal,
+                    borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+                    paddingVertical: theme.spacing.sm,
+                    paddingHorizontal: theme.spacing.md,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: theme.spacing.sm,
+                  }}
+                >
+                  <Ionicons name="people" size={20} color="#FFFFFF" />
+                  <Text
+                    style={{
+                      color: '#FFFFFF',
+                      fontSize: isKidsEdition ? 14 : 12,
+                      fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                      fontWeight: '600',
+                    }}
+                  >
+                    Manage Guests & Import CSV
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
               <View style={{ paddingHorizontal, paddingVertical: theme.spacing.md }}>
                 <Text
                   style={{

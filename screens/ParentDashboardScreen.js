@@ -440,30 +440,6 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
       <TouchableOpacity
         style={{
-          backgroundColor: theme.brandColors.teal,
-          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
-          paddingVertical: theme.spacing.md,
-          marginBottom: theme.spacing.lg,
-          flexDirection: 'row',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-        onPress={() => navigation?.navigate('GuestManagement')}
-      >
-        <Ionicons name="document-outline" size={20} color="#FFFFFF" style={{ marginRight: theme.spacing.sm }} />
-        <Text
-          style={{
-            color: '#FFFFFF',
-            fontSize: isKidsEdition ? 16 : 14,
-            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-          }}
-        >
-          Manage Guests & Import CSV
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={{
           backgroundColor: theme.semanticColors.error,
           borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
           paddingVertical: theme.spacing.md,
