@@ -443,7 +443,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <AppBar
-        title="Manage Guests"
+        title={eventName ? `Guests - ${eventName}` : 'Manage Guests'}
         onBackPress={() => navigation?.goBack()}
         showBack={true}
       />
