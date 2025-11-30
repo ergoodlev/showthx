@@ -108,11 +108,13 @@ export const ParentLoginScreen = ({ navigation }) => {
       const sessionResult = await restoreParentSession();
 
       if (!sessionResult.success) {
-        setError('Session expired. Please log in with email and password.');
+        setError('Please log in with your email and password to continue.');
         return;
       }
 
       console.log('✅ Biometric login successful with session restore');
+      // Wait a moment for RootNavigator to detect the session
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (err) {
       console.error('❌ Biometric login error:', err);
       setError('Biometric login failed. Please try again or use email/password.');

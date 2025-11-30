@@ -163,12 +163,12 @@ export const RootNavigator = () => {
     // Monitor app state changes (foreground/background)
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
-    // Poll for session changes every 500ms (helps detect login/logout immediately)
+    // Poll for session changes every 2 seconds (reduced from 500ms to prevent race conditions)
     const pollInterval = setInterval(() => {
       if (appState.current === 'active') {
         loadSessions();
       }
-    }, 500);
+    }, 2000);
 
     return () => {
       subscription.remove();
