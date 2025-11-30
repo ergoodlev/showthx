@@ -40,6 +40,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [fetchingGuests, setFetchingGuests] = useState(true);
   const [sendMethod, setSendMethod] = useState('email'); // 'email' or 'sms'
   const [smsAvailable, setSmsAvailable] = useState(false);
+  const [videoUrl, setVideoUrl] = useState(videoUri); // Will be replaced with database URL
 
   // Email customization state
   const [showEmailCustomizer, setShowEmailCustomizer] = useState(false);
@@ -55,16 +56,16 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
     checkSms();
   }, []);
 
-  // Fetch guests for this event on mount
+  // Fetch video URL and assigned guest on mount
   useEffect(() => {
-    const fetchGuests = async () => {
+    const fetchVideoDataAndGuest = async () => {
       try {
         setFetchingGuests(true);
 
-        // First, get the gift to find the parent_id
+        // First, get the gift to find guest_id and parent_id
         const { data: giftData, error: giftError } = await supabase
           .from('gifts')
-          .select('parent_id')
+          .select('parent_id, guest_id, video_url')
           .eq('id', giftId)
           .single();
 
@@ -77,26 +78,41 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           return;
         }
 
-        // Fetch guests for this parent
-        const { data: guestData, error: guestError } = await supabase
-          .from('guests')
-          .select('*')
-          .eq('parent_id', giftData.parent_id)
-          .order('created_at', { ascending: false });
+        // Set the video URL from the gift record
+        if (giftData.video_url) {
+          setVideoUrl(giftData.video_url);
+          console.log('✅ Loaded video URL from gift');
+        }
 
-        if (guestError) throw guestError;
+        // Only fetch the guest assigned to this gift
+        if (giftData.guest_id) {
+          const { data: guestData, error: guestError } = await supabase
+            .from('guests')
+            .select('*')
+            .eq('id', giftData.guest_id)
+            .single();
 
-        console.log('✅ Loaded guests for parent:', guestData?.length || 0);
-        setGuests(guestData || []);
+          if (guestError) throw guestError;
+
+          console.log('✅ Loaded assigned guest:', guestData?.name || 'Unknown');
+          setGuests(guestData ? [guestData] : []);
+          // Auto-select the assigned guest
+          if (guestData) {
+            setSelectedGuests(new Set([guestData.id]));
+          }
+        } else {
+          console.warn('No guest assigned to this gift');
+          setGuests([]);
+        }
       } catch (error) {
-        console.error('Error fetching guests:', error);
+        console.error('Error fetching video data and guest:', error);
         setGuests([]);
       } finally {
         setFetchingGuests(false);
       }
     };
 
-    fetchGuests();
+    fetchVideoDataAndGuest();
   }, [giftId]);
 
   const toggleGuestSelection = (guestId) => {
@@ -135,7 +151,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         const emailResult = await sendVideoToGuests(
           selectedGuestEmails,
           giftName,
-          videoUri,
+          videoUrl, // Use public video URL from database
           '30 days',
           emailTemplate // Pass custom template
         );
@@ -158,7 +174,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         const smsResult = await sendVideoViaSMS(
           phoneNumbers,
           giftName,
-          videoUri
+          videoUrl // Use public video URL from database
         );
 
         if (!smsResult.success && smsResult.error !== 'Message was cancelled') {
