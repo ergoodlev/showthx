@@ -3,9 +3,21 @@
  * Manages simple decorations that kids can place on their videos
  * These are simple icon stickers (stars, hearts, etc.) - NOT full frames
  *
- * NOTE: Currently using emoji-based decorations
- * Can be upgraded to Lottie animations later
+ * Supports both emoji fallback and Lottie animations
+ * If Lottie files exist in assets/lottie/decorations/, they will be used
+ * Otherwise, falls back to emoji
  */
+
+// Helper to safely load Lottie files
+const getLottieSource = (filename) => {
+  try {
+    // Try to load the Lottie file - will fail gracefully if file doesn't exist
+    return require(`../assets/lottie/decorations/${filename}`);
+  } catch (e) {
+    // File doesn't exist, return null to fallback to emoji
+    return null;
+  }
+};
 
 // Simple decorations for kids to place on videos
 export const DECORATIONS = [
@@ -13,6 +25,8 @@ export const DECORATIONS = [
     id: 'star',
     name: 'Star',
     emoji: '⭐',
+    lottieFilename: 'star.json',
+    lottieSource: getLottieSource('star.json'),
     category: 'shapes',
     color: '#FFD700',
     description: 'Golden star',
@@ -21,6 +35,8 @@ export const DECORATIONS = [
     id: 'heart',
     name: 'Heart',
     emoji: '❤️',
+    lottieFilename: 'heart.json',
+    lottieSource: getLottieSource('heart.json'),
     category: 'shapes',
     color: '#FF6B6B',
     description: 'Red heart',
@@ -29,6 +45,8 @@ export const DECORATIONS = [
     id: 'balloon',
     name: 'Balloon',
     emoji: '🎈',
+    lottieFilename: 'balloon.json',
+    lottieSource: getLottieSource('balloon.json'),
     category: 'party',
     color: '#FF6B9D',
     description: 'Party balloon',
@@ -37,6 +55,8 @@ export const DECORATIONS = [
     id: 'confetti',
     name: 'Confetti',
     emoji: '🎊',
+    lottieFilename: 'confetti.json',
+    lottieSource: getLottieSource('confetti.json'),
     category: 'party',
     color: '#FF69B4',
     description: 'Confetti popper',
@@ -45,6 +65,8 @@ export const DECORATIONS = [
     id: 'sparkle',
     name: 'Sparkle',
     emoji: '✨',
+    lottieFilename: 'sparkle.json',
+    lottieSource: getLottieSource('sparkle.json'),
     category: 'shapes',
     color: '#FFD93D',
     description: 'Sparkles',
@@ -53,6 +75,8 @@ export const DECORATIONS = [
     id: 'gift',
     name: 'Gift',
     emoji: '🎁',
+    lottieFilename: 'gift.json',
+    lottieSource: getLottieSource('gift.json'),
     category: 'party',
     color: '#FF6347',
     description: 'Gift box',
@@ -61,6 +85,8 @@ export const DECORATIONS = [
     id: 'smile',
     name: 'Smile',
     emoji: '😊',
+    lottieFilename: 'smile.json',
+    lottieSource: getLottieSource('smile.json'),
     category: 'faces',
     color: '#FFD700',
     description: 'Smiley face',
@@ -69,6 +95,8 @@ export const DECORATIONS = [
     id: 'rainbow',
     name: 'Rainbow',
     emoji: '🌈',
+    lottieFilename: 'rainbow.json',
+    lottieSource: getLottieSource('rainbow.json'),
     category: 'nature',
     color: '#FF69B4',
     description: 'Rainbow',
@@ -77,6 +105,8 @@ export const DECORATIONS = [
     id: 'flower',
     name: 'Flower',
     emoji: '🌸',
+    lottieFilename: 'flower.json',
+    lottieSource: getLottieSource('flower.json'),
     category: 'nature',
     color: '#FFB6C1',
     description: 'Pretty flower',
@@ -85,6 +115,8 @@ export const DECORATIONS = [
     id: 'sun',
     name: 'Sun',
     emoji: '☀️',
+    lottieFilename: 'sun.json',
+    lottieSource: getLottieSource('sun.json'),
     category: 'nature',
     color: '#FFD700',
     description: 'Sunny day',
@@ -126,6 +158,7 @@ export const createPlacedDecoration = (decorationId, x = 50, y = 50, scale = 1.0
     id: `${decorationId}-${Date.now()}`, // Unique instance ID
     decorationId, // Reference to base decoration
     emoji: decoration.emoji,
+    lottieSource: decoration.lottieSource, // Lottie animation source (or null for emoji fallback)
     x, // Position X (percentage 0-100)
     y, // Position Y (percentage 0-100)
     scale, // Size multiplier (0.5 to 2.0)

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -104,16 +105,25 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                 ],
               }}
             >
-              <Text
-                style={{
-                  fontSize: 40,
-                  textShadowColor: 'rgba(0,0,0,0.3)',
-                  textShadowOffset: { width: 1, height: 1 },
-                  textShadowRadius: 2,
-                }}
-              >
-                {decoration.emoji}
-              </Text>
+              {decoration.lottieSource ? (
+                <LottieView
+                  source={decoration.lottieSource}
+                  autoPlay
+                  loop
+                  style={{ width: 40, height: 40 }}
+                />
+              ) : (
+                <Text
+                  style={{
+                    fontSize: 40,
+                    textShadowColor: 'rgba(0,0,0,0.3)',
+                    textShadowOffset: { width: 1, height: 1 },
+                    textShadowRadius: 2,
+                  }}
+                >
+                  {decoration.emoji}
+                </Text>
+              )}
             </TouchableOpacity>
           ))}
         </View>
@@ -158,7 +168,16 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                   borderColor: 'transparent',
                 }}
               >
-                <Text style={{ fontSize: 36 }}>{decoration.emoji}</Text>
+                {decoration.lottieSource ? (
+                  <LottieView
+                    source={decoration.lottieSource}
+                    autoPlay
+                    loop
+                    style={{ width: 40, height: 40 }}
+                  />
+                ) : (
+                  <Text style={{ fontSize: 36 }}>{decoration.emoji}</Text>
+                )}
                 <Text
                   style={{
                     fontSize: isKidsEdition ? 10 : 9,

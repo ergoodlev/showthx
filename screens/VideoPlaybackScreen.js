@@ -250,7 +250,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
                 fontWeight: '600',
               }}
             >
-              Choose Frame
+              Add Stickers
             </Text>
           </TouchableOpacity>
         </View>

@@ -14,6 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
+import LottieView from 'lottie-react-native';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -47,16 +48,25 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           ],
         }}
       >
-        <Text
-          style={{
-            fontSize: 40,
-            textShadowColor: 'rgba(0,0,0,0.3)',
-            textShadowOffset: { width: 1, height: 1 },
-            textShadowRadius: 2,
-          }}
-        >
-          {decoration.emoji}
-        </Text>
+        {decoration.lottieSource ? (
+          <LottieView
+            source={decoration.lottieSource}
+            autoPlay
+            loop
+            style={{ width: 40, height: 40 }}
+          />
+        ) : (
+          <Text
+            style={{
+              fontSize: 40,
+              textShadowColor: 'rgba(0,0,0,0.3)',
+              textShadowOffset: { width: 1, height: 1 },
+              textShadowRadius: 2,
+            }}
+          >
+            {decoration.emoji}
+          </Text>
+        )}
       </View>
     ));
   };
