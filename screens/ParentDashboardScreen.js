@@ -101,7 +101,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
       if (childrenError) throw childrenError;
       setChildren(childList || []);
 
-      // Load pending videos
+      // Load pending videos with child and gift data
       const { data: videoList, error: videosError } = await supabase
         .from('videos')
         .select(`
@@ -109,7 +109,21 @@ export const ParentDashboardScreen = ({ navigation }) => {
           status,
           created_at,
           child_id,
-          gift_id
+          gift_id,
+          kid:children!videos_child_id_fkey(
+            id,
+            name
+          ),
+          gift:gifts!videos_gift_id_fkey(
+            id,
+            name,
+            giver_name,
+            guest:guests(
+              id,
+              name,
+              email
+            )
+          )
         `)
         .eq('parent_id', user.id)
         .eq('status', 'pending_approval')
@@ -311,7 +325,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
                   marginTop: 4,
                 }}
               >
-                From: {item.gift?.giver_name || 'Unknown'}
+                From: {item.gift?.guest?.name || item.gift?.giver_name || 'Unknown'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color={theme.brandColors.coral} />

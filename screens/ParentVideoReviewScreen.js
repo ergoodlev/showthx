@@ -34,6 +34,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
 
   const videoRef = useRef(null);
   const [loading, setLoading] = useState(true);
+  const [fetchedVideoUri, setFetchedVideoUri] = useState(videoUri);
   const [fetchedGiftId, setFetchedGiftId] = useState(giftId);
   const [fetchedGiftName, setFetchedGiftName] = useState(giftName);
   const [fetchedKidName, setFetchedKidName] = useState(kidName);
@@ -89,6 +90,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       setFetchedGiftId(videoData.gift_id);
       setFetchedGiftName(giftData.name);
       setFetchedKidName(childData.name);
+      setFetchedVideoUri(videoData.video_url);
       setFetchedMusicTitle(videoData.metadata?.music_id || null);
     } catch (error) {
       console.error('❌ Error loading video details:', error);
@@ -232,11 +234,12 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
         >
           <Video
             ref={videoRef}
-            source={{ uri: videoUri }}
+            source={{ uri: fetchedVideoUri }}
             style={{ width: '100%', height: '100%' }}
             resizeMode="contain"
             useNativeControls={false}
             onPlaybackStatusUpdate={(status) => setIsPlaying(status.isPlaying)}
+            shouldPlay={false}
           />
 
           {!isPlaying && (

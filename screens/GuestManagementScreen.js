@@ -48,15 +48,21 @@ export const GuestManagementScreen = ({ navigation, route }) => {
         data: { user },
       } = await supabase.auth.getUser();
 
+      // Load guests linked to gifts for this specific event
+      // This prevents showing old guests from deleted events
       const { data, error } = await supabase
         .from('guests')
-        .select('*')
+        .select(`
+          *,
+          gifts!inner(event_id)
+        `)
         .eq('parent_id', user.id)
+        .eq('gifts.event_id', eventId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setGuests(data || []);
-      console.log('✅ Loaded guests:', data?.length || 0);
+      console.log('✅ Loaded guests for event:', data?.length || 0);
     } catch (error) {
       console.error('Error loading guests:', error);
       Alert.alert('Error', 'Failed to load guests');
