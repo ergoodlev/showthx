@@ -11,6 +11,8 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +49,12 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
     setPlacedDecorations(placedDecorations.filter(d => d.id !== decorationInstanceId));
   };
 
+  const handleUpdateDecorationPosition = (decorationInstanceId, newX, newY) => {
+    setPlacedDecorations(placedDecorations.map(d =>
+      d.id === decorationInstanceId ? { ...d, x: newX, y: newY } : d
+    ));
+  };
+
   const handleProceed = () => {
     navigation?.navigate('VideoConfirmation', {
       videoUri,
@@ -54,6 +62,61 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
       giftName,
       decorations: placedDecorations,
     });
+  };
+
+  // Draggable Sticker Component
+  const DraggableSticker = ({ decoration, children }) => {
+    const pan = useRef(new Animated.ValueXY()).current;
+    const containerRef = useRef(null);
+
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          pan.setOffset({
+            x: pan.x._value,
+            y: pan.y._value,
+          });
+        },
+        onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
+          useNativeDriver: false,
+        }),
+        onPanResponderRelease: (e, gesture) => {
+          pan.flattenOffset();
+
+          // Get container dimensions to calculate percentage
+          if (containerRef.current) {
+            containerRef.current.measure((fx, fy, width, height, px, py) => {
+              const newX = Math.max(5, Math.min(95, ((decoration.x / 100) * width + gesture.dx) / width * 100));
+              const newY = Math.max(5, Math.min(95, ((decoration.y / 100) * height + gesture.dy) / height * 100));
+              handleUpdateDecorationPosition(decoration.id, newX, newY);
+              pan.setValue({ x: 0, y: 0 });
+            });
+          }
+        },
+      })
+    ).current;
+
+    return (
+      <Animated.View
+        ref={containerRef}
+        {...panResponder.panHandlers}
+        style={{
+          position: 'absolute',
+          left: `${decoration.x}%`,
+          top: `${decoration.y}%`,
+          transform: [
+            { translateX: -20 },
+            { translateY: -20 },
+            { translateX: pan.x },
+            { translateY: pan.y },
+            { scale: decoration.scale },
+          ],
+        }}
+      >
+        {children}
+      </Animated.View>
+    );
   };
 
   return (
@@ -89,42 +152,34 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             isLooping
           />
 
-          {/* Decoration Overlays */}
+          {/* Decoration Overlays - Draggable */}
           {placedDecorations.map(decoration => (
-            <TouchableOpacity
-              key={decoration.id}
-              onPress={() => handleRemoveDecoration(decoration.id)}
-              style={{
-                position: 'absolute',
-                left: `${decoration.x}%`,
-                top: `${decoration.y}%`,
-                transform: [
-                  { translateX: -20 },
-                  { translateY: -20 },
-                  { scale: decoration.scale },
-                ],
-              }}
-            >
-              {decoration.lottieSource ? (
-                <LottieView
-                  source={decoration.lottieSource}
-                  autoPlay
-                  loop
-                  style={{ width: 40, height: 40 }}
-                />
-              ) : (
-                <Text
-                  style={{
-                    fontSize: 40,
-                    textShadowColor: 'rgba(0,0,0,0.3)',
-                    textShadowOffset: { width: 1, height: 1 },
-                    textShadowRadius: 2,
-                  }}
-                >
-                  {decoration.emoji}
-                </Text>
-              )}
-            </TouchableOpacity>
+            <DraggableSticker key={decoration.id} decoration={decoration}>
+              <TouchableOpacity
+                onLongPress={() => handleRemoveDecoration(decoration.id)}
+                delayLongPress={500}
+              >
+                {decoration.lottieSource ? (
+                  <LottieView
+                    source={decoration.lottieSource}
+                    autoPlay
+                    loop
+                    style={{ width: 40, height: 40 }}
+                  />
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 40,
+                      textShadowColor: 'rgba(0,0,0,0.3)',
+                      textShadowOffset: { width: 1, height: 1 },
+                      textShadowRadius: 2,
+                    }}
+                  >
+                    {decoration.emoji}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </DraggableSticker>
           ))}
         </View>
 
@@ -148,7 +203,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
               marginBottom: theme.spacing.md,
             }}
           >
-            Tap a sticker to add it to your video. Tap a sticker on the video to remove it.
+            Tap a sticker to add it to your video. Drag stickers to reposition them. Long-press a sticker on the video to remove it.
           </Text>
 
           {/* Decoration Grid */}
