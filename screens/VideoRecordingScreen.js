@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
+import { StaticFrameOverlay } from '../components/StaticFrameOverlay';
 
 export const VideoRecordingScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -94,68 +95,23 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   };
 
   // Render frame overlay on camera
+  // NEW ARCHITECTURE:
+  // - Kids choose frame STYLE (frameId from FRAME_LIBRARY via StaticFrameOverlay)
+  // - Parents add custom TEXT (frameTemplate.custom_text)
   const renderFrameOverlay = () => {
-    if (!frameTemplate) return null;
-
-    const shape = frameTemplate.frame_shape || 'rounded';
-    const borderRadius = shape === 'rectangle' ? 0 : shape === 'rounded' ? 20 : shape === 'polaroid' ? 4 : shape === 'playful' ? 30 : 8;
-    const frameColor = frameTemplate.primary_color || '#06b6d4';
-    const customText = frameTemplate.custom_text || '';
-    const textPosition = frameTemplate.custom_text_position || 'bottom';
-    const textColor = frameTemplate.custom_text_color || '#FFFFFF';
+    const frameId = frameTemplate?.frame_id || 'none';
+    const customText = frameTemplate?.custom_text || '';
+    const textPosition = frameTemplate?.custom_text_position || 'bottom';
+    const textColor = frameTemplate?.custom_text_color || '#FFFFFF';
 
     return (
       <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
-        {/* Frame border */}
-        <View
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            right: 8,
-            bottom: 8,
-            borderRadius,
-            borderWidth: 4,
-            borderColor: frameColor,
-            backgroundColor: decorations?.fillColor ? `${decorations.fillColor}20` : 'transparent',
-          }}
-        />
-
-        {/* Decorations: emojis placed by kids */}
-        {decorations?.emojis?.map((emoji, idx) => (
-          <Text
-            key={idx}
-            style={{
-              position: 'absolute',
-              left: `${emoji.x}%`,
-              top: `${emoji.y}%`,
-              fontSize: 28,
-            }}
-          >
-            {emoji.emoji}
-          </Text>
-        ))}
-
-        {/* Texture pattern overlay */}
-        {decorations?.texture && decorations.texture !== 'none' && (
-          <View style={[StyleSheet.absoluteFill, { opacity: 0.3 }]}>
-            {[...Array(8)].map((_, i) => (
-              <Ionicons
-                key={i}
-                name={decorations.texture === 'sparkle' ? 'sparkles' : decorations.texture === 'hearts' ? 'heart' : decorations.texture === 'stars' ? 'star' : 'ellipse'}
-                size={20}
-                color={frameColor}
-                style={{
-                  position: 'absolute',
-                  left: `${(i % 4) * 28 + 5}%`,
-                  top: `${Math.floor(i / 4) * 45 + 10}%`,
-                }}
-              />
-            ))}
-          </View>
+        {/* Frame Style - Kids choose from FRAME_LIBRARY */}
+        {frameId && frameId !== 'none' && (
+          <StaticFrameOverlay frameId={frameId} />
         )}
 
-        {/* Parent's custom text */}
+        {/* Parent's Custom Text - Parents add/edit */}
         {customText && (
           <View
             style={{
