@@ -72,11 +72,13 @@ export const FrameSelectionScreen = ({ navigation, route }) => {
   };
 
   const handleProceed = () => {
-    navigation.navigate('MusicSelection', {
+    // Skip music selection - go directly to customization
+    navigation.navigate('VideoCustomization', {
       videoUri,
       giftId,
       giftName,
-      selectedFrame,
+      frame: selectedFrame,
+      musicId: null, // No music
     });
   };
 
@@ -298,7 +300,7 @@ export const FrameSelectionScreen = ({ navigation, route }) => {
           </View>
         )}
         <ThankCastButton
-          title="Next: Add Music"
+          title="Next: Customize"
           onPress={handleProceed}
           disabled={loading}
         />

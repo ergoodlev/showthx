@@ -33,7 +33,6 @@ import FrameDecorationScreen from '../screens/FrameDecorationScreen';
 import VideoRecordingScreen from '../screens/VideoRecordingScreen';
 import VideoPlaybackScreen from '../screens/VideoPlaybackScreen';
 import FrameSelectionScreen from '../screens/FrameSelectionScreen';
-import MusicSelectionScreen from '../screens/MusicSelectionScreen';
 import VideoCustomizationScreen from '../screens/VideoCustomizationScreen';
 import VideoConfirmationScreen from '../screens/VideoConfirmationScreen';
 import VideoSuccessScreen from '../screens/VideoSuccessScreen';
@@ -104,7 +103,6 @@ const KidAppStack = () => {
       <Stack.Screen name="VideoRecording" component={VideoRecordingScreen} />
       <Stack.Screen name="VideoPlayback" component={VideoPlaybackScreen} />
       <Stack.Screen name="FrameSelection" component={FrameSelectionScreen} />
-      <Stack.Screen name="MusicSelection" component={MusicSelectionScreen} />
       <Stack.Screen name="VideoCustomization" component={VideoCustomizationScreen} />
       <Stack.Screen name="VideoConfirmation" component={VideoConfirmationScreen} />
       <Stack.Screen name="VideoSuccess" component={VideoSuccessScreen} />

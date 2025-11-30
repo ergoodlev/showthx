@@ -369,43 +369,6 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             </View>
           </View>
 
-          {/* Music Info */}
-          {musicTitle && (
-            <View
-              style={{
-                backgroundColor: theme.neutralColors.lightGray,
-                borderRadius: 8,
-                padding: theme.spacing.md,
-                marginBottom: theme.spacing.md,
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-            >
-              <Ionicons name="musical-notes" size={20} color={theme.brandColors.teal} />
-              <View style={{ marginLeft: theme.spacing.sm, flex: 1 }}>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 12 : 11,
-                    fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                    color: theme.neutralColors.mediumGray,
-                  }}
-                >
-                  Music
-                </Text>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 14 : 12,
-                    fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                    color: theme.neutralColors.dark,
-                    marginTop: 2,
-                  }}
-                >
-                  {musicTitle}
-                </Text>
-              </View>
-            </View>
-          )}
-
           {/* Customization Info */}
           {(overlayText || transition !== 'none') && (
             <View
