@@ -1,6 +1,6 @@
 /**
  * VideoConfirmationScreen
- * Final review of customized video before submission
+ * Final review of video before submission - simplified
  */
 
 import React, { useState, useRef } from 'react';
@@ -27,113 +27,17 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
   const videoUri = route?.params?.videoUri;
   const giftId = route?.params?.giftId;
   const giftName = route?.params?.giftName;
-  const musicId = route?.params?.musicId;
-  const musicTitle = route?.params?.musicTitle;
-  const transition = route?.params?.transition;
   const overlayText = route?.params?.overlayText;
-  const textColor = route?.params?.textColor;
-  const textPosition = route?.params?.textPosition;
-  const textPosX = route?.params?.textPosX;
-  const textPosY = route?.params?.textPosY;
-  const frame = route?.params?.frame;
 
-  const TEXT_COLORS = {
-    white: '#FFFFFF',
-    black: '#000000',
-    coral: '#FF6B6B',
-    teal: '#00A699',
-    yellow: '#FFD93D',
-  };
-
-  // Render frame overlay based on selection
-  const renderFrameOverlay = () => {
-    if (!frame || frame === 'none') return null;
-
-    switch (frame) {
-      case 'gradient-glow':
-        return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 40, backgroundColor: 'rgba(255,107,107,0.4)' }} />
-            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, backgroundColor: 'rgba(255,217,61,0.4)' }} />
-            <View style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 8, backgroundColor: 'rgba(255,107,107,0.6)' }} />
-            <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 8, backgroundColor: 'rgba(255,217,61,0.6)' }} />
-          </View>
-        );
-      case 'neon-border':
-        return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 4, borderColor: '#00F5FF', borderRadius: 12, pointerEvents: 'none', shadowColor: '#00F5FF', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 10 }} />
-        );
-      case 'soft-vignette':
-        return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 50, backgroundColor: 'rgba(0,0,0,0.5)' }} />
-            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, backgroundColor: 'rgba(0,0,0,0.5)' }} />
-          </View>
-        );
-      case 'celebration':
-        return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-            <View style={{ position: 'absolute', top: 8, left: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFD700' }} />
-            <View style={{ position: 'absolute', top: 8, right: 8, width: 16, height: 16, borderRadius: 8, backgroundColor: '#FF6B6B' }} />
-            <View style={{ position: 'absolute', bottom: 8, left: 20, width: 14, height: 14, borderRadius: 7, backgroundColor: '#FF6B6B' }} />
-            <View style={{ position: 'absolute', bottom: 12, right: 16, width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFD700' }} />
-            <View style={{ position: 'absolute', top: 40, right: 30, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFD700' }} />
-          </View>
-        );
-      case 'minimal':
-        return (
-          <View style={{ position: 'absolute', top: 8, left: 8, right: 8, bottom: 8, borderWidth: 2, borderColor: 'rgba(255,255,255,0.8)', borderRadius: 8, pointerEvents: 'none' }} />
-        );
-      default:
-        return null;
-    }
-  };
-
-  // Render text overlay
+  // Render text overlay - simple, centered at bottom
   const renderTextOverlay = () => {
     if (!overlayText) return null;
 
-    // Handle custom position (draggable)
-    if (textPosition === 'custom' && textPosX !== undefined && textPosY !== undefined) {
-      return (
-        <View
-          style={{
-            position: 'absolute',
-            left: `${textPosX}%`,
-            top: `${textPosY}%`,
-            transform: [{ translateX: -50 }, { translateY: -50 }],
-            paddingHorizontal: 16,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: isKidsEdition ? 20 : 16,
-              fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-              color: TEXT_COLORS[textColor] || '#FFFFFF',
-              textAlign: 'center',
-              paddingHorizontal: 16,
-              paddingVertical: 4,
-              backgroundColor: 'rgba(0,0,0,0.3)',
-              borderRadius: 4,
-              overflow: 'hidden',
-              textShadowColor: 'rgba(0,0,0,0.5)',
-              textShadowOffset: { width: 1, height: 1 },
-              textShadowRadius: 3,
-            }}
-          >
-            {overlayText}
-          </Text>
-        </View>
-      );
-    }
-
-    // Handle preset positions
     return (
       <View
         style={{
           position: 'absolute',
-          top: textPosition === 'top' ? 12 : textPosition === 'middle' ? '40%' : undefined,
-          bottom: textPosition === 'bottom' ? 12 : undefined,
+          bottom: 12,
           left: 0,
           right: 0,
           alignItems: 'center',
@@ -144,7 +48,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           style={{
             fontSize: isKidsEdition ? 20 : 16,
             fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-            color: TEXT_COLORS[textColor] || '#FFFFFF',
+            color: '#FFFFFF',
             textAlign: 'center',
             paddingHorizontal: 16,
             paddingVertical: 4,
@@ -219,15 +123,8 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           p_parent_id: parentId,
           p_video_url: uploadResult.url,
           p_metadata: {
-            music_id: musicId,
-            frame: frame,
             customization: {
               text: overlayText,
-              textColor,
-              textPosition,
-              textPosX,
-              textPosY,
-              transition,
             },
           },
         });
@@ -296,9 +193,6 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             useNativeControls={false}
             onPlaybackStatusUpdate={(status) => setIsPlaying(status.isPlaying)}
           />
-
-          {/* Frame Overlay */}
-          {renderFrameOverlay()}
 
           {/* Text Overlay */}
           {renderTextOverlay()}
@@ -369,8 +263,8 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             </View>
           </View>
 
-          {/* Customization Info */}
-          {(overlayText || transition !== 'none') && (
+          {/* Text Overlay Info */}
+          {overlayText && (
             <View
               style={{
                 backgroundColor: theme.neutralColors.lightGray,
@@ -381,63 +275,23 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             >
               <Text
                 style={{
-                  fontSize: isKidsEdition ? 14 : 12,
-                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                  color: theme.neutralColors.dark,
-                  marginBottom: theme.spacing.sm,
+                  fontSize: isKidsEdition ? 12 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.neutralColors.mediumGray,
                 }}
               >
-                Customizations
+                Text Overlay
               </Text>
-
-              {overlayText && (
-                <View style={{ marginBottom: theme.spacing.sm }}>
-                  <Text
-                    style={{
-                      fontSize: isKidsEdition ? 12 : 11,
-                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                      color: theme.neutralColors.mediumGray,
-                    }}
-                  >
-                    Text
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: isKidsEdition ? 13 : 11,
-                      fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                      color: theme.neutralColors.dark,
-                      marginTop: 2,
-                    }}
-                  >
-                    "{overlayText}"
-                  </Text>
-                </View>
-              )}
-
-              {transition !== 'none' && (
-                <View>
-                  <Text
-                    style={{
-                      fontSize: isKidsEdition ? 12 : 11,
-                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                      color: theme.neutralColors.mediumGray,
-                    }}
-                  >
-                    Transition
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: isKidsEdition ? 13 : 11,
-                      fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                      color: theme.neutralColors.dark,
-                      marginTop: 2,
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    {transition}
-                  </Text>
-                </View>
-              )}
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 13 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: theme.neutralColors.dark,
+                  marginTop: 2,
+                }}
+              >
+                "{overlayText}"
+              </Text>
             </View>
           )}
 
