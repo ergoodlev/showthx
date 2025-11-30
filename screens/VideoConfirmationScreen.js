@@ -27,43 +27,38 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
   const videoUri = route?.params?.videoUri;
   const giftId = route?.params?.giftId;
   const giftName = route?.params?.giftName;
-  const overlayText = route?.params?.overlayText;
+  const decorations = route?.params?.decorations || [];
 
-  // Render text overlay - simple, centered at bottom
-  const renderTextOverlay = () => {
-    if (!overlayText) return null;
+  // Render decoration overlays
+  const renderDecorations = () => {
+    if (!decorations || decorations.length === 0) return null;
 
-    return (
+    return decorations.map(decoration => (
       <View
+        key={decoration.id}
         style={{
           position: 'absolute',
-          bottom: 12,
-          left: 0,
-          right: 0,
-          alignItems: 'center',
-          paddingHorizontal: 16,
+          left: `${decoration.x}%`,
+          top: `${decoration.y}%`,
+          transform: [
+            { translateX: -20 },
+            { translateY: -20 },
+            { scale: decoration.scale },
+          ],
         }}
       >
         <Text
           style={{
-            fontSize: isKidsEdition ? 20 : 16,
-            fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-            color: '#FFFFFF',
-            textAlign: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 4,
-            backgroundColor: 'rgba(0,0,0,0.3)',
-            borderRadius: 4,
-            overflow: 'hidden',
-            textShadowColor: 'rgba(0,0,0,0.5)',
+            fontSize: 40,
+            textShadowColor: 'rgba(0,0,0,0.3)',
             textShadowOffset: { width: 1, height: 1 },
-            textShadowRadius: 3,
+            textShadowRadius: 2,
           }}
         >
-          {overlayText}
+          {decoration.emoji}
         </Text>
       </View>
-    );
+    ));
   };
 
   const videoRef = useRef(null);
@@ -123,9 +118,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           p_parent_id: parentId,
           p_video_url: uploadResult.url,
           p_metadata: {
-            customization: {
-              text: overlayText,
-            },
+            decorations: decorations,
           },
         });
 
@@ -194,8 +187,8 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             onPlaybackStatusUpdate={(status) => setIsPlaying(status.isPlaying)}
           />
 
-          {/* Text Overlay */}
-          {renderTextOverlay()}
+          {/* Decoration Overlays */}
+          {renderDecorations()}
 
           {!isPlaying && (
             <TouchableOpacity
@@ -263,8 +256,8 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             </View>
           </View>
 
-          {/* Text Overlay Info */}
-          {overlayText && (
+          {/* Decorations Info */}
+          {decorations && decorations.length > 0 && (
             <View
               style={{
                 backgroundColor: theme.neutralColors.lightGray,
@@ -280,17 +273,24 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                   color: theme.neutralColors.mediumGray,
                 }}
               >
-                Text Overlay
+                Stickers Added
               </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                {decorations.map(decoration => (
+                  <Text key={decoration.id} style={{ fontSize: 20 }}>
+                    {decoration.emoji}
+                  </Text>
+                ))}
+              </View>
               <Text
                 style={{
                   fontSize: isKidsEdition ? 13 : 11,
                   fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
                   color: theme.neutralColors.dark,
-                  marginTop: 2,
+                  marginTop: 4,
                 }}
               >
-                "{overlayText}"
+                {decorations.length} sticker{decorations.length !== 1 ? 's' : ''}
               </Text>
             </View>
           )}

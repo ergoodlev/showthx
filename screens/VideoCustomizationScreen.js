@@ -1,7 +1,7 @@
 /**
  * VideoCustomizationScreen
- * Simplified - Add optional text overlay to thank you video
- * Phase 4 will add decoration picker here
+ * Kids can add simple decorations (stickers) to their video
+ * Phase 4: Decorations system for kids
  */
 
 import React, { useState, useRef } from 'react';
@@ -11,13 +11,14 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  TextInput,
 } from 'react-native';
 import { Video } from 'expo-av';
+import { Ionicons } from '@expo/vector-icons';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
+import { DECORATIONS, createPlacedDecoration } from '../services/decorationService';
 
 export const VideoCustomizationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -28,14 +29,29 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
 
   const videoRef = useRef(null);
   const [loading, setLoading] = useState(false);
-  const [overlayText, setOverlayText] = useState('');
+  const [placedDecorations, setPlacedDecorations] = useState([]);
+
+  const handleAddDecoration = (decorationId) => {
+    // Create a new decoration instance at a random position
+    const randomX = 20 + Math.random() * 60;
+    const randomY = 20 + Math.random() * 60;
+    const newDecoration = createPlacedDecoration(decorationId, randomX, randomY, 1.0);
+
+    if (newDecoration) {
+      setPlacedDecorations([...placedDecorations, newDecoration]);
+    }
+  };
+
+  const handleRemoveDecoration = (decorationInstanceId) => {
+    setPlacedDecorations(placedDecorations.filter(d => d.id !== decorationInstanceId));
+  };
 
   const handleProceed = () => {
     navigation?.navigate('VideoConfirmation', {
       videoUri,
       giftId,
       giftName,
-      overlayText,
+      decorations: placedDecorations,
     });
   };
 
@@ -72,41 +88,37 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             isLooping
           />
 
-          {/* Text Overlay Preview - Simple, centered at bottom */}
-          {overlayText && (
-            <View
+          {/* Decoration Overlays */}
+          {placedDecorations.map(decoration => (
+            <TouchableOpacity
+              key={decoration.id}
+              onPress={() => handleRemoveDecoration(decoration.id)}
               style={{
                 position: 'absolute',
-                bottom: 12,
-                left: 0,
-                right: 0,
-                alignItems: 'center',
-                paddingHorizontal: theme.spacing.md,
+                left: `${decoration.x}%`,
+                top: `${decoration.y}%`,
+                transform: [
+                  { translateX: -20 },
+                  { translateY: -20 },
+                  { scale: decoration.scale },
+                ],
               }}
             >
               <Text
                 style={{
-                  fontSize: isKidsEdition ? 20 : 16,
-                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-                  color: '#FFFFFF',
-                  textAlign: 'center',
-                  paddingHorizontal: theme.spacing.md,
-                  paddingVertical: 4,
-                  backgroundColor: 'rgba(0,0,0,0.3)',
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                  textShadowColor: 'rgba(0,0,0,0.5)',
+                  fontSize: 40,
+                  textShadowColor: 'rgba(0,0,0,0.3)',
                   textShadowOffset: { width: 1, height: 1 },
-                  textShadowRadius: 3,
+                  textShadowRadius: 2,
                 }}
               >
-                {overlayText}
+                {decoration.emoji}
               </Text>
-            </View>
-          )}
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Text Overlay Section */}
+        {/* Decoration Picker */}
         <View style={{ marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.lg }}>
           <Text
             style={{
@@ -116,63 +128,72 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
               marginBottom: theme.spacing.sm,
             }}
           >
-            Add Text Overlay (Optional)
-          </Text>
-
-          <TextInput
-            placeholder="What do you want to say?"
-            value={overlayText}
-            onChangeText={setOverlayText}
-            style={{
-              borderWidth: 1,
-              borderColor: theme.neutralColors.lightGray,
-              borderRadius: 8,
-              paddingHorizontal: theme.spacing.sm,
-              paddingVertical: theme.spacing.sm,
-              fontSize: isKidsEdition ? 14 : 12,
-              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: theme.neutralColors.dark,
-              marginBottom: theme.spacing.sm,
-              maxHeight: 80,
-            }}
-            multiline
-            placeholderTextColor={theme.neutralColors.mediumGray}
-          />
-
-          <Text
-            style={{
-              fontSize: isKidsEdition ? 11 : 10,
-              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: theme.neutralColors.mediumGray,
-              fontStyle: 'italic',
-            }}
-          >
-            Text will appear centered at the bottom of the video in white.
-          </Text>
-        </View>
-
-        {/* Placeholder for Phase 4: Decoration Picker */}
-        <View style={{ marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.lg }}>
-          <Text
-            style={{
-              fontSize: isKidsEdition ? 16 : 14,
-              fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-              color: theme.neutralColors.dark,
-              marginBottom: theme.spacing.sm,
-            }}
-          >
-            Decorations
+            Add Stickers to Your Video!
           </Text>
           <Text
             style={{
               fontSize: isKidsEdition ? 12 : 11,
               fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
               color: theme.neutralColors.mediumGray,
-              fontStyle: 'italic',
+              marginBottom: theme.spacing.md,
             }}
           >
-            Coming soon: Add fun stickers and decorations to your video!
+            Tap a sticker to add it to your video. Tap a sticker on the video to remove it.
           </Text>
+
+          {/* Decoration Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+            {DECORATIONS.map(decoration => (
+              <TouchableOpacity
+                key={decoration.id}
+                onPress={() => handleAddDecoration(decoration.id)}
+                style={{
+                  width: 70,
+                  height: 70,
+                  backgroundColor: theme.neutralColors.lightGray,
+                  borderRadius: 12,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderWidth: 2,
+                  borderColor: 'transparent',
+                }}
+              >
+                <Text style={{ fontSize: 36 }}>{decoration.emoji}</Text>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 10 : 9,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.mediumGray,
+                    marginTop: 2,
+                  }}
+                >
+                  {decoration.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Placed Decorations Info */}
+          {placedDecorations.length > 0 && (
+            <View
+              style={{
+                marginTop: theme.spacing.md,
+                padding: theme.spacing.sm,
+                backgroundColor: 'rgba(0, 166, 153, 0.1)',
+                borderRadius: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 12 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: theme.brandColors.teal,
+                }}
+              >
+                {placedDecorations.length} sticker{placedDecorations.length !== 1 ? 's' : ''} added!
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
