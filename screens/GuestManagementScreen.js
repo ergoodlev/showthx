@@ -348,14 +348,33 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             guestData.phone = guest.phone;
           }
 
-          const { data, error } = await supabase
+          const { data: guestRecord, error: guestError } = await supabase
             .from('guests')
             .insert(guestData)
             .select()
             .single();
 
-          if (!error && data) {
-            insertedCount++;
+          if (!guestError && guestRecord) {
+            // Create corresponding gift record
+            const { error: giftError } = await supabase
+              .from('gifts')
+              .insert({
+                event_id: eventId,
+                parent_id: user.id,
+                guest_id: guestRecord.id,
+                name: `Gift from ${guest.name}`,
+                giver_name: guest.name,
+                status: 'pending',
+                created_at: new Date().toISOString(),
+              });
+
+            if (giftError) {
+              console.error(`Error creating gift for ${guest.email}:`, giftError);
+              // Don't increment count if gift creation failed
+              skippedCount++;
+            } else {
+              insertedCount++;
+            }
           }
         } catch (err) {
           console.error(`Error inserting guest ${guest.email}:`, err);
