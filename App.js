@@ -13,6 +13,7 @@ import { View, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as Font from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 import {
   Nunito_400Regular,
   Nunito_600SemiBold,
@@ -40,8 +41,8 @@ import { EditionProvider, useEdition } from './context/EditionContext';
 // Navigation
 import RootNavigator from './navigation/RootNavigator';
 
-// Placeholder screens (to be implemented in Phase 2)
-import SplashScreen from './screens/SplashScreen';
+// Prevent native splash from auto-hiding
+SplashScreen.preventAutoHideAsync();
 
 /**
  * Main App Content Component
@@ -85,21 +86,22 @@ const AppContent = () => {
         'Inter_SemiBold': Inter_600SemiBold,
         'Inter_Bold': Inter_700Bold,
       });
+
+      // Hide native splash screen - our custom splash in RootNavigator will show
+      await SplashScreen.hideAsync();
       setIsReady(true);
     } catch (error) {
       console.error('Error loading fonts:', error);
+      // Hide splash even on error
+      await SplashScreen.hideAsync();
       // Continue anyway - system fonts will be used
       setIsReady(true);
     }
   };
 
-  // Show splash screen while loading
+  // Native splash will show while loading - no need to render anything
   if (!isReady) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.neutralColors.white }]}>
-        <SplashScreen />
-      </View>
-    );
+    return null;
   }
 
   // Main app content
