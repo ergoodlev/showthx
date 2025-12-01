@@ -254,6 +254,8 @@ export const GuestManagementScreen = ({ navigation, route }) => {
           // Get gift name if available
           const giftName = giftNameIndex !== -1 ? (cols[giftNameIndex] || '').trim() : null;
 
+          console.log(`📦 Row ${i + 1} gift data:`, { giftNameIndex, giftName, columnValue: cols[giftNameIndex] });
+
           // Validate
           if (!name) {
             errors.push(`Row ${i + 1}: Missing name`);
@@ -393,6 +395,8 @@ export const GuestManagementScreen = ({ navigation, route }) => {
           const giftName = guest.giftName && guest.giftName.trim()
             ? guest.giftName
             : `Gift from ${guest.name}`;
+
+          console.log(`💾 Creating gift for ${guest.name}:`, { giftName, parsedGiftName: guest.giftName });
 
           const { error: giftError } = await supabase
             .from('gifts')

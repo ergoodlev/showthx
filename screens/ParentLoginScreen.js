@@ -193,8 +193,11 @@ export const ParentLoginScreen = ({ navigation }) => {
       const biometricSupported = await isBiometricSupported();
       const biometricEnabled = await isBiometricLoginEnabled();
 
+      console.log('🔐 Biometric check:', { biometricSupported, biometricEnabled });
+
       if (biometricSupported && !biometricEnabled) {
         const biometricType = await getBiometricTypeName();
+        console.log(`📱 Showing ${biometricType} enrollment prompt`);
         // Prompt user to enable biometric login immediately (no delay)
         // Show alert before RootNavigator's next polling cycle detects the session
         Alert.alert(
