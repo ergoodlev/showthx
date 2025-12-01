@@ -195,51 +195,50 @@ export const ParentLoginScreen = ({ navigation }) => {
 
       if (biometricSupported && !biometricEnabled) {
         const biometricType = await getBiometricTypeName();
-        // Prompt user to enable biometric login
-        setTimeout(() => {
-          Alert.alert(
-            `Enable ${biometricType}?`,
-            `Would you like to use ${biometricType} for faster sign-in next time?`,
-            [
-              {
-                text: 'Not Now',
-                style: 'cancel',
-                onPress: () => console.log('User declined biometric setup'),
-              },
-              {
-                text: 'Enable',
-                onPress: async () => {
-                  try {
-                    // Pass credentials for secure storage - enables true "remember me"
-                    console.log(`🔐 Enabling ${biometricType}...`);
-                    const enableResult = await enableBiometricLogin(result.userId, email, password);
-                    if (enableResult.success) {
-                      console.log(`✅ ${biometricType} enabled with secure credential storage`);
-                      Alert.alert(
-                        'Success!',
-                        `${biometricType} has been enabled. You can now use it to sign in next time.`
-                      );
-                      // Refresh biometric availability
-                      setBiometricAvailable(true);
-                    } else {
-                      console.error(`❌ Failed to enable ${biometricType}:`, enableResult.error);
-                      Alert.alert(
-                        'Setup Failed',
-                        enableResult.error || `Could not enable ${biometricType}. You can try again from Settings.`
-                      );
-                    }
-                  } catch (err) {
-                    console.error(`❌ Error enabling ${biometricType}:`, err);
+        // Prompt user to enable biometric login immediately (no delay)
+        // Show alert before RootNavigator's next polling cycle detects the session
+        Alert.alert(
+          `Enable ${biometricType}?`,
+          `Would you like to use ${biometricType} for faster sign-in next time?`,
+          [
+            {
+              text: 'Not Now',
+              style: 'cancel',
+              onPress: () => console.log('User declined biometric setup'),
+            },
+            {
+              text: 'Enable',
+              onPress: async () => {
+                try {
+                  // Pass credentials for secure storage - enables true "remember me"
+                  console.log(`🔐 Enabling ${biometricType}...`);
+                  const enableResult = await enableBiometricLogin(result.userId, email, password);
+                  if (enableResult.success) {
+                    console.log(`✅ ${biometricType} enabled with secure credential storage`);
                     Alert.alert(
-                      'Setup Error',
-                      `An error occurred while enabling ${biometricType}. Please try again.`
+                      'Success!',
+                      `${biometricType} has been enabled. You can now use it to sign in next time.`
+                    );
+                    // Refresh biometric availability
+                    setBiometricAvailable(true);
+                  } else {
+                    console.error(`❌ Failed to enable ${biometricType}:`, enableResult.error);
+                    Alert.alert(
+                      'Setup Failed',
+                      enableResult.error || `Could not enable ${biometricType}. You can try again from Settings.`
                     );
                   }
-                },
+                } catch (err) {
+                  console.error(`❌ Error enabling ${biometricType}:`, err);
+                  Alert.alert(
+                    'Setup Error',
+                    `An error occurred while enabling ${biometricType}. Please try again.`
+                  );
+                }
               },
-            ]
-          );
-        }, 500); // Delay to ensure navigation completes first
+            },
+          ]
+        );
       }
 
       // Session is stored in AsyncStorage
