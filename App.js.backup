@@ -1,0 +1,3422 @@
+// App.js - Main React Native Application
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  ScrollView,
+  Alert,
+  TextInput,
+  Modal,
+  Platform,
+  PanResponder,
+  Animated,
+  Dimensions,
+  ActivityIndicator,
+} from 'react-native';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import { Video } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
+import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path } from 'react-native-svg';
+import ParentalConsentScreen from './screens/ParentalConsentScreen';
+import { supabase } from './supabaseClient';
+import { sendBulkEmails } from './services/emailService';
+import { uploadVideoToCloud } from './services/videoStorageService';
+
+const GratituGramApp = () => {
+  const [view, setView] = useState('home');
+  const [hasConsent, setHasConsent] = useState(null); // null = checking, false = no consent, true = has consent
+  const [familyId, setFamilyId] = useState(null);
+  const [guests, setGuests] = useState([]);
+  const [currentGuest, setCurrentGuest] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [recordedVideo, setRecordedVideo] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [selectedFilter, setSelectedFilter] = useState('none');
+  const [decorations, setDecorations] = useState([]);
+  const [showAddGuest, setShowAddGuest] = useState(false);
+  const [newGuestName, setNewGuestName] = useState('');
+  const [newGuestGift, setNewGuestGift] = useState('');
+  const [newGuestEmail, setNewGuestEmail] = useState('');
+  const [newGuestPhone, setNewGuestPhone] = useState('');
+  const [editingGuest, setEditingGuest] = useState(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [selectedVideoForPreview, setSelectedVideoForPreview] = useState(null);
+  const [sendingEmails, setSendingEmails] = useState(false);
+  const [selectedFrame, setSelectedFrame] = useState('none');
+  const [textOverlay, setTextOverlay] = useState('');
+  const [drawingPaths, setDrawingPaths] = useState([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [childName, setChildName] = useState('');
+  const [emailSubjectLine, setEmailSubjectLine] = useState('');
+  const [showPinGate, setShowPinGate] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [parentPin, setParentPin] = useState(null);
+  const [currentDrawingPath, setCurrentDrawingPath] = useState([]);
+  const [currentDrawingColor, setCurrentDrawingColor] = useState('#FF0000');
+  const [currentBrushSize, setCurrentBrushSize] = useState(4);
+  const [stickers, setStickers] = useState([]);
+  const [textOverlays, setTextOverlays] = useState([]);
+
+  // Use the useCameraPermissions hook correctly
+  const [permission, requestPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
+
+  const cameraRef = useRef(null);
+  const timerRef = useRef(null);
+  const cameraReadyRef = useRef(false);
+  const mountTimeRef = useRef(null);
+
+  // Check for parental consent on app launch
+  useEffect(() => {
+    checkParentalConsent();
+  }, []);
+
+  // Load guests from storage
+  useEffect(() => {
+    if (hasConsent) {
+      loadGuests();
+    }
+  }, [hasConsent]);
+
+  const checkParentalConsent = async () => {
+    try {
+      const consentGiven = await AsyncStorage.getItem('parentalConsentGiven');
+      const storedFamilyId = await AsyncStorage.getItem('familyId');
+
+      if (consentGiven === 'true' && storedFamilyId) {
+        setHasConsent(true);
+        setFamilyId(storedFamilyId);
+
+        // Load parent settings from Supabase
+        const { data: familyData } = await supabase
+          .from('families')
+          .select('pin_code, email_subject_line, child_name')
+          .eq('id', storedFamilyId)
+          .single();
+
+        if (familyData) {
+          setParentPin(familyData.pin_code);
+          setEmailSubjectLine(familyData.email_subject_line || '');
+          if (familyData.child_name) {
+            setChildName(familyData.child_name);
+          }
+        }
+      } else {
+        setHasConsent(false);
+      }
+    } catch (error) {
+      console.error('Error checking parental consent:', error);
+      setHasConsent(false);
+    }
+  };
+
+  const handleConsentComplete = (newFamilyId) => {
+    setFamilyId(newFamilyId);
+    setHasConsent(true);
+  };
+
+  // Reset camera ready state and track mount time when changing views
+  useEffect(() => {
+    if (view !== 'record') {
+      setIsCameraReady(false);
+      cameraReadyRef.current = false;
+      mountTimeRef.current = null;
+    } else {
+      // Track when camera view mounts
+      mountTimeRef.current = Date.now();
+      console.log('Camera view mounted, waiting 3 seconds before allowing recording');
+
+      // Wait 3 seconds after mount before allowing recording
+      const readyTimer = setTimeout(() => {
+        console.log('3 seconds elapsed, marking camera as ready');
+        cameraReadyRef.current = true;
+        setIsCameraReady(true);
+      }, 3000);
+
+      return () => clearTimeout(readyTimer);
+    }
+  }, [view]);
+
+  const loadGuests = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('guests');
+      if (stored) {
+        setGuests(JSON.parse(stored));
+      } else {
+        const sampleGuests = [
+          { id: '1', name: 'Grandma Susan', gift: 'LEGO Set', completed: false },
+          { id: '2', name: 'Uncle Mike', gift: 'Art Supplies', completed: false },
+          { id: '3', name: 'Aunt Jenny', gift: 'Books', completed: false },
+        ];
+        setGuests(sampleGuests);
+        await AsyncStorage.setItem('guests', JSON.stringify(sampleGuests));
+      }
+    } catch (error) {
+      console.error('Error loading guests:', error);
+    }
+  };
+
+  const saveGuests = async (updatedGuests) => {
+    try {
+      await AsyncStorage.setItem('guests', JSON.stringify(updatedGuests));
+      setGuests(updatedGuests);
+    } catch (error) {
+      console.error('Error saving guests:', error);
+    }
+  };
+
+  const addGuest = async () => {
+    if (!newGuestName.trim()) {
+      Alert.alert('Missing Info', 'Please enter a guest name');
+      return;
+    }
+
+    if (editingGuest) {
+      // Update existing guest
+      const updated = guests.map((g) =>
+        g.id === editingGuest.id
+          ? {
+              ...g,
+              name: newGuestName,
+              gift: newGuestGift,
+              email: newGuestEmail,
+              phone: newGuestPhone,
+            }
+          : g
+      );
+      await saveGuests(updated);
+    } else {
+      // Add new guest
+      const newGuest = {
+        id: Date.now().toString(),
+        name: newGuestName,
+        gift: newGuestGift,
+        email: newGuestEmail,
+        phone: newGuestPhone,
+        completed: false,
+      };
+      const updated = [...guests, newGuest];
+      await saveGuests(updated);
+    }
+
+    setNewGuestName('');
+    setNewGuestGift('');
+    setNewGuestEmail('');
+    setNewGuestPhone('');
+    setEditingGuest(null);
+    setShowAddGuest(false);
+  };
+
+  const editGuest = (guest) => {
+    setEditingGuest(guest);
+    setNewGuestName(guest.name);
+    setNewGuestGift(guest.gift || '');
+    setNewGuestEmail(guest.email || '');
+    setNewGuestPhone(guest.phone || '');
+    setShowAddGuest(true);
+  };
+
+  const importCSV = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/csv',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const fileUri = result.assets[0].uri;
+      const csvContent = await FileSystem.readAsStringAsync(fileUri);
+
+      // Parse CSV - handle common Evite export formats
+      const lines = csvContent.split('\n');
+      const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+
+      // Find column indices for name, email, phone
+      const nameIndex = headers.findIndex(h => h.includes('name') || h.includes('guest'));
+      const emailIndex = headers.findIndex(h => h.includes('email'));
+      const phoneIndex = headers.findIndex(h => h.includes('phone') || h.includes('mobile'));
+
+      if (nameIndex === -1) {
+        Alert.alert('Error', 'Could not find guest names in CSV. Make sure the file has a "Name" column.');
+        return;
+      }
+
+      const newGuests = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const columns = line.split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
+        const name = columns[nameIndex];
+
+        if (name) {
+          newGuests.push({
+            id: `${Date.now()}_${i}`,
+            name,
+            gift: '', // User will fill in later
+            email: emailIndex !== -1 ? columns[emailIndex] : '',
+            phone: phoneIndex !== -1 ? columns[phoneIndex] : '',
+            completed: false,
+          });
+        }
+      }
+
+      if (newGuests.length === 0) {
+        Alert.alert('Error', 'No guests found in CSV file.');
+        return;
+      }
+
+      // Merge with existing guests (avoid duplicates)
+      const existingNames = new Set(guests.map(g => g.name.toLowerCase()));
+      const uniqueNewGuests = newGuests.filter(g => !existingNames.has(g.name.toLowerCase()));
+
+      const updated = [...guests, ...uniqueNewGuests];
+      await saveGuests(updated);
+
+      Alert.alert(
+        'Success!',
+        `Imported ${uniqueNewGuests.length} guest(s). ${newGuests.length - uniqueNewGuests.length} duplicates were skipped.\n\nDon't forget to add what gifts they gave!`
+      );
+    } catch (error) {
+      console.error('CSV import error:', error);
+      Alert.alert('Import Error', error.message || 'Failed to import CSV file.');
+    }
+  };
+
+  const toggleApproval = async (guestId) => {
+    const updated = guests.map((g) =>
+      g.id === guestId
+        ? { ...g, approved: !g.approved }
+        : g
+    );
+    await saveGuests(updated);
+  };
+
+  const sendAllEmails = async () => {
+    const approvedGuests = guests.filter((g) => g.completed && g.approved && g.email);
+
+    if (approvedGuests.length === 0) {
+      Alert.alert('No Videos to Send', 'Please approve at least one video with an email address.');
+      return;
+    }
+
+    Alert.alert(
+      'Send Videos?',
+      `Send ${approvedGuests.length} approved video(s) via email?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: async () => {
+            setSendingEmails(true);
+            try {
+              // Prepare email list
+              const emailList = approvedGuests.map((guest) => ({
+                toEmail: guest.email,
+                toName: guest.name,
+                videoUrl: guest.video_url,
+                giftDescription: guest.gift || 'your wonderful gift',
+                childName: 'Your Friend', // TODO: Get child's name from family settings
+              }));
+
+              // Send emails with progress tracking
+              let sentCount = 0;
+              const results = await sendBulkEmails(emailList, (sent, total) => {
+                sentCount = sent;
+                console.log(`Sent ${sent}/${total} emails`);
+              });
+
+              if (results.failed > 0) {
+                Alert.alert(
+                  'Partially Sent',
+                  `${results.sent} video(s) sent successfully.\n${results.failed} failed to send.`,
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        // Mark successful ones as sent
+                        const updated = guests.map((g) => {
+                          const wasSent = results.errors.every(err => err.email !== g.email);
+                          return g.approved && wasSent
+                            ? { ...g, sent: true, sent_at: new Date().toISOString() }
+                            : g;
+                        });
+                        saveGuests(updated);
+                      },
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert(
+                  'Success!',
+                  `${results.sent} thank you video(s) sent successfully! 🎉`
+                );
+
+                // Mark all approved as sent
+                const updated = guests.map((g) =>
+                  g.approved ? { ...g, sent: true, sent_at: new Date().toISOString() } : g
+                );
+                await saveGuests(updated);
+              }
+            } catch (error) {
+              console.error('Send emails error:', error);
+              Alert.alert(
+                'Error',
+                `Failed to send emails: ${error.message}\n\nPlease check your internet connection and SendGrid configuration.`
+              );
+            } finally {
+              setSendingEmails(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const startRecording = async () => {
+    console.log('startRecording called');
+    console.log('cameraRef.current:', !!cameraRef.current);
+    console.log('isCameraReady state:', isCameraReady);
+    console.log('cameraReadyRef.current:', cameraReadyRef.current);
+
+    if (!cameraRef.current) {
+      Alert.alert('Error', 'Camera reference not available. Please try again.');
+      return;
+    }
+
+    if (!cameraReadyRef.current) {
+      Alert.alert('Error', 'Camera not ready yet. Please wait a moment and try again.');
+      return;
+    }
+
+    try {
+      console.log('Starting recording...');
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      timerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+
+      // Add a delay before calling recordAsync to ensure camera is fully ready
+      console.log('Waiting 500ms before starting recording...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('Calling recordAsync...');
+      const video = await cameraRef.current.recordAsync();
+
+      console.log('Recording complete:', video.uri);
+      setRecordedVideo(video.uri);
+      setView('preview');
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    } catch (error) {
+      console.error('Recording error:', error);
+      Alert.alert('Recording Error', error.message || 'Failed to record video');
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const stopRecording = () => {
+    if (cameraRef.current && isRecording) {
+      cameraRef.current.stopRecording();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const retakeVideo = () => {
+    setRecordedVideo(null);
+    setDecorations([]);
+    setView('record');
+  };
+
+  const uploadVideoToSupabase = async (videoUri) => {
+    try {
+      console.log('Uploading video to Supabase Storage...');
+
+      // Upload to cloud storage and get public URL
+      const publicUrl = await uploadVideoToCloud(videoUri, currentGuest.id);
+
+      console.log('Video uploaded successfully:', publicUrl);
+      return publicUrl;
+    } catch (error) {
+      console.error('Upload error:', error);
+      Alert.alert(
+        'Upload Warning',
+        'Video saved locally but failed to upload to cloud. Email links may not work. Continue anyway?',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => { throw error; } },
+          { text: 'Continue', onPress: () => {} }
+        ]
+      );
+      return videoUri; // Fallback to local URI
+    }
+  };
+
+  const completeThankYou = async () => {
+    setLoading(true);
+    try {
+      console.log('Saving video with customizations:', {
+        drawingPaths: drawingPaths.length,
+        stickers: stickers.length,
+        frame: selectedFrame,
+        textOverlay,
+      });
+
+      // Upload video to Supabase
+      const videoUrl = await uploadVideoToCloud(recordedVideo, currentGuest.id);
+
+      // Consolidate ALL customization data
+      const customizationData = {
+        decorations, // old style decorations
+        drawingPaths, // drawing paths with colors and sizes
+        stickers, // fullscreen stickers with positions and scales
+        selectedFrame, // frame selection
+        textOverlay, // text overlay
+        textOverlays, // array of text overlays
+      };
+
+      // Update guest with video URL
+      const updated = guests.map((g) =>
+        g.id === currentGuest.id
+          ? {
+              ...g,
+              completed: true,
+              video: recordedVideo,
+              video_url: videoUrl,
+              recorded_at: new Date().toISOString(),
+              customization_data: customizationData,
+            }
+          : g
+      );
+
+      await saveGuests(updated);
+
+      // Also save to Supabase guests table
+      await supabase
+        .from('guests')
+        .upsert({
+          id: currentGuest.id,
+          family_id: familyId,
+          name: currentGuest.name,
+          gift_description: currentGuest.gift,
+          email: currentGuest.email || null,
+          phone: currentGuest.phone || null,
+          video_url: videoUrl,
+          recorded_at: new Date().toISOString(),
+          customization_data: customizationData,
+          completed: true,
+        });
+
+      console.log('Video saved successfully!');
+
+      // Reset all states
+      setRecordedVideo(null);
+      setDecorations([]);
+      setDrawingPaths([]);
+      setStickers([]);
+      setTextOverlays([]);
+      setSelectedFrame('none');
+      setTextOverlay('');
+      setCurrentGuest(null);
+      setView('guests');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save video. Please try again.');
+      console.error('Complete error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // LOADING STATE - Checking for consent
+  if (hasConsent === null) {
+    return (
+      <LinearGradient colors={['#A78BFA', '#EC4899', '#EF4444']} style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={[styles.homeContainer, { justifyContent: 'center' }]}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="sparkles" size={48} color="white" />
+            </View>
+            <Text style={styles.appTitle}>GratituGram</Text>
+            <Text style={[styles.appSubtitle, { marginTop: 20 }]}>Loading...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // PARENTAL CONSENT SCREEN - Show if consent not given
+  if (hasConsent === false) {
+    return <ParentalConsentScreen onConsentComplete={handleConsentComplete} />;
+  }
+
+  // HOME SCREEN
+  if (view === 'home') {
+    return (
+      <LinearGradient
+        colors={['#A78BFA', '#EC4899', '#EF4444']}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.homeContainer}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <Ionicons name="sparkles" size={48} color="white" />
+              </View>
+              <Text style={styles.appTitle}>GratituGram</Text>
+              <Text style={styles.appSubtitle}>Video thank you notes made fun!</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => setView('guests')}
+            >
+              <Ionicons name="people" size={24} color="white" />
+              <Text style={styles.buttonText}>Start Thank You Notes</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: 'rgba(236, 72, 153, 0.3)' }]}
+              onPress={() => {
+                if (!parentPin) {
+                  Alert.prompt(
+                    'Set Parent PIN',
+                    'Create a 4-digit PIN to protect the review screen',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Set PIN',
+                        onPress: (pin) => {
+                          if (pin && pin.length === 4 && /^\d+$/.test(pin)) {
+                            setParentPin(pin);
+                            setView('review');
+                          } else {
+                            Alert.alert('Invalid PIN', 'Please enter a 4-digit PIN');
+                          }
+                        },
+                      },
+                    ],
+                    'plain-text',
+                    '',
+                    'numeric'
+                  );
+                } else {
+                  Alert.prompt(
+                    'Parent Access',
+                    'Enter your 4-digit PIN to continue',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Enter',
+                        onPress: (pin) => {
+                          if (pin === parentPin) {
+                            setView('review');
+                          } else {
+                            Alert.alert('Wrong PIN', 'Please try again');
+                          }
+                        },
+                      },
+                    ],
+                    'plain-text',
+                    '',
+                    'numeric'
+                  );
+                }
+              }}
+            >
+              <Ionicons name="shield-checkmark" size={24} color="white" />
+              <Text style={styles.buttonText}>Review & Send Videos (PIN Protected)</Text>
+            </TouchableOpacity>
+
+            <View style={styles.infoBox}>
+              <Text style={styles.infoTitle}>
+                <Ionicons name="gift" size={16} /> How it works:
+              </Text>
+              <Text style={styles.infoText}>1. Add guests and their gifts</Text>
+              <Text style={styles.infoText}>2. Record a fun video message</Text>
+              <Text style={styles.infoText}>3. Add stickers and decorations</Text>
+              <Text style={styles.infoText}>4. Send or download!</Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // GUEST LIST SCREEN
+  if (view === 'guests') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['#F3E8FF', '#FCE7F3']}
+          style={styles.guestContainer}
+        >
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => setView('home')}>
+              <Ionicons name="arrow-back" size={24} color="#7C3AED" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Your Guest List</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.addButton, { flex: 1, marginRight: 8 }]}
+              onPress={() => {
+                setEditingGuest(null);
+                setNewGuestName('');
+                setNewGuestGift('');
+                setNewGuestEmail('');
+                setNewGuestPhone('');
+                setShowAddGuest(true);
+              }}
+            >
+              <Ionicons name="person-add" size={18} color="white" />
+              <Text style={styles.addButtonText}>Add Guest</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.importButton, { flex: 1, marginLeft: 8 }]}
+              onPress={importCSV}
+            >
+              <Ionicons name="cloud-upload" size={18} color="#7C3AED" />
+              <Text style={styles.importButtonText}>Import CSV</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.guestList}>
+            {guests.map((guest) => (
+              <View
+                key={guest.id}
+                style={[
+                  styles.guestCard,
+                  guest.completed && styles.guestCardCompleted,
+                ]}
+              >
+                <View style={styles.guestInfo}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={styles.guestName}>{guest.name}</Text>
+                    {!guest.completed && (
+                      <TouchableOpacity
+                        onPress={() => editGuest(guest)}
+                        style={{ marginLeft: 8 }}
+                      >
+                        <Ionicons name="pencil" size={16} color="#7C3AED" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <Text style={styles.guestGift}>
+                    Gift: {guest.gift || '(not added yet)'}
+                  </Text>
+                  {guest.email && (
+                    <Text style={styles.guestContact}>
+                      <Ionicons name="mail" size={12} /> {guest.email}
+                    </Text>
+                  )}
+                  {guest.phone && (
+                    <Text style={styles.guestContact}>
+                      <Ionicons name="call" size={12} /> {guest.phone}
+                    </Text>
+                  )}
+                </View>
+
+                {guest.completed ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={styles.completedBadge}>
+                      <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                      <Text style={styles.completedText}>Done</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.recordButton, { backgroundColor: '#8B5CF6' }]}
+                      onPress={() => {
+                        console.log('Edit button clicked for:', guest.name);
+                        setCurrentGuest(guest);
+                        setRecordedVideo(guest.video);
+
+                        // Load saved customization data
+                        const customData = guest.customization_data || {};
+                        console.log('Loading customization data:', customData);
+                        setDecorations(customData.decorations || []);
+                        setDrawingPaths(customData.drawingPaths || []);
+                        setStickers(customData.stickers || []);
+                        setSelectedFrame(customData.selectedFrame || 'none');
+                        setTextOverlay(customData.textOverlay || '');
+                        setTextOverlays(customData.textOverlays || []);
+
+                        setView('customize');
+                      }}
+                    >
+                      <Ionicons name="create" size={20} color="white" />
+                      <Text style={styles.recordButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.recordButton}
+                    onPress={() => {
+                      console.log('Record button clicked for:', guest.name);
+                      setCurrentGuest(guest);
+                      setView('record');
+                    }}
+                  >
+                    <Ionicons name="videocam" size={20} color="white" />
+                    <Text style={styles.recordButtonText}>Record</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+
+          <Modal visible={showAddGuest} transparent animationType="slide">
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>
+                  {editingGuest ? 'Edit Guest' : 'Add New Guest'}
+                </Text>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Guest name *"
+                  value={newGuestName}
+                  onChangeText={setNewGuestName}
+                  autoCapitalize="words"
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Gift received (optional)"
+                  value={newGuestGift}
+                  onChangeText={setNewGuestGift}
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email (optional)"
+                  value={newGuestEmail}
+                  onChangeText={setNewGuestEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Phone (optional)"
+                  value={newGuestPhone}
+                  onChangeText={setNewGuestPhone}
+                  keyboardType="phone-pad"
+                />
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => {
+                      setShowAddGuest(false);
+                      setNewGuestName('');
+                      setNewGuestGift('');
+                      setNewGuestEmail('');
+                      setNewGuestPhone('');
+                      setEditingGuest(null);
+                    }}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton]}
+                    onPress={addGuest}
+                  >
+                    <Text style={styles.saveButtonText}>
+                      {editingGuest ? 'Save' : 'Add'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
+  // RECORDING SCREEN
+  if (view === 'record') {
+    // Check if permission is still loading
+    if (!permission || !micPermission) {
+      return (
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'black' }]}>
+          <Text style={{ color: 'white', fontSize: 18 }}>Requesting permissions...</Text>
+          <Text style={{ color: 'white', fontSize: 14, marginTop: 10 }}>Please allow camera and microphone access</Text>
+        </View>
+      );
+    }
+
+    // If camera permission not granted
+    if (!permission.granted) {
+      return (
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'black', padding: 20 }]}>
+          <Text style={{ color: 'white', fontSize: 18, textAlign: 'center', marginBottom: 20 }}>Camera access needed</Text>
+          <TouchableOpacity onPress={requestPermission} style={styles.addButton}>
+            <Text style={styles.addButtonText}>Grant Camera Permission</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // If microphone permission not granted
+    if (!micPermission.granted) {
+      return (
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'black', padding: 20 }]}>
+          <Text style={{ color: 'white', fontSize: 18, textAlign: 'center', marginBottom: 20 }}>Microphone access needed for video recording</Text>
+          <TouchableOpacity onPress={requestMicPermission} style={styles.addButton}>
+            <Text style={styles.addButtonText}>Grant Microphone Permission</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.container}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="front"
+          mode="video"
+          onCameraReady={() => {
+            console.log('onCameraReady callback fired (ignoring, using fixed delay instead)');
+          }}
+        />
+        <SafeAreaView style={styles.cameraOverlay}>
+          <View style={styles.cameraHeader}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setView('guests')}
+            >
+              <Ionicons name="close" size={30} color="white" />
+            </TouchableOpacity>
+
+            {isRecording && (
+              <View style={styles.recordingIndicator}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingTime}>{formatTime(recordingTime)}</Text>
+              </View>
+            )}
+          </View>
+
+          {currentGuest && (
+            <View style={styles.guestOverlay}>
+              <Text style={styles.overlayLabel}>Recording for:</Text>
+              <Text style={styles.overlayName}>{currentGuest.name}</Text>
+              <Text style={styles.overlayGift}>Gift: {currentGuest.gift}</Text>
+            </View>
+          )}
+
+          <View style={styles.cameraControls}>
+            {!isCameraReady && !isRecording && (
+              <Text style={{ color: 'white', marginBottom: 10, fontSize: 14 }}>
+                Preparing camera...
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.captureButton,
+                !isCameraReady && !isRecording && { opacity: 0.5 }
+              ]}
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={!isCameraReady && !isRecording}
+            >
+              {isRecording ? (
+                <View style={styles.stopButton} />
+              ) : (
+                <Ionicons name="videocam" size={32} color="white" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // PREVIEW SCREEN
+
+  // PREVIEW SCREEN - Kid can see final video before saving
+  if (view === 'preview') {
+    // Extract decorations from the decorations array
+    const previewFrame = decorations.find(d => d.type === 'frame')?.value || 'none';
+    const previewDrawings = decorations.find(d => d.type === 'drawing')?.paths || [];
+    const previewText = decorations.find(d => d.type === 'text')?.value || '';
+    const previewStickers = decorations.filter(d => d.type === 'sticker');
+
+    const DecorativeFrame = ({ frameName }) => {
+      if (frameName === 'none') return null;
+
+      const frameConfig = {
+        hearts: { emoji: '❤️', bgColor: '#EC4899', gradientColor: '#F472B6' },
+        stars: { emoji: '⭐', bgColor: '#FBBF24', gradientColor: '#FDE047' },
+        party: { emoji: '🎉', bgColor: '#8B5CF6', gradientColor: '#A78BFA' },
+        confetti: { emoji: '🎊', bgColor: '#F59E0B', gradientColor: '#FBBF24' },
+        balloons: { emoji: '🎈', bgColor: '#3B82F6', gradientColor: '#60A5FA' },
+        rainbow: { emoji: '🌈', bgColor: '#EC4899', gradientColor: '#F472B6' },
+        cake: { emoji: '🎂', bgColor: '#F472B6', gradientColor: '#FBCFE8' },
+        flowers: { emoji: '🌸', bgColor: '#F472B6', gradientColor: '#FBCFE8' },
+        sunshine: { emoji: '☀️', bgColor: '#FBBF24', gradientColor: '#FDE047' },
+        clouds: { emoji: '☁️', bgColor: '#93C5FD', gradientColor: '#BFDBFE' },
+        butterflies: { emoji: '🦋', bgColor: '#A78BFA', gradientColor: '#C4B5FD' },
+        sparkles: { emoji: '✨', bgColor: '#FACC15', gradientColor: '#FDE047' },
+      };
+
+      const config = frameConfig[frameName] || frameConfig.stars;
+      const borderWidth = 40;
+      const emojiSize = 32;
+
+      return (
+        <View style={styles.decorativeFrameContainer} pointerEvents="none">
+          <LinearGradient colors={[config.bgColor, config.gradientColor]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: borderWidth, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 10 }}>
+            {Array.from({ length: 8 }).map((_, i) => (<Text key={i} style={{ fontSize: emojiSize }}>{config.emoji}</Text>))}
+          </LinearGradient>
+          <LinearGradient colors={[config.gradientColor, config.bgColor]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: borderWidth, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 10 }}>
+            {Array.from({ length: 8 }).map((_, i) => (<Text key={i} style={{ fontSize: emojiSize }}>{config.emoji}</Text>))}
+          </LinearGradient>
+          <LinearGradient colors={[config.bgColor, config.gradientColor]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ position: 'absolute', top: borderWidth, bottom: borderWidth, left: 0, width: borderWidth, flexDirection: 'column', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 10 }}>
+            {Array.from({ length: 6 }).map((_, i) => (<Text key={i} style={{ fontSize: emojiSize }}>{config.emoji}</Text>))}
+          </LinearGradient>
+          <LinearGradient colors={[config.gradientColor, config.bgColor]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ position: 'absolute', top: borderWidth, bottom: borderWidth, right: 0, width: borderWidth, flexDirection: 'column', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 10 }}>
+            {Array.from({ length: 6 }).map((_, i) => (<Text key={i} style={{ fontSize: emojiSize }}>{config.emoji}</Text>))}
+          </LinearGradient>
+          <View style={{ position: 'absolute', top: 5, left: 5 }}><Text style={{ fontSize: 40 }}>{config.emoji}</Text></View>
+          <View style={{ position: 'absolute', top: 5, right: 5 }}><Text style={{ fontSize: 40 }}>{config.emoji}</Text></View>
+          <View style={{ position: 'absolute', bottom: 5, left: 5 }}><Text style={{ fontSize: 40 }}>{config.emoji}</Text></View>
+          <View style={{ position: 'absolute', bottom: 5, right: 5 }}><Text style={{ fontSize: 40 }}>{config.emoji}</Text></View>
+        </View>
+      );
+    };
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient colors={['#F3E8FF', '#FCE7F3']} style={[styles.guestContainer, { flex: 1 }]}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => setView('customize')}>
+              <Ionicons name="arrow-back" size={24} color="#7C3AED" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Preview Your Video!</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 20 }}>
+            <View style={styles.previewContainer}>
+              <Video
+                source={{ uri: recordedVideo }}
+                style={styles.videoPreview}
+                resizeMode="contain"
+                shouldPlay={false}
+                isLooping={false}
+                useNativeControls
+                progressUpdateIntervalMillis={500}
+              />
+
+              <DecorativeFrame frameName={previewFrame} />
+
+              {previewStickers.map((sticker) => (
+                <View key={sticker.id} style={{ position: 'absolute', left: `${sticker.position.x}%`, top: `${sticker.position.y}%`, transform: [{ translateX: -25 }, { translateY: -25 }] }} pointerEvents="none">
+                  <Text style={{ fontSize: 50 * sticker.scale }}>{sticker.emoji}</Text>
+                </View>
+              ))}
+
+              {previewDrawings.length > 0 && previewDrawings.map((path, index) => {
+                if (!path || !path.points || path.points.length === 0) return null;
+                // Render SVG paths for drawings
+                const pointsToPath = (points) => {
+                  if (!points || points.length === 0) return '';
+                  let pathData = `M ${points[0].x} ${points[0].y}`;
+                  for (let i = 1; i < points.length; i++) {
+                    const prevPoint = points[i - 1];
+                    const currentPoint = points[i];
+                    const midX = (prevPoint.x + currentPoint.x) / 2;
+                    const midY = (prevPoint.y + currentPoint.y) / 2;
+                    if (i === 1) {
+                      pathData += ` L ${midX} ${midY}`;
+                    } else {
+                      pathData += ` Q ${prevPoint.x} ${prevPoint.y} ${midX} ${midY}`;
+                    }
+                  }
+                  if (points.length > 1) {
+                    const lastPoint = points[points.length - 1];
+                    pathData += ` L ${lastPoint.x} ${lastPoint.y}`;
+                  }
+                  return pathData;
+                };
+
+                return (
+                  <Svg key={index} style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <Path
+                      d={pointsToPath(path.points)}
+                      stroke={path.color || '#000000'}
+                      strokeWidth={path.strokeWidth || 4}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                  </Svg>
+                );
+              })}
+
+              {previewText && (
+                <View style={styles.textOverlayContainer}>
+                  <Text style={styles.textOverlay}>{previewText}</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#7C3AED', textAlign: 'center', marginTop: 20 }}>
+              Ready to share?
+            </Text>
+            <Text style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 5 }}>
+              This is what {currentGuest?.name} will receive!
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+              <TouchableOpacity style={[styles.retakeButton, { flex: 1 }]} onPress={() => setView('customize')}>
+                <Ionicons name="create" size={20} color="#374151" />
+                <Text style={styles.retakeButtonText}>Decorate More</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.completeButton, { flex: 1 }]} onPress={completeThankYou} disabled={loading}>
+                {loading ? (
+                  <>
+                    <ActivityIndicator color="white" />
+                    <Text style={styles.completeButtonText}>Saving...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={20} color="white" />
+                    <Text style={styles.completeButtonText}>Send Video!</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
+  // CUSTOMIZE SCREEN
+  if (view === 'customize') {
+    const availableStickers = ['🎉', '🎁', '❤️', '⭐', '🎈', '🌟', '💝', '🎊', '🙏', '😊', '🎂', '🌈', '✨', '🎀', '💖', '🌺'];
+    const availableFrames = [
+      'none',
+      // Birthday & Party
+      'hearts', 'stars', 'party', 'confetti', 'balloons', 'rainbow', 'cake',
+      // Nature & Cute
+      'flowers', 'sunshine', 'clouds', 'butterflies', 'sparkles',
+      // Fun & Colorful
+      'emoji', 'doodle', 'comic', 'glitter', 'neon',
+      // Elegant
+      'gold', 'silver', 'rose_gold',
+    ];
+
+    const addSticker = (emoji) => {
+      setDecorations([
+        ...decorations,
+        {
+          type: 'sticker',
+          emoji,
+          id: Date.now(),
+          position: { x: Math.random() * 60 + 20, y: Math.random() * 60 + 20 }, // Random position
+          scale: 1,
+        },
+      ]);
+    };
+
+    const updateStickerPosition = (stickerId, x, y) => {
+      setDecorations(
+        decorations.map((d) =>
+          d.id === stickerId ? { ...d, position: { x, y } } : d
+        )
+      );
+    };
+
+    const removeSticker = (stickerId) => {
+      setDecorations(decorations.filter((d) => d.id !== stickerId));
+    };
+
+    const DraggableSticker = ({ sticker }) => {
+      const pan = useRef(new Animated.ValueXY()).current;
+      const [isDragging, setIsDragging] = useState(false);
+
+      const panResponder = useRef(
+        PanResponder.create({
+          onStartShouldSetPanResponder: () => true,
+          onMoveShouldSetPanResponder: () => true,
+          onPanResponderGrant: () => {
+            setIsDragging(true);
+            pan.setOffset({
+              x: pan.x._value,
+              y: pan.y._value,
+            });
+          },
+          onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
+            useNativeDriver: false,
+          }),
+          onPanResponderRelease: (e, gesture) => {
+            setIsDragging(false);
+            pan.flattenOffset();
+            // Update position in decorations - convert pixels to percentage
+            // Assuming video container is ~350px wide and ~600px tall
+            const newX = Math.max(0, Math.min(100, sticker.position.x + (gesture.dx / 3.5)));
+            const newY = Math.max(0, Math.min(100, sticker.position.y + (gesture.dy / 6)));
+            updateStickerPosition(sticker.id, newX, newY);
+            // Reset animated values
+            pan.setValue({ x: 0, y: 0 });
+          },
+        })
+      ).current;
+
+      return (
+        <Animated.View
+          {...panResponder.panHandlers}
+          style={[
+            styles.draggableSticker,
+            {
+              left: `${sticker.position.x}%`,
+              top: `${sticker.position.y}%`,
+              transform: [
+                { translateX: pan.x },
+                { translateY: pan.y },
+                { scale: isDragging ? 1.2 : 1 },
+              ],
+              opacity: isDragging ? 0.9 : 1,
+              shadowColor: isDragging ? '#7C3AED' : 'transparent',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: isDragging ? 0.5 : 0,
+              shadowRadius: 8,
+            },
+          ]}
+        >
+          <Text style={styles.stickerEmoji}>{sticker.emoji}</Text>
+          <TouchableOpacity
+            style={styles.deleteStickerButton}
+            onPress={() => removeSticker(sticker.id)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close-circle" size={24} color="#EF4444" />
+          </TouchableOpacity>
+        </Animated.View>
+      );
+    };
+
+    // Decorative Frame component with background borders
+    const DecorativeFrame = ({ frameName }) => {
+      if (frameName === 'none') return null;
+
+      const frameConfig = {
+        hearts: { emoji: '❤️', bgColor: '#EC4899', gradientColor: '#F472B6' },
+        stars: { emoji: '⭐', bgColor: '#FBBF24', gradientColor: '#FDE047' },
+        party: { emoji: '🎉', bgColor: '#8B5CF6', gradientColor: '#A78BFA' },
+        confetti: { emoji: '🎊', bgColor: '#F59E0B', gradientColor: '#FBBF24' },
+        balloons: { emoji: '🎈', bgColor: '#3B82F6', gradientColor: '#60A5FA' },
+        rainbow: { emoji: '🌈', bgColor: '#EC4899', gradientColor: '#F472B6' },
+        cake: { emoji: '🎂', bgColor: '#F472B6', gradientColor: '#FBCFE8' },
+        flowers: { emoji: '🌸', bgColor: '#F472B6', gradientColor: '#FBCFE8' },
+        sunshine: { emoji: '☀️', bgColor: '#FBBF24', gradientColor: '#FDE047' },
+        clouds: { emoji: '☁️', bgColor: '#93C5FD', gradientColor: '#BFDBFE' },
+        butterflies: { emoji: '🦋', bgColor: '#A78BFA', gradientColor: '#C4B5FD' },
+        sparkles: { emoji: '✨', bgColor: '#FACC15', gradientColor: '#FDE047' },
+      };
+
+      const config = frameConfig[frameName] || frameConfig.stars;
+      const borderWidth = 40;
+      const emojiSize = 32;
+
+      return (
+        <View style={styles.decorativeFrameContainer} pointerEvents="none">
+          {/* Top border */}
+          <LinearGradient
+            colors={[config.bgColor, config.gradientColor]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: borderWidth,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              paddingHorizontal: 10,
+            }}
+          >
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Text key={i} style={{ fontSize: emojiSize }}>
+                {config.emoji}
+              </Text>
+            ))}
+          </LinearGradient>
+
+          {/* Bottom border */}
+          <LinearGradient
+            colors={[config.gradientColor, config.bgColor]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: borderWidth,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              paddingHorizontal: 10,
+            }}
+          >
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Text key={i} style={{ fontSize: emojiSize }}>
+                {config.emoji}
+              </Text>
+            ))}
+          </LinearGradient>
+
+          {/* Left border */}
+          <LinearGradient
+            colors={[config.bgColor, config.gradientColor]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{
+              position: 'absolute',
+              top: borderWidth,
+              bottom: borderWidth,
+              left: 0,
+              width: borderWidth,
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              paddingVertical: 10,
+            }}
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Text key={i} style={{ fontSize: emojiSize }}>
+                {config.emoji}
+              </Text>
+            ))}
+          </LinearGradient>
+
+          {/* Right border */}
+          <LinearGradient
+            colors={[config.gradientColor, config.bgColor]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{
+              position: 'absolute',
+              top: borderWidth,
+              bottom: borderWidth,
+              right: 0,
+              width: borderWidth,
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              paddingVertical: 10,
+            }}
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Text key={i} style={{ fontSize: emojiSize }}>
+                {config.emoji}
+              </Text>
+            ))}
+          </LinearGradient>
+
+          {/* Corner decorations */}
+          <View style={{ position: 'absolute', top: 5, left: 5 }}>
+            <Text style={{ fontSize: 40 }}>{config.emoji}</Text>
+          </View>
+          <View style={{ position: 'absolute', top: 5, right: 5 }}>
+            <Text style={{ fontSize: 40 }}>{config.emoji}</Text>
+          </View>
+          <View style={{ position: 'absolute', bottom: 5, left: 5 }}>
+            <Text style={{ fontSize: 40 }}>{config.emoji}</Text>
+          </View>
+          <View style={{ position: 'absolute', bottom: 5, right: 5 }}>
+            <Text style={{ fontSize: 40 }}>{config.emoji}</Text>
+          </View>
+        </View>
+      );
+    };
+
+    const addFromName = () => {
+      if (!childName.trim()) {
+        Alert.prompt(
+          'Child\'s Name',
+          'What name should appear on the video?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Add',
+              onPress: (name) => {
+                if (name && name.trim()) {
+                  setChildName(name.trim());
+                  setTextOverlay(`From, ${name.trim()}`);
+                }
+              },
+            },
+          ],
+          'plain-text'
+        );
+      } else {
+        setTextOverlay(`From, ${childName}`);
+      }
+    };
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient colors={['#F3E8FF', '#FCE7F3']} style={[styles.previewContainer, { flex: 1 }]}>
+          <View style={styles.customizeHeader}>
+            <TouchableOpacity onPress={() => setView('preview')}>
+              <Ionicons name="arrow-back" size={24} color="#7C3AED" />
+            </TouchableOpacity>
+            <Text style={styles.previewTitle}>Decorate Your Video</Text>
+            <TouchableOpacity onPress={() => setIsDrawing(!isDrawing)}>
+              <Ionicons
+                name={isDrawing ? "brush" : "brush-outline"}
+                size={24}
+                color={isDrawing ? "#7C3AED" : "#9CA3AF"}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 16 }}>
+            <View style={styles.videoPreviewContainer}>
+              <Video
+                source={{ uri: recordedVideo }}
+                style={styles.video}
+                resizeMode="contain"
+                shouldPlay={false}
+              />
+
+              {/* Decorative Frame with actual emoji elements */}
+              <DecorativeFrame frameName={selectedFrame} />
+
+              {/* Draggable stickers (old system - kept for compatibility) */}
+              {decorations
+                .filter((d) => d.type === 'sticker')
+                .map((sticker) => (
+                  <DraggableSticker key={sticker.id} sticker={sticker} />
+                ))}
+
+              {/* New fullscreen stickers */}
+              {stickers.map((sticker) => (
+                <View
+                  key={sticker.id}
+                  style={{
+                    position: 'absolute',
+                    left: `${sticker.x}%`,
+                    top: `${sticker.y}%`,
+                    transform: [{ translateX: -25 }, { translateY: -25 }],
+                  }}
+                  pointerEvents="none"
+                >
+                  <Text style={{ fontSize: 50 * sticker.scale }}>{sticker.emoji}</Text>
+                </View>
+              ))}
+
+              {/* Drawing paths */}
+              {drawingPaths.map((pathObj, index) => {
+                const points = Array.isArray(pathObj) ? pathObj : pathObj.points;
+                const color = pathObj.color || '#FF0000';
+                const strokeWidth = pathObj.strokeWidth || 4;
+
+                if (!points || points.length === 0) return null;
+
+                // Convert points to SVG path
+                let pathData = `M ${points[0].x} ${points[0].y}`;
+                for (let i = 1; i < points.length; i++) {
+                  const prevPoint = points[i - 1];
+                  const currentPoint = points[i];
+                  const midX = (prevPoint.x + currentPoint.x) / 2;
+                  const midY = (prevPoint.y + currentPoint.y) / 2;
+
+                  if (i === 1) {
+                    pathData += ` L ${midX} ${midY}`;
+                  } else {
+                    pathData += ` Q ${prevPoint.x} ${prevPoint.y} ${midX} ${midY}`;
+                  }
+                }
+                if (points.length > 1) {
+                  const lastPoint = points[points.length - 1];
+                  pathData += ` L ${lastPoint.x} ${lastPoint.y}`;
+                }
+
+                return (
+                  <Svg key={index} style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <Path
+                      d={pathData}
+                      stroke={color}
+                      strokeWidth={strokeWidth}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                  </Svg>
+                );
+              })}
+
+              {/* Text overlay */}
+              {textOverlay && (
+                <View style={styles.textOverlayContainer}>
+                  <Text style={styles.textOverlay}>{textOverlay}</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.customizationTools}>
+              {/* Quick "From [name]" button for non-readers */}
+              <TouchableOpacity
+                style={styles.fromNameButton}
+                onPress={addFromName}
+              >
+                <Ionicons name="person" size={20} color="white" />
+                <Text style={styles.fromNameButtonText}>
+                  {childName ? `From, ${childName}` : 'Add "From [Name]"'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Stickers section */}
+              <View style={styles.toolSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.toolsSectionTitle}>🎨 Stickers</Text>
+                  {stickers.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setStickers([])}
+                      style={styles.clearDrawingButton}
+                    >
+                      <Text style={styles.clearDrawingText}>Clear All ({stickers.length})</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={styles.drawingButton}
+                  onPress={() => setView('stickers')}
+                >
+                  <Ionicons name="happy" size={24} color="white" />
+                  <Text style={styles.drawingButtonText}>
+                    {stickers.length > 0 ? `Edit Stickers (${stickers.length})` : 'Add Stickers!'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Frames section */}
+              <View style={styles.toolSection}>
+                <Text style={styles.toolsSectionTitle}>🖼️ Frames</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.framePicker}>
+                  {availableFrames.map((frame) => (
+                    <TouchableOpacity
+                      key={frame}
+                      style={[
+                        styles.frameButton,
+                        selectedFrame === frame && styles.frameButtonSelected,
+                      ]}
+                      onPress={() => setSelectedFrame(frame)}
+                    >
+                      <View style={[styles.framePreview, styles[`frame_${frame}_preview`]]} />
+                      <Text style={styles.frameButtonText}>
+                        {frame.charAt(0).toUpperCase() + frame.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Drawing tools */}
+              <View style={styles.toolSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.toolsSectionTitle}>✏️ Drawing</Text>
+                  {drawingPaths.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setDrawingPaths([])}
+                      style={styles.clearDrawingButton}
+                    >
+                      <Text style={styles.clearDrawingText}>Clear All ({drawingPaths.length})</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={styles.drawingButton}
+                  onPress={() => setView('draw')}
+                >
+                  <Ionicons name="brush" size={24} color="white" />
+                  <Text style={styles.drawingButtonText}>
+                    {drawingPaths.length > 0 ? `Edit Drawings (${drawingPaths.length})` : 'Draw on Video!'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Custom text */}
+              <View style={styles.toolSection}>
+                <Text style={styles.toolsSectionTitle}>💬 Add Text</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Type a message..."
+                  placeholderTextColor="#9CA3AF"
+                  value={textOverlay}
+                  onChangeText={setTextOverlay}
+                  maxLength={50}
+                />
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+            <TouchableOpacity
+              style={styles.completeButton}
+              onPress={() => {
+                // Save all decorations
+                const allDecorations = [
+                  ...decorations.filter(d => d.type === 'sticker'),
+                  { type: 'frame', value: selectedFrame },
+                  { type: 'text', value: textOverlay },
+                  { type: 'drawing', paths: drawingPaths },
+                ];
+                setDecorations(allDecorations);
+                setView('preview');
+              }}
+            >
+              <Ionicons name="checkmark" size={20} color="white" />
+              <Text style={styles.completeButtonText}>Save Decorations</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
+  // FULLSCREEN DRAWING MODE
+  if (view === 'draw') {
+    // Create panResponder fresh each render to avoid closure issues with state
+    const drawingPanResponder = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        console.log('Drawing started');
+        const { locationX, locationY } = e.nativeEvent;
+        setCurrentDrawingPath([{ x: locationX, y: locationY }]);
+      },
+      onPanResponderMove: (e) => {
+        const { locationX, locationY } = e.nativeEvent;
+        setCurrentDrawingPath((prev) => [...prev, { x: locationX, y: locationY }]);
+      },
+      onPanResponderRelease: () => {
+        console.log('Drawing released, current path length:', currentDrawingPath.length);
+        setCurrentDrawingPath((pathToSave) => {
+          if (pathToSave.length > 0) {
+            // Save path with its color and brush size
+            const newPath = { points: pathToSave, color: currentDrawingColor, strokeWidth: currentBrushSize };
+            console.log('Saving path with', pathToSave.length, 'points');
+            // Use functional update to avoid stale closure
+            setDrawingPaths((prevPaths) => {
+              const updated = [...prevPaths, newPath];
+              console.log('Updated paths count:', updated.length);
+              return updated;
+            });
+          }
+          return [];
+        });
+      },
+    });
+    const panResponder = drawingPanResponder;
+
+    // Convert points array to SVG path string
+    const pointsToPath = (points) => {
+      if (points.length === 0) return '';
+
+      let pathData = `M ${points[0].x} ${points[0].y}`;
+
+      // Use quadratic bezier curves for smoother lines
+      for (let i = 1; i < points.length; i++) {
+        const prevPoint = points[i - 1];
+        const currentPoint = points[i];
+        const midX = (prevPoint.x + currentPoint.x) / 2;
+        const midY = (prevPoint.y + currentPoint.y) / 2;
+
+        if (i === 1) {
+          pathData += ` L ${midX} ${midY}`;
+        } else {
+          pathData += ` Q ${prevPoint.x} ${prevPoint.y} ${midX} ${midY}`;
+        }
+      }
+
+      // Add final point
+      if (points.length > 1) {
+        const lastPoint = points[points.length - 1];
+        pathData += ` L ${lastPoint.x} ${lastPoint.y}`;
+      }
+
+      return pathData;
+    };
+
+    const renderPath = (pathObj, index) => {
+      // Handle both formats: array of points OR object with {points, color, strokeWidth}
+      const points = Array.isArray(pathObj) ? pathObj : pathObj.points;
+      const color = pathObj.color || currentDrawingColor;
+      const strokeWidth = pathObj.strokeWidth || currentBrushSize;
+
+      if (!points || points.length === 0) return null;
+
+      const pathData = pointsToPath(points);
+
+      return (
+        <Svg key={index} style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Path
+            d={pathData}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </Svg>
+      );
+    };
+
+    const drawingColors = [
+      { name: 'Red', color: '#FF0000' },
+      { name: 'Orange', color: '#FF8800' },
+      { name: 'Yellow', color: '#FFFF00' },
+      { name: 'Green', color: '#00FF00' },
+      { name: 'Blue', color: '#0088FF' },
+      { name: 'Purple', color: '#8800FF' },
+      { name: 'Pink', color: '#FF00FF' },
+      { name: 'White', color: '#FFFFFF' },
+      { name: 'Black', color: '#000000' },
+    ];
+
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: '#000' }]}>
+        <View style={styles.drawingScreenHeader}>
+          <TouchableOpacity onPress={() => setView('customize')} style={styles.drawingHeaderButton}>
+            <Ionicons name="arrow-back" size={28} color="white" />
+            <Text style={styles.drawingHeaderText}>Back</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.drawingTitle}>Draw on Your Video!</Text>
+
+          <TouchableOpacity
+            onPress={() => {
+              if (drawingPaths.length > 0) {
+                setDrawingPaths(drawingPaths.slice(0, -1));
+              }
+            }}
+            style={styles.drawingHeaderButton}
+          >
+            <Ionicons name="arrow-undo" size={28} color="white" />
+            <Text style={styles.drawingHeaderText}>Undo</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.drawingContainer} {...panResponder.panHandlers}>
+          <Video
+            source={{ uri: recordedVideo }}
+            style={styles.drawingVideo}
+            resizeMode="contain"
+            shouldPlay={false}
+          />
+
+          {/* Render all saved paths */}
+          {drawingPaths.map((path, index) => renderPath(path, index))}
+          {/* Render current path being drawn */}
+          {renderPath(currentDrawingPath, 'current')}
+        </View>
+
+        {/* Color Picker */}
+        <View style={styles.colorPickerContainer}>
+          <Text style={styles.colorPickerLabel}>Color:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorPickerScroll}>
+            {drawingColors.map((colorItem) => (
+              <TouchableOpacity
+                key={colorItem.color}
+                onPress={() => setCurrentDrawingColor(colorItem.color)}
+                style={[
+                  styles.colorButton,
+                  { backgroundColor: colorItem.color },
+                  currentDrawingColor === colorItem.color && styles.colorButtonSelected,
+                ]}
+              >
+                {currentDrawingColor === colorItem.color && (
+                  <Ionicons name="checkmark" size={20} color={colorItem.color === '#FFFFFF' ? '#000' : '#FFF'} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Brush Size Picker */}
+        <View style={styles.colorPickerContainer}>
+          <Text style={styles.colorPickerLabel}>Size:</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {[2, 4, 8, 12, 20].map((size) => (
+              <TouchableOpacity
+                key={size}
+                onPress={() => setCurrentBrushSize(size)}
+                style={[
+                  styles.brushSizeButton,
+                  currentBrushSize === size && styles.brushSizeButtonSelected,
+                ]}
+              >
+                <View style={{
+                  width: size,
+                  height: size,
+                  borderRadius: size / 2,
+                  backgroundColor: currentDrawingColor,
+                }} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.drawingFooter}>
+          <TouchableOpacity
+            onPress={() => setDrawingPaths([])}
+            style={styles.drawingClearButton}
+          >
+            <Ionicons name="trash" size={24} color="#EF4444" />
+            <Text style={styles.drawingClearText}>Clear All</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setView('customize')}
+            style={styles.drawingDoneButton}
+          >
+            <Ionicons name="checkmark-circle" size={24} color="white" />
+            <Text style={styles.drawingDoneText}>Done Drawing!</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // FULLSCREEN STICKER MODE
+  if (view === 'stickers') {
+    const availableStickers = ['🎉', '🎁', '❤️', '⭐', '🎈', '🌟', '💝', '🎊', '🙏', '😊', '🎂', '🌈', '✨', '🎀', '💖', '🌺'];
+
+    const addStickerToVideo = (emoji) => {
+      const newSticker = {
+        id: Date.now(),
+        emoji,
+        x: 50, // Center position (percentage)
+        y: 50,
+        scale: 1,
+      };
+      setStickers([...stickers, newSticker]);
+    };
+
+    const removeSticker = (id) => {
+      setStickers(stickers.filter((s) => s.id !== id));
+    };
+
+    const updateStickerPosition = (id, x, y) => {
+      setStickers(
+        stickers.map((s) =>
+          s.id === id ? { ...s, x, y } : s
+        )
+      );
+    };
+
+    const updateStickerScale = (id, scale) => {
+      setStickers(
+        stickers.map((s) =>
+          s.id === id ? { ...s, scale: Math.max(0.5, Math.min(3, scale)) } : s
+        )
+      );
+    };
+
+    const DraggableStickerItem = ({ sticker }) => {
+      const [dragging, setDragging] = useState(false);
+      const pan = useRef(new Animated.ValueXY()).current;
+
+      const panResponder = useRef(
+        PanResponder.create({
+          onStartShouldSetPanResponder: () => true,
+          onMoveShouldSetPanResponder: () => true,
+          onPanResponderGrant: () => {
+            setDragging(true);
+            pan.setOffset({
+              x: pan.x._value,
+              y: pan.y._value,
+            });
+          },
+          onPanResponderMove: Animated.event(
+            [null, { dx: pan.x, dy: pan.y }],
+            { useNativeDriver: false }
+          ),
+          onPanResponderRelease: (e, gesture) => {
+            setDragging(false);
+            pan.flattenOffset();
+
+            // Calculate new position as percentage with higher precision
+            const containerWidth = Dimensions.get('window').width;
+            const containerHeight = Dimensions.get('window').height - 200;
+
+            const currentX = (sticker.x / 100) * containerWidth;
+            const currentY = (sticker.y / 100) * containerHeight;
+
+            // Use toFixed to maintain precision and avoid snapping
+            const newX = Math.max(0, Math.min(100, parseFloat((((currentX + gesture.dx) / containerWidth) * 100).toFixed(2))));
+            const newY = Math.max(0, Math.min(100, parseFloat((((currentY + gesture.dy) / containerHeight) * 100).toFixed(2))));
+
+            updateStickerPosition(sticker.id, newX, newY);
+            pan.setValue({ x: 0, y: 0 });
+          },
+        })
+      ).current;
+
+      return (
+        <Animated.View
+          {...panResponder.panHandlers}
+          style={{
+            position: 'absolute',
+            left: `${sticker.x}%`,
+            top: `${sticker.y}%`,
+            transform: [
+              { translateX: -25 },
+              { translateY: -25 },
+              { translateX: pan.x },
+              { translateY: pan.y },
+              { scale: dragging ? 1.2 : 1 },
+            ],
+            opacity: dragging ? 0.8 : 1,
+          }}
+        >
+          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 50 * sticker.scale }}>{sticker.emoji}</Text>
+
+            {/* Delete button */}
+            <TouchableOpacity
+              style={{
+                position: 'absolute',
+                top: -15,
+                right: -15,
+                backgroundColor: '#EF4444',
+                borderRadius: 15,
+                width: 30,
+                height: 30,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 3,
+              }}
+              onPress={() => removeSticker(sticker.id)}
+            >
+              <Ionicons name="close" size={18} color="white" />
+            </TouchableOpacity>
+
+            {/* Resize buttons */}
+            <View style={{
+              position: 'absolute',
+              bottom: -40,
+              flexDirection: 'row',
+              gap: 8,
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              borderRadius: 20,
+              padding: 6,
+            }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#8B5CF6',
+                  borderRadius: 15,
+                  width: 30,
+                  height: 30,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onPress={() => updateStickerScale(sticker.id, sticker.scale - 0.2)}
+              >
+                <Ionicons name="remove" size={18} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#8B5CF6',
+                  borderRadius: 15,
+                  width: 30,
+                  height: 30,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onPress={() => updateStickerScale(sticker.id, sticker.scale + 0.2)}
+              >
+                <Ionicons name="add" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      );
+    };
+
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: '#000' }]}>
+        <View style={styles.drawingScreenHeader}>
+          <TouchableOpacity onPress={() => setView('customize')} style={styles.drawingHeaderButton}>
+            <Ionicons name="arrow-back" size={28} color="white" />
+            <Text style={styles.drawingHeaderText}>Back</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.drawingTitle}>Add Stickers!</Text>
+
+          <TouchableOpacity
+            onPress={() => {
+              if (stickers.length > 0) {
+                setStickers(stickers.slice(0, -1));
+              }
+            }}
+            style={styles.drawingHeaderButton}
+          >
+            <Ionicons name="arrow-undo" size={28} color="white" />
+            <Text style={styles.drawingHeaderText}>Undo</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.drawingContainer}>
+          <Video
+            source={{ uri: recordedVideo }}
+            style={styles.drawingVideo}
+            resizeMode="contain"
+            shouldPlay={false}
+          />
+
+          {/* Render stickers */}
+          {stickers.map((sticker) => (
+            <DraggableStickerItem key={sticker.id} sticker={sticker} />
+          ))}
+        </View>
+
+        {/* Sticker picker at bottom */}
+        <View style={{ backgroundColor: '#1F2937', paddingVertical: 15 }}>
+          <Text style={[styles.drawingHeaderText, { textAlign: 'center', marginBottom: 10 }]}>
+            Tap to Add Sticker
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 20 }}
+          >
+            {availableStickers.map((emoji) => (
+              <TouchableOpacity
+                key={emoji}
+                style={{
+                  width: 60,
+                  height: 60,
+                  backgroundColor: '#374151',
+                  borderRadius: 30,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginHorizontal: 5,
+                }}
+                onPress={() => addStickerToVideo(emoji)}
+              >
+                <Text style={{ fontSize: 32 }}>{emoji}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 15, paddingHorizontal: 20 }}>
+            <TouchableOpacity
+              onPress={() => setStickers([])}
+              style={[styles.drawingClearButton, { flex: 1, marginRight: 10 }]}
+            >
+              <Ionicons name="trash" size={24} color="#EF4444" />
+              <Text style={styles.drawingClearText}>Clear All</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setView('customize')}
+              style={[styles.drawingDoneButton, { flex: 1, marginLeft: 10 }]}
+            >
+              <Ionicons name="checkmark-circle" size={24} color="white" />
+              <Text style={styles.drawingDoneText}>Done!</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // PARENT REVIEW SCREEN
+  if (view === 'review') {
+    const completedGuests = guests.filter((g) => g.completed);
+    const approvedCount = completedGuests.filter((g) => g.approved).length;
+    const readyToSend = completedGuests.filter((g) => g.approved && g.email).length;
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient colors={['#F3E8FF', '#FCE7F3']} style={styles.guestContainer}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => setView('home')}>
+              <Ionicons name="arrow-back" size={24} color="#7C3AED" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Review Videos</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {completedGuests.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="videocam-off" size={64} color="#9CA3AF" />
+              <Text style={styles.emptyStateText}>No videos recorded yet</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Record thank you videos from the guest list
+              </Text>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setView('guests')}
+              >
+                <Text style={styles.addButtonText}>Go to Guest List</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <View style={styles.reviewStats}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNumber}>{completedGuests.length}</Text>
+                  <Text style={styles.statLabel}>Recorded</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={[styles.statNumber, { color: '#10B981' }]}>{approvedCount}</Text>
+                  <Text style={styles.statLabel}>Approved</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={[styles.statNumber, { color: '#7C3AED' }]}>{readyToSend}</Text>
+                  <Text style={styles.statLabel}>Ready to Send</Text>
+                </View>
+              </View>
+
+              <ScrollView style={styles.guestList}>
+                {completedGuests.map((guest) => (
+                  <View key={guest.id} style={styles.reviewCard}>
+                    <TouchableOpacity
+                      style={styles.videoThumbnail}
+                      onPress={() => setSelectedVideoForPreview(guest)}
+                    >
+                      <Video
+                        source={{ uri: guest.video_url }}
+                        style={styles.thumbnailVideo}
+                        resizeMode="cover"
+                        shouldPlay={false}
+                      />
+                      <View style={styles.playOverlay}>
+                        <Ionicons name="play-circle" size={48} color="white" />
+                      </View>
+                    </TouchableOpacity>
+
+                    <View style={styles.reviewInfo}>
+                      <Text style={styles.reviewGuestName}>{guest.name}</Text>
+                      <Text style={styles.reviewGuestGift}>Gift: {guest.gift}</Text>
+                      {guest.email ? (
+                        <Text style={styles.reviewContact}>
+                          <Ionicons name="mail" size={12} /> {guest.email}
+                        </Text>
+                      ) : (
+                        <Text style={[styles.reviewContact, { color: '#EF4444' }]}>
+                          <Ionicons name="alert-circle" size={12} /> No email - can't send
+                        </Text>
+                      )}
+                      {guest.sent && (
+                        <Text style={styles.sentBadge}>
+                          <Ionicons name="checkmark-circle" size={12} /> Sent
+                        </Text>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.approveButton,
+                        guest.approved && styles.approveButtonActive,
+                      ]}
+                      onPress={() => toggleApproval(guest.id)}
+                    >
+                      <Ionicons
+                        name={guest.approved ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                        size={32}
+                        color={guest.approved ? '#10B981' : '#9CA3AF'}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+
+              {readyToSend > 0 && (
+                <TouchableOpacity
+                  style={[styles.sendAllButton, sendingEmails && { opacity: 0.5 }]}
+                  onPress={sendAllEmails}
+                  disabled={sendingEmails}
+                >
+                  {sendingEmails ? (
+                    <>
+                      <Text style={styles.sendAllButtonText}>Sending...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={20} color="white" />
+                      <Text style={styles.sendAllButtonText}>
+                        Send {readyToSend} Approved Video{readyToSend > 1 ? 's' : ''}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+
+          {/* Video Preview Modal */}
+          {selectedVideoForPreview && (
+            <Modal visible={true} transparent animationType="fade">
+              <View style={styles.videoPreviewModal}>
+                <View style={styles.videoPreviewContent}>
+                  <View style={styles.videoPreviewHeader}>
+                    <Text style={styles.videoPreviewTitle}>
+                      {selectedVideoForPreview.name}'s Video
+                    </Text>
+                    <TouchableOpacity onPress={() => setSelectedVideoForPreview(null)}>
+                      <Ionicons name="close" size={28} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                  <Video
+                    source={{ uri: selectedVideoForPreview.video_url }}
+                    style={styles.videoPreviewPlayer}
+                    useNativeControls
+                    resizeMode="contain"
+                    shouldPlay
+                  />
+                </View>
+              </View>
+            </Modal>
+          )}
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
+  return null;
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  homeContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#7C3AED',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  appTitle: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 8,
+  },
+  appSubtitle: {
+    fontSize: 16,
+    color: 'white',
+    opacity: 0.9,
+  },
+  primaryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    marginBottom: 20,
+    gap: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  infoBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#374151',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  guestContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  addButton: {
+    backgroundColor: '#7C3AED',
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  importButton: {
+    backgroundColor: 'white',
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#7C3AED',
+  },
+  importButtonText: {
+    color: '#7C3AED',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  guestList: {
+    flex: 1,
+  },
+  guestCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  guestCardCompleted: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  guestInfo: {
+    flex: 1,
+  },
+  guestName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  guestGift: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  guestContact: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  completedText: {
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  recordButton: {
+    backgroundColor: '#7C3AED',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 4,
+  },
+  recordButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  camera: {
+    flex: 1,
+  },
+  cameraOverlay: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  cameraHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  closeButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 8,
+    borderRadius: 20,
+  },
+  recordingIndicator: {
+    backgroundColor: '#EF4444',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  recordingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'white',
+  },
+  recordingTime: {
+    color: 'white',
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  guestOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 12,
+    margin: 16,
+    borderRadius: 12,
+  },
+  overlayLabel: {
+    color: 'white',
+    fontSize: 12,
+    opacity: 0.8,
+  },
+  overlayName: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    marginVertical: 4,
+  },
+  overlayGift: {
+    color: 'white',
+    fontSize: 14,
+    opacity: 0.8,
+  },
+  cameraControls: {
+    alignItems: 'center',
+    paddingBottom: 40,
+  },
+  captureButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stopButton: {
+    width: 32,
+    height: 32,
+    backgroundColor: 'white',
+    borderRadius: 4,
+  },
+  previewContainer: {
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 20,
+    aspectRatio: 9 / 16,
+    width: '100%',
+  },
+  videoPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  previewTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  previewSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  videoContainer: {
+    backgroundColor: 'black',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    position: 'relative',
+  },
+  video: {
+    width: '100%',
+    height: 400,
+  },
+  playHintOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    pointerEvents: 'none',
+  },
+  playHintCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(124, 58, 237, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  playHintText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  previewActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  retakeButton: {
+    flex: 1,
+    backgroundColor: '#E5E7EB',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  retakeButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  completeButton: {
+    backgroundColor: '#7C3AED',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+    minHeight: 56,
+  },
+  completeButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#1F2937',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  cancelButtonText: {
+    color: '#374151',
+    fontWeight: '600',
+  },
+  saveButton: {
+    backgroundColor: '#7C3AED',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  customizeButton: {
+    flex: 1,
+    backgroundColor: '#EC4899',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  customizeButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  customizeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  videoPreviewContainer: {
+    backgroundColor: 'black',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  frameOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: 'none',
+  },
+  frame_hearts: {
+    borderWidth: 12,
+    borderColor: '#EC4899',
+    borderStyle: 'solid',
+    borderRadius: 12,
+    shadowColor: '#EC4899',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  frame_stars: {
+    borderWidth: 12,
+    borderColor: '#F59E0B',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  frame_party: {
+    borderWidth: 12,
+    borderColor: '#8B5CF6',
+    borderStyle: 'solid',
+    borderRadius: 12,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  frame_confetti: {
+    borderWidth: 12,
+    borderColor: '#10B981',
+    borderStyle: 'dotted',
+    borderRadius: 12,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  frame_balloons: {
+    borderWidth: 12,
+    borderColor: '#3B82F6',
+    borderStyle: 'solid',
+    borderRadius: 24,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  frame_rainbow: {
+    borderWidth: 14,
+    borderColor: 'transparent',
+    borderRadius: 16,
+    borderTopColor: '#EF4444',
+    borderRightColor: '#F59E0B',
+    borderBottomColor: '#10B981',
+    borderLeftColor: '#8B5CF6',
+    shadowColor: '#EC4899',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+  },
+  frame_cake: {
+    borderWidth: 12,
+    borderColor: '#F472B6',
+    borderStyle: 'solid',
+    borderRadius: 20,
+    shadowColor: '#F472B6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    backgroundColor: 'rgba(244, 114, 182, 0.05)',
+  },
+  frame_flowers: {
+    borderWidth: 12,
+    borderColor: '#FB923C',
+    borderStyle: 'dotted',
+    borderRadius: 16,
+    shadowColor: '#FB923C',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  frame_sunshine: {
+    borderWidth: 14,
+    borderColor: '#FCD34D',
+    borderStyle: 'solid',
+    borderRadius: 50,
+    shadowColor: '#FCD34D',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 15,
+  },
+  frame_clouds: {
+    borderWidth: 12,
+    borderColor: '#93C5FD',
+    borderStyle: 'dashed',
+    borderRadius: 30,
+    shadowColor: '#93C5FD',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+  },
+  frame_butterflies: {
+    borderWidth: 12,
+    borderColor: '#D8B4FE',
+    borderStyle: 'dotted',
+    borderRadius: 18,
+    shadowColor: '#D8B4FE',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+  },
+  frame_sparkles: {
+    borderWidth: 10,
+    borderColor: '#FBBF24',
+    borderStyle: 'solid',
+    borderRadius: 8,
+    shadowColor: '#FBBF24',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+  },
+  frame_emoji: {
+    borderWidth: 14,
+    borderColor: '#F472B6',
+    borderStyle: 'solid',
+    borderRadius: 16,
+    shadowColor: '#F472B6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  frame_doodle: {
+    borderWidth: 13,
+    borderColor: '#A855F7',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+  },
+  frame_comic: {
+    borderWidth: 16,
+    borderColor: '#000000',
+    borderStyle: 'solid',
+    borderRadius: 4,
+    shadowColor: '#FCD34D',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  frame_glitter: {
+    borderWidth: 12,
+    borderColor: '#F0ABFC',
+    borderStyle: 'solid',
+    borderRadius: 14,
+    shadowColor: '#F0ABFC',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 20,
+  },
+  frame_neon: {
+    borderWidth: 10,
+    borderColor: '#22D3EE',
+    borderStyle: 'solid',
+    borderRadius: 8,
+    shadowColor: '#22D3EE',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 25,
+  },
+  frame_gold: {
+    borderWidth: 14,
+    borderColor: '#F59E0B',
+    borderStyle: 'solid',
+    borderRadius: 12,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 15,
+    backgroundColor: 'rgba(245, 158, 11, 0.05)',
+  },
+  frame_silver: {
+    borderWidth: 14,
+    borderColor: '#94A3B8',
+    borderStyle: 'solid',
+    borderRadius: 12,
+    shadowColor: '#94A3B8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    backgroundColor: 'rgba(148, 163, 184, 0.05)',
+  },
+  frame_rose_gold: {
+    borderWidth: 14,
+    borderColor: '#F87171',
+    borderStyle: 'solid',
+    borderRadius: 12,
+    shadowColor: '#F87171',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    backgroundColor: 'rgba(248, 113, 113, 0.05)',
+  },
+  // Decorative frame container
+  decorativeFrameContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: 'none',
+  },
+  // Draggable sticker styles
+  draggableSticker: {
+    position: 'absolute',
+    padding: 16,
+    backgroundColor: 'transparent',
+  },
+  deleteStickerButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  stickerOverlay: {
+    position: 'absolute',
+    fontSize: 48,
+  },
+  // Text overlay container
+  textOverlayContainer: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textOverlay: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+    padding: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 8,
+  },
+  // Drawing styles
+  drawingDot: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#EF4444',
+  },
+  customizationTools: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  toolsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  stickerPicker: {
+    marginBottom: 20,
+  },
+  stickerButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 8,
+  },
+  stickerEmoji: {
+    fontSize: 72,
+  },
+  framePicker: {
+    marginBottom: 20,
+  },
+  frameButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 12,
+    paddingHorizontal: 16,
+    marginRight: 8,
+  },
+  frameButtonSelected: {
+    backgroundColor: '#7C3AED',
+  },
+  frameButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  // Frame preview thumbnails
+  framePreview: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    marginBottom: 4,
+    backgroundColor: '#E5E7EB',
+  },
+  frame_none_preview: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  frame_hearts_preview: {
+    borderWidth: 3,
+    borderColor: '#EC4899',
+    backgroundColor: '#FCE7F3',
+  },
+  frame_stars_preview: {
+    borderWidth: 3,
+    borderColor: '#F59E0B',
+    borderStyle: 'dashed',
+    backgroundColor: '#FEF3C7',
+  },
+  frame_party_preview: {
+    borderWidth: 3,
+    borderColor: '#8B5CF6',
+    backgroundColor: '#EDE9FE',
+  },
+  frame_confetti_preview: {
+    borderWidth: 3,
+    borderColor: '#10B981',
+    borderStyle: 'dotted',
+    backgroundColor: '#D1FAE5',
+  },
+  frame_balloons_preview: {
+    borderWidth: 3,
+    borderColor: '#3B82F6',
+    borderRadius: 12,
+    backgroundColor: '#DBEAFE',
+  },
+  frame_rainbow_preview: {
+    borderWidth: 4,
+    borderTopColor: '#EF4444',
+    borderRightColor: '#F59E0B',
+    borderBottomColor: '#10B981',
+    borderLeftColor: '#8B5CF6',
+    backgroundColor: '#FEF3C7',
+  },
+  frame_cake_preview: {
+    borderWidth: 3,
+    borderColor: '#F472B6',
+    borderRadius: 8,
+    backgroundColor: '#FCE7F3',
+  },
+  frame_flowers_preview: {
+    borderWidth: 3,
+    borderColor: '#FB923C',
+    borderStyle: 'dotted',
+    backgroundColor: '#FED7AA',
+  },
+  frame_sunshine_preview: {
+    borderWidth: 3,
+    borderColor: '#FCD34D',
+    borderRadius: 20,
+    backgroundColor: '#FEF9C3',
+  },
+  frame_clouds_preview: {
+    borderWidth: 3,
+    borderColor: '#93C5FD',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    backgroundColor: '#DBEAFE',
+  },
+  frame_butterflies_preview: {
+    borderWidth: 3,
+    borderColor: '#D8B4FE',
+    borderStyle: 'dotted',
+    backgroundColor: '#F3E8FF',
+  },
+  frame_sparkles_preview: {
+    borderWidth: 3,
+    borderColor: '#FBBF24',
+    backgroundColor: '#FEF3C7',
+  },
+  frame_emoji_preview: {
+    borderWidth: 3,
+    borderColor: '#F472B6',
+    backgroundColor: '#FCE7F3',
+  },
+  frame_doodle_preview: {
+    borderWidth: 3,
+    borderColor: '#A855F7',
+    borderStyle: 'dashed',
+    backgroundColor: '#F3E8FF',
+  },
+  frame_comic_preview: {
+    borderWidth: 4,
+    borderColor: '#000000',
+    backgroundColor: '#FEF9C3',
+  },
+  frame_glitter_preview: {
+    borderWidth: 3,
+    borderColor: '#F0ABFC',
+    backgroundColor: '#FAE8FF',
+  },
+  frame_neon_preview: {
+    borderWidth: 3,
+    borderColor: '#22D3EE',
+    backgroundColor: '#CFFAFE',
+  },
+  frame_gold_preview: {
+    borderWidth: 3,
+    borderColor: '#F59E0B',
+    backgroundColor: '#FEF3C7',
+  },
+  frame_silver_preview: {
+    borderWidth: 3,
+    borderColor: '#94A3B8',
+    backgroundColor: '#F1F5F9',
+  },
+  frame_rose_gold_preview: {
+    borderWidth: 3,
+    borderColor: '#F87171',
+    backgroundColor: '#FEE2E2',
+  },
+  // Tool section styles
+  toolSection: {
+    marginBottom: 20,
+  },
+  // From Name button
+  fromNameButton: {
+    backgroundColor: '#7C3AED',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 8,
+  },
+  fromNameButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Drawing tools
+  drawingToggle: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#7C3AED',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  drawingToggleActive: {
+    backgroundColor: '#7C3AED',
+  },
+  drawingToggleText: {
+    color: '#7C3AED',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clearDrawingButton: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  clearDrawingText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  textInput: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  // Review screen styles
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  reviewStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  statBox: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  reviewCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  videoThumbnail: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginRight: 12,
+    position: 'relative',
+  },
+  thumbnailVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  reviewInfo: {
+    flex: 1,
+  },
+  reviewGuestName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  reviewGuestGift: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  reviewContact: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  sentBadge: {
+    fontSize: 12,
+    color: '#10B981',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  approveButton: {
+    padding: 8,
+  },
+  approveButtonActive: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+  },
+  sendAllButton: {
+    backgroundColor: '#7C3AED',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
+    borderRadius: 16,
+    margin: 16,
+    gap: 8,
+  },
+  sendAllButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  videoPreviewModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+  },
+  videoPreviewContent: {
+    flex: 1,
+    padding: 20,
+  },
+  videoPreviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 60,
+  },
+  videoPreviewTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  videoPreviewPlayer: {
+    flex: 1,
+    backgroundColor: 'black',
+  },
+  // Fullscreen drawing mode styles
+  drawingScreenHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  drawingHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  drawingHeaderText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  drawingTitle: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  drawingContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  drawingVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  drawingFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 20,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  drawingClearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+  },
+  drawingClearText: {
+    color: '#EF4444',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  drawingDoneButton: {
+    backgroundColor: '#7C3AED',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+  },
+  drawingDoneText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  drawingButton: {
+    backgroundColor: '#7C3AED',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+  },
+  drawingButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  colorPickerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  colorPickerLabel: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 12,
+  },
+  colorPickerScroll: {
+    flex: 1,
+  },
+  colorButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  colorButtonSelected: {
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  brushSizeButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  brushSizeButtonSelected: {
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+});
+
+export default GratituGramApp;
