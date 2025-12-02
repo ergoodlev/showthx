@@ -72,6 +72,14 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
 
       if (videoError) throw videoError;
 
+      // CRITICAL: Check if video_url exists
+      if (!videoData.video_url) {
+        console.error('❌ Video record found but video_url is null/empty:', videoData);
+        throw new Error('Video URL is missing from the database. Please try re-recording the video.');
+      }
+
+      console.log('✅ Video URL loaded:', videoData.video_url);
+
       // Get gift details
       const { data: giftData, error: giftError } = await supabase
         .from('gifts')
@@ -106,7 +114,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
         console.log('ℹ️  No frame template assigned for this video');
       }
 
-      console.log('✅ Loaded video details');
+      console.log('✅ Loaded video details - Gift:', giftData.name, 'Kid:', childData.name);
       setFetchedGiftId(videoData.gift_id);
       setFetchedGiftName(giftData.name);
       setFetchedKidName(childData.name);
@@ -114,7 +122,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       setFetchedMusicTitle(videoData.metadata?.music_id || null);
     } catch (error) {
       console.error('❌ Error loading video details:', error);
-      Alert.alert('Error', 'Failed to load video details');
+      Alert.alert('Error', error.message || 'Failed to load video details');
       navigation?.goBack();
     } finally {
       setLoading(false);
@@ -185,6 +193,16 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       setLoading(true);
       console.log('✅ Approving video:', videoId);
 
+      // CRITICAL: Verify video URL exists before approving
+      if (!fetchedVideoUri) {
+        console.error('❌ Cannot approve - video URL is missing');
+        Alert.alert('Error', 'Video URL is missing. Please try re-loading this screen or re-recording the video.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('📋 Approving with video URL:', fetchedVideoUri);
+
       // Update video status to 'approved'
       const { error: videoError } = await supabase
         .from('videos')
@@ -211,6 +229,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
 
       if (giftError) {
         console.error('Error updating gift:', giftError);
+        throw giftError;
       } else {
         console.log('✅ Saved video_url to gift record:', fetchedVideoUri);
       }
@@ -221,7 +240,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       navigation?.navigate('SendToGuests', {
         giftId: fetchedGiftId,
         giftName: fetchedGiftName,
-        videoUri,
+        videoUri: fetchedVideoUri, // Pass the fetched URI, not the route param
       });
     } catch (error) {
       console.error('❌ Error approving video:', error);

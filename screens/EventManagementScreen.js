@@ -293,6 +293,7 @@ export const EventManagementScreen = ({ navigation, route }) => {
             <TouchableOpacity
               style={styles.createFrameButton}
               onPress={() => navigation?.navigate('FrameCreation', {
+                eventId: existingEvent?.id || null, // Pass eventId for frame assignment
                 eventName: name || 'New Event',
               })}
             >
