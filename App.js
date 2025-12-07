@@ -50,45 +50,62 @@ import RootNavigator from './navigation/RootNavigator';
 import { initRemoteLogger } from './services/remoteLogger';
 
 // Initialize Sentry for error tracking in production
-Sentry.init({
-  dsn: SENTRY_DSN,
-  // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
-  // Reduce this in production to save quota
-  tracesSampleRate: __DEV__ ? 1.0 : 0.2,
-  // Enable auto session tracking
-  enableAutoSessionTracking: true,
-  // Session tracking interval
-  sessionTrackingIntervalMillis: 30000,
-  // Enable native crash tracking
-  enableNative: true,
-  // Attach stack trace to errors
-  attachStacktrace: true,
-  // Environment
-  environment: __DEV__ ? 'development' : 'production',
-  // Release tracking (optional - set this to your app version)
-  // release: 'gratitugram@1.0.0',
-  // beforeSend callback to filter/modify events before sending
-  beforeSend(event, hint) {
-    // Don't send events in development unless you want to test
-    if (__DEV__) {
-      console.log('Sentry Event (DEV - not sent):', event);
-      return null; // Don't send in dev
-    }
-    return event;
-  },
-  // Integrations
-  integrations: [
-    new Sentry.ReactNativeTracing({
-      // Enable route tracking
-      routingInstrumentation: new Sentry.ReactNavigationInstrumentation(),
-      // Enable automatic HTTP request tracking
-      tracingOrigins: ['localhost', 'supabase.co', /^\//],
-    }),
-  ],
-});
+// Wrapped in try-catch to prevent blocking app startup if Sentry fails
+try {
+  if (SENTRY_DSN && SENTRY_DSN !== 'YOUR_SENTRY_DSN_HERE') {
+    console.log('🔧 Initializing Sentry...');
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
+      // Reduce this in production to save quota
+      tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+      // Enable auto session tracking
+      enableAutoSessionTracking: true,
+      // Session tracking interval
+      sessionTrackingIntervalMillis: 30000,
+      // Enable native crash tracking
+      enableNative: true,
+      // Attach stack trace to errors
+      attachStacktrace: true,
+      // Environment
+      environment: __DEV__ ? 'development' : 'production',
+      // Release tracking (optional - set this to your app version)
+      // release: 'gratitugram@1.0.0',
+      // beforeSend callback to filter/modify events before sending
+      beforeSend(event, hint) {
+        // Don't send events in development unless you want to test
+        if (__DEV__) {
+          console.log('Sentry Event (DEV - not sent):', event);
+          return null; // Don't send in dev
+        }
+        return event;
+      },
+      // Integrations
+      integrations: [
+        new Sentry.ReactNativeTracing({
+          // Enable route tracking
+          routingInstrumentation: new Sentry.ReactNavigationInstrumentation(),
+          // Enable automatic HTTP request tracking
+          tracingOrigins: ['localhost', 'supabase.co', /^\//],
+        }),
+      ],
+    });
+    console.log('✅ Sentry initialized successfully');
+  } else {
+    console.log('⚠️ Sentry DSN not configured - skipping Sentry initialization');
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize Sentry:', error);
+  console.error('App will continue without Sentry error tracking');
+}
 
 // Initialize remote logger for debugging in production
-initRemoteLogger();
+try {
+  initRemoteLogger();
+  console.log('✅ Remote logger initialized');
+} catch (error) {
+  console.error('❌ Failed to initialize remote logger:', error);
+}
 
 // Prevent native splash from auto-hiding
 SplashScreen.preventAutoHideAsync();
