@@ -36,6 +36,7 @@ yarn-error.*
 
 # Secrets and API keys
 config.js
+config/sentry.js
 
 # typescript
 *.tsbuildinfo

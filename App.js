@@ -6,14 +6,16 @@
  * - Font loading (Nunito, Playfair, Montserrat, Inter)
  * - Edition-aware theming via EditionProvider
  * - Navigation structure for Phase 2 flows
+ * - Sentry error tracking for production monitoring
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, StatusBar } from 'react-native';
+import { View, StyleSheet, StatusBar, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as Font from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Sentry from '@sentry/react-native';
 import {
   Nunito_400Regular,
   Nunito_600SemiBold,
@@ -35,11 +37,58 @@ import {
 } from '@expo-google-fonts/inter';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 
+// Sentry Configuration
+import { SENTRY_DSN } from './config/sentry';
+
 // Context & Providers
 import { EditionProvider, useEdition } from './context/EditionContext';
 
 // Navigation
 import RootNavigator from './navigation/RootNavigator';
+
+// Debug Logging
+import { initRemoteLogger } from './services/remoteLogger';
+
+// Initialize Sentry for error tracking in production
+Sentry.init({
+  dsn: SENTRY_DSN,
+  // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
+  // Reduce this in production to save quota
+  tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+  // Enable auto session tracking
+  enableAutoSessionTracking: true,
+  // Session tracking interval
+  sessionTrackingIntervalMillis: 30000,
+  // Enable native crash tracking
+  enableNative: true,
+  // Attach stack trace to errors
+  attachStacktrace: true,
+  // Environment
+  environment: __DEV__ ? 'development' : 'production',
+  // Release tracking (optional - set this to your app version)
+  // release: 'gratitugram@1.0.0',
+  // beforeSend callback to filter/modify events before sending
+  beforeSend(event, hint) {
+    // Don't send events in development unless you want to test
+    if (__DEV__) {
+      console.log('Sentry Event (DEV - not sent):', event);
+      return null; // Don't send in dev
+    }
+    return event;
+  },
+  // Integrations
+  integrations: [
+    new Sentry.ReactNativeTracing({
+      // Enable route tracking
+      routingInstrumentation: new Sentry.ReactNavigationInstrumentation(),
+      // Enable automatic HTTP request tracking
+      tracingOrigins: ['localhost', 'supabase.co', /^\//],
+    }),
+  ],
+});
+
+// Initialize remote logger for debugging in production
+initRemoteLogger();
 
 // Prevent native splash from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -123,16 +172,48 @@ const AppContent = () => {
 /**
  * Root App Component
  * Wrapped with EditionProvider for edition-aware theming
+ * Wrapped with Sentry ErrorBoundary for crash reporting
  */
-export default function App() {
+export default Sentry.wrap(function App() {
   return (
     <SafeAreaProvider>
       <EditionProvider>
-        <AppContent />
+        <Sentry.ErrorBoundary
+          fallback={({ error, componentStack, resetError }) => (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>
+                Oops! Something went wrong
+              </Text>
+              <Text style={{ fontSize: 14, color: '#666', marginBottom: 20, textAlign: 'center' }}>
+                We've been notified and will fix this soon.
+              </Text>
+              <TouchableOpacity
+                onPress={resetError}
+                style={{
+                  backgroundColor: '#FF6B6B',
+                  paddingVertical: 12,
+                  paddingHorizontal: 24,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ color: '#FFF', fontWeight: '600' }}>Try Again</Text>
+              </TouchableOpacity>
+              {__DEV__ && (
+                <View style={{ marginTop: 20, padding: 10, backgroundColor: '#f5f5f5', borderRadius: 8 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#DC2626' }}>
+                    {error.toString()}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        >
+          <AppContent />
+        </Sentry.ErrorBoundary>
       </EditionProvider>
     </SafeAreaProvider>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

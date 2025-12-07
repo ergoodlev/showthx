@@ -100,18 +100,44 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
 
       // Load frame template for this video
       console.log('🖼️  Loading frame template for video');
-      const frameResult = await getFrameForGift(
-        videoData.gift_id,
-        videoData.child_id,
-        giftData.event_id,
-        null
-      );
+      console.log('📋 Video metadata:', videoData.metadata);
 
-      if (frameResult.success && frameResult.data) {
-        console.log('✅ Frame template loaded:', frameResult.data.name);
-        setFrameTemplate(frameResult.data);
+      // Try to get frame template ID from video metadata first
+      let frameData = null;
+      if (videoData.metadata?.frame_template_id) {
+        console.log('🖼️  Found frame template ID in metadata:', videoData.metadata.frame_template_id);
+        const { data: frameFromMetadata, error: frameMetadataError } = await supabase
+          .from('frame_templates')
+          .select('*')
+          .eq('id', videoData.metadata.frame_template_id)
+          .single();
+
+        if (!frameMetadataError && frameFromMetadata) {
+          frameData = frameFromMetadata;
+          console.log('✅ Loaded frame from metadata:', frameData.name);
+        }
+      }
+
+      // If no frame in metadata, look up via assignments
+      if (!frameData) {
+        console.log('🖼️  Looking up frame via assignments');
+        const frameResult = await getFrameForGift(
+          videoData.gift_id,
+          videoData.child_id,
+          giftData.event_id,
+          null
+        );
+
+        if (frameResult.success && frameResult.data) {
+          frameData = frameResult.data;
+          console.log('✅ Frame template loaded via assignment:', frameData.name);
+        }
+      }
+
+      if (frameData) {
+        setFrameTemplate(frameData);
       } else {
-        console.log('ℹ️  No frame template assigned for this video');
+        console.log('ℹ️  No frame template found for this video');
       }
 
       console.log('✅ Loaded video details - Gift:', giftData.name, 'Kid:', childData.name);
@@ -192,6 +218,8 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
     try {
       setLoading(true);
       console.log('✅ Approving video:', videoId);
+      console.log('📋 Gift ID:', fetchedGiftId);
+      console.log('📋 Video URI:', fetchedVideoUri);
 
       // CRITICAL: Verify video URL exists before approving
       if (!fetchedVideoUri) {
@@ -201,39 +229,56 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
         return;
       }
 
+      if (!fetchedGiftId) {
+        console.error('❌ Cannot approve - gift ID is missing');
+        Alert.alert('Error', 'Gift ID is missing. Please try re-loading this screen.');
+        setLoading(false);
+        return;
+      }
+
       console.log('📋 Approving with video URL:', fetchedVideoUri);
 
       // Update video status to 'approved'
-      const { error: videoError } = await supabase
+      const { data: videoUpdateData, error: videoError } = await supabase
         .from('videos')
         .update({
           status: 'approved',
           approved_at: new Date().toISOString(),
         })
-        .eq('id', videoId);
+        .eq('id', videoId)
+        .select();
 
       if (videoError) {
-        console.error('Error approving video:', videoError);
-        throw videoError;
+        console.error('❌ Error approving video in videos table:', videoError);
+        console.error('Error details:', JSON.stringify(videoError, null, 2));
+        Alert.alert('Error', `Failed to approve video: ${videoError.message || videoError.code}`);
+        setLoading(false);
+        return;
       }
 
+      console.log('✅ Video status updated:', videoUpdateData);
+
       // Update gift status to 'approved' and save video_url
-      const { error: giftError } = await supabase
+      const { data: giftUpdateData, error: giftError } = await supabase
         .from('gifts')
         .update({
           status: 'approved',
           approved_at: new Date().toISOString(),
           video_url: fetchedVideoUri, // CRITICAL: Save video URL so SendToGuests can find it
         })
-        .eq('id', fetchedGiftId);
+        .eq('id', fetchedGiftId)
+        .select();
 
       if (giftError) {
-        console.error('Error updating gift:', giftError);
-        throw giftError;
-      } else {
-        console.log('✅ Saved video_url to gift record:', fetchedVideoUri);
+        console.error('❌ Error updating gift in gifts table:', giftError);
+        console.error('Error details:', JSON.stringify(giftError, null, 2));
+        Alert.alert('Error', `Failed to update gift: ${giftError.message || giftError.code}`);
+        setLoading(false);
+        return;
       }
 
+      console.log('✅ Gift status updated:', giftUpdateData);
+      console.log('✅ Saved video_url to gift record:', fetchedVideoUri);
       console.log('✅ Video approved, navigating to share screen');
 
       // Navigate to send screen
@@ -244,7 +289,8 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       });
     } catch (error) {
       console.error('❌ Error approving video:', error);
-      Alert.alert('Error', 'Failed to approve video');
+      console.error('Error stack:', error.stack);
+      Alert.alert('Error', `Failed to approve video: ${error.message}`);
       setLoading(false);
     }
   };
@@ -258,42 +304,58 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
 
       setLoading(true);
       console.log('🔄 Requesting changes for video:', videoId);
+      console.log('📋 Gift ID:', fetchedGiftId);
+      console.log('📝 Feedback:', feedback);
 
       // Update video status and add feedback
-      const { error: videoError } = await supabase
+      const { data: videoData, error: videoError } = await supabase
         .from('videos')
         .update({
           status: 'needs_rerecord',
           parent_feedback: feedback,
           feedback_sent_at: new Date().toISOString(),
         })
-        .eq('id', videoId);
+        .eq('id', videoId)
+        .select();
 
       if (videoError) {
-        console.error('Error updating video:', videoError);
-        throw videoError;
+        console.error('❌ Error updating video:', videoError);
+        console.error('Error details:', JSON.stringify(videoError, null, 2));
+        Alert.alert('Error', `Failed to send feedback: ${videoError.message || videoError.code}`);
+        setLoading(false);
+        return;
       }
 
+      console.log('✅ Video feedback updated:', videoData);
+
       // Also update gift status
-      const { error: giftError } = await supabase
+      const { data: giftData, error: giftError } = await supabase
         .from('gifts')
         .update({
           status: 'needs_rerecord',
           parent_feedback: feedback,
           feedback_sent_at: new Date().toISOString(),
         })
-        .eq('id', fetchedGiftId);
+        .eq('id', fetchedGiftId)
+        .select();
 
       if (giftError) {
-        console.error('Error updating gift:', giftError);
+        console.error('❌ Error updating gift:', giftError);
+        console.error('Error details:', JSON.stringify(giftError, null, 2));
+        Alert.alert('Error', `Failed to update gift: ${giftError.message || giftError.code}`);
+        setLoading(false);
+        return;
       }
+
+      console.log('✅ Gift feedback updated:', giftData);
 
       // Show confirmation and go back
       Alert.alert('Feedback Sent', 'Your feedback has been sent to the child. They can re-record the video now.');
       navigation?.goBack();
     } catch (error) {
       console.error('❌ Error requesting changes:', error);
-      Alert.alert('Error', 'Failed to send feedback');
+      console.error('Error stack:', error.stack);
+      Alert.alert('Error', `Failed to send feedback: ${error.message}`);
       setLoading(false);
     }
   };
@@ -322,15 +384,31 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
             overflow: 'hidden',
           }}
         >
-          <Video
-            ref={videoRef}
-            source={{ uri: fetchedVideoUri }}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="contain"
-            useNativeControls={false}
-            onPlaybackStatusUpdate={(status) => setIsPlaying(status.isPlaying)}
-            shouldPlay={false}
-          />
+          {fetchedVideoUri ? (
+            <Video
+              ref={videoRef}
+              source={{ uri: fetchedVideoUri }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="contain"
+              useNativeControls={false}
+              onPlaybackStatusUpdate={(status) => {
+                if (status.isLoaded) {
+                  setIsPlaying(status.isPlaying);
+                }
+              }}
+              onError={(error) => {
+                console.error('❌ Video playback error:', error);
+              }}
+              onLoad={() => {
+                console.log('✅ Video loaded successfully');
+              }}
+              shouldPlay={false}
+            />
+          ) : (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 14 }}>Loading video...</Text>
+            </View>
+          )}
 
           {/* Frame Overlay */}
           {renderFrameOverlay()}

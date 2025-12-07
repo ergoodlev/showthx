@@ -74,6 +74,9 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
     const panResponder = useRef(
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderGrant: () => {
           pan.setOffset({
             x: pan.x._value,
@@ -134,10 +137,15 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
         showBack={true}
       />
 
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        scrollEnabled={true}
+        nestedScrollEnabled={false}
+      >
         {/* Video Preview - Portrait aspect ratio for vertical videos */}
         <View
           ref={videoContainerRef}
+          onStartShouldSetResponder={() => true}
           style={{
             backgroundColor: '#000000',
             aspectRatio: 9 / 16,

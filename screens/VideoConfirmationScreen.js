@@ -85,20 +85,26 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
   const renderDecorations = () => {
     if (!decorations || decorations.length === 0) return null;
 
-    return decorations.map(decoration => (
-      <View
-        key={decoration.id}
-        style={{
-          position: 'absolute',
-          left: `${decoration.x}%`,
-          top: `${decoration.y}%`,
-          transform: [
-            { translateX: -20 },
-            { translateY: -20 },
-            { scale: decoration.scale },
-          ],
-        }}
-      >
+    return decorations.map(decoration => {
+      // Defensive checks to prevent NaN errors
+      const x = typeof decoration.x === 'number' && !isNaN(decoration.x) ? decoration.x : 50;
+      const y = typeof decoration.y === 'number' && !isNaN(decoration.y) ? decoration.y : 50;
+      const scale = typeof decoration.scale === 'number' && !isNaN(decoration.scale) ? decoration.scale : 1;
+
+      return (
+        <View
+          key={decoration.id}
+          style={{
+            position: 'absolute',
+            left: `${x}%`,
+            top: `${y}%`,
+            transform: [
+              { translateX: -20 },
+              { translateY: -20 },
+              { scale: scale },
+            ],
+          }}
+        >
         {decoration.lottieSource ? (
           <LottieView
             source={decoration.lottieSource}
@@ -118,8 +124,9 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             {decoration.emoji}
           </Text>
         )}
-      </View>
-    ));
+        </View>
+      );
+    });
   };
 
   const videoRef = useRef(null);
@@ -172,15 +179,26 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
 
       // Step 3: Create video record using secure function (bypasses RLS for kid submissions)
       console.log('💾 Creating database record via secure function...');
+
+      // Build metadata object with decorations and frame info
+      const metadata = {
+        decorations: decorations,
+      };
+
+      // Add frame template ID if present
+      if (frameTemplate && frameTemplate.id) {
+        metadata.frame_template_id = frameTemplate.id;
+        console.log('🖼️  Saving frame template ID:', frameTemplate.id);
+      }
+
       const { data: videoId, error: videoError } = await supabase
         .rpc('submit_video_from_kid', {
           p_child_id: kidSessionId,
           p_gift_id: giftId,
           p_parent_id: parentId,
           p_video_url: uploadResult.url,
-          p_metadata: {
-            decorations: decorations,
-          },
+          p_storage_path: uploadResult.path, // Required by the SQL function
+          p_metadata: metadata,
         });
 
       if (videoError) {

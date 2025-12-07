@@ -200,8 +200,8 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       // Phone columns (optional)
       const phoneIndex = findColumnIndex(['phone', 'mobile', 'cell', 'tel', 'contact']);
 
-      // Gift columns (optional)
-      const giftNameIndex = findColumnIndex(['gift', 'giftname', 'present', 'item', 'description']);
+      // Gift columns (optional) - match more variations
+      const giftNameIndex = findColumnIndex(['gift', 'giftname', 'present', 'item', 'description', 'gifted', 'presents', 'giftfrom']);
 
       // Validate we can find email
       if (emailIndex === -1) {
@@ -254,7 +254,14 @@ export const GuestManagementScreen = ({ navigation, route }) => {
           // Get gift name if available
           const giftName = giftNameIndex !== -1 ? (cols[giftNameIndex] || '').trim() : null;
 
-          console.log(`📦 Row ${i + 1} gift data:`, { giftNameIndex, giftName, columnValue: cols[giftNameIndex] });
+          console.log(`📦 Row ${i + 1}:`, {
+            name,
+            email,
+            giftNameIndex,
+            giftName,
+            rawGiftValue: cols[giftNameIndex],
+            allColumns: cols
+          });
 
           // Validate
           if (!name) {
@@ -396,7 +403,11 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             ? guest.giftName
             : `Gift from ${guest.name}`;
 
-          console.log(`💾 Creating gift for ${guest.name}:`, { giftName, parsedGiftName: guest.giftName });
+          console.log(`💾 Creating gift for ${guest.name}:`, {
+            finalGiftName: giftName,
+            parsedGiftName: guest.giftName,
+            hasGiftName: !!guest.giftName
+          });
 
           const { error: giftError } = await supabase
             .from('gifts')

@@ -96,6 +96,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
           name,
           description,
           giver_name,
+          guest_id,
           status,
           child_id,
           event_id,
@@ -248,6 +249,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
     setEditingGift(gift);
     setGiftName(gift.name);
     setGiverName(gift.giver_name);
+    setSelectedGuestId(gift.guest_id || null); // Preserve guest_id when editing
     setDescription(gift.description || '');
     setSelectedKids(gift.gift_assignments?.map((a) => a.children.id) || []);
     setModalMode('edit');
@@ -275,6 +277,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
         description: description || null,
         event_id: eventId,
         parent_id: user.id,
+        guest_id: selectedGuestId || null, // CRITICAL: Link gift to guest for SendToGuests to work
       };
 
       let giftId;
