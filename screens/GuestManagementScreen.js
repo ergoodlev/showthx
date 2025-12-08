@@ -376,10 +376,10 @@ export const GuestManagementScreen = ({ navigation, route }) => {
               email: guest.email,
               created_at: new Date().toISOString(),
             };
-            // Add phone if available
-            if (guest.phone) {
-              guestData.phone = guest.phone;
-            }
+            // Note: Phone column doesn't exist in guests table schema yet
+            // if (guest.phone) {
+            //   guestData.phone = guest.phone;
+            // }
 
             const { data: guestRecord, error: guestError } = await supabase
               .from('guests')

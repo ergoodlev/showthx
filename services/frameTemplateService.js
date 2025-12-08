@@ -296,6 +296,11 @@ export const getFrameForGift = async (giftId, childId, eventId, guestId = null) 
 
     return { success: true, data: data?.frame_templates || null };
   } catch (error) {
+    // PGRST205 = table not found - this is expected if frame_assignments table doesn't exist yet
+    if (error.code === 'PGRST205') {
+      console.log('ℹ️  Frame assignments table not found - frames feature not yet set up in database');
+      return { success: true, data: null };
+    }
     console.error('❌ Error getting frame for gift:', error);
     return { success: false, error: error.message, data: null };
   }
