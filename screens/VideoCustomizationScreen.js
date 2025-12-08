@@ -139,7 +139,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
 
       <ScrollView
         style={{ flex: 1 }}
-        scrollEnabled={true}
+        scrollEnabled={false}
         nestedScrollEnabled={false}
       >
         {/* Video Preview - Portrait aspect ratio for vertical videos */}
