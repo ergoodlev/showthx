@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
-import { StaticFrameOverlay } from '../components/StaticFrameOverlay';
+import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 
 export const VideoRecordingScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -95,23 +95,21 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   };
 
   // Render frame overlay on camera
-  // NEW ARCHITECTURE:
-  // - Kids choose frame STYLE (frameId from FRAME_LIBRARY via StaticFrameOverlay)
-  // - Parents add custom TEXT (frameTemplate.custom_text)
+  // Parents create custom frame templates with shape, color, and text
+  // Frames are loaded from frame_assignments table based on event/gift context
   const renderFrameOverlay = () => {
-    const frameId = frameTemplate?.frame_id || 'none';
     const customText = frameTemplate?.custom_text || '';
     const textPosition = frameTemplate?.custom_text_position || 'bottom';
     const textColor = frameTemplate?.custom_text_color || '#FFFFFF';
 
     return (
       <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
-        {/* Frame Style - Kids choose from FRAME_LIBRARY */}
-        {frameId && frameId !== 'none' && (
-          <StaticFrameOverlay frameId={frameId} />
+        {/* Custom Frame Border - Created by parent in FrameCreationScreen */}
+        {frameTemplate && (
+          <CustomFrameOverlay frameTemplate={frameTemplate} />
         )}
 
-        {/* Parent's Custom Text - Parents add/edit */}
+        {/* Parent's Custom Text */}
         {customText && (
           <View
             style={{

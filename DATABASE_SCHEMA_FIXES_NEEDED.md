@@ -110,11 +110,27 @@ CREATE INDEX idx_guests_phone ON public.guests(phone);
 
 ---
 
+### 3. Missing Column: `gifts.approved_at`
+**Feature Affected:** Parent video approval workflow
+**Error:** `PGRST204 - Could not find the 'approved_at' column of 'gifts'`
+**Status:** ❌ **Blocking Feature** - Parents cannot approve videos
+
+**Required Migration:**
+```sql
+ALTER TABLE public.gifts
+ADD COLUMN approved_at TIMESTAMP WITH TIME ZONE;
+```
+
+**Impact:** Parent video approval will work properly. Currently approval flow crashes when trying to set approved_at timestamp.
+
+---
+
 ## Known Issues Summary
 
 | Issue | Feature | Status | Priority |
 |-------|---------|--------|----------|
 | `frame_assignments` table missing | Frame templates | Disabled | High |
+| `gifts.approved_at` column missing | Video approval | Blocking | High |
 | `guests.phone` column missing | CSV phone import | Workaround | Medium |
 | Date scroller not working | Event creation | Unknown | Medium |
 

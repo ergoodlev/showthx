@@ -35,6 +35,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
   const videoContainerRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [placedDecorations, setPlacedDecorations] = useState([]);
+  const [isDraggingSticker, setIsDraggingSticker] = useState(false);
 
   const handleAddDecoration = (decorationId) => {
     // Create a new decoration instance at a random position
@@ -78,6 +79,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
         onMoveShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderGrant: () => {
+          setIsDraggingSticker(true);
           pan.setOffset({
             x: pan.x._value,
             y: pan.y._value,
@@ -102,7 +104,10 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
 
               handleUpdateDecorationPosition(decoration.id, newX, newY);
               pan.setValue({ x: 0, y: 0 });
+              setIsDraggingSticker(false);
             });
+          } else {
+            setIsDraggingSticker(false);
           }
         },
       })
@@ -139,7 +144,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
 
       <ScrollView
         style={{ flex: 1 }}
-        scrollEnabled={true}
+        scrollEnabled={!isDraggingSticker}
         nestedScrollEnabled={false}
       >
         {/* Video Preview - Portrait aspect ratio for vertical videos */}

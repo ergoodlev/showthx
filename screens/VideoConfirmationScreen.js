@@ -20,7 +20,7 @@ import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
-import { StaticFrameOverlay } from '../components/StaticFrameOverlay';
+import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { supabase } from '../supabaseClient';
 import { uploadVideo, validateVideo } from '../services/videoService';
 
@@ -37,17 +37,14 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
   const renderFrameOverlay = () => {
     if (!frameTemplate) return null;
 
-    const frameId = frameTemplate.frame_id || 'none';
     const customText = frameTemplate.custom_text || '';
     const textPosition = frameTemplate.custom_text_position || 'bottom';
     const textColor = frameTemplate.custom_text_color || '#FFFFFF';
 
     return (
       <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
-        {/* Frame Style */}
-        {frameId && frameId !== 'none' && (
-          <StaticFrameOverlay frameId={frameId} />
-        )}
+        {/* Custom Frame Border */}
+        <CustomFrameOverlay frameTemplate={frameTemplate} />
 
         {/* Parent's Custom Text */}
         {customText && (
