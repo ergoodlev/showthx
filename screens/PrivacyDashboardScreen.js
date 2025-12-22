@@ -13,7 +13,10 @@ import {
   Alert,
   TextInput,
   Linking,
+  Share,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useEdition } from '../context/EditionContext';
@@ -225,6 +228,7 @@ export const PrivacyDashboardScreen = ({ navigation }) => {
         .eq('parent_id', user.id);
 
       let guests = [];
+      let gifts = [];
       if (events && events.length > 0) {
         const eventIds = events.map(e => e.id);
         const { data: guestData } = await supabase
@@ -232,6 +236,12 @@ export const PrivacyDashboardScreen = ({ navigation }) => {
           .select('id, name, email, event_id, created_at')
           .in('event_id', eventIds);
         guests = guestData || [];
+
+        const { data: giftData } = await supabase
+          .from('gifts')
+          .select('id, name, status, guest_id, event_id, created_at')
+          .in('event_id', eventIds);
+        gifts = giftData || [];
       }
 
       const exportData = {
@@ -262,6 +272,11 @@ export const PrivacyDashboardScreen = ({ navigation }) => {
           email: g.email,
           createdAt: g.created_at,
         })),
+        gifts: gifts.map(g => ({
+          name: g.name,
+          status: g.status,
+          createdAt: g.created_at,
+        })),
         dataRetentionPolicies: {
           draftVideos: `${RETENTION_POLICIES.DRAFT_VIDEO} days`,
           approvedVideos: `${RETENTION_POLICIES.APPROVED_VIDEO} days`,
@@ -270,22 +285,48 @@ export const PrivacyDashboardScreen = ({ navigation }) => {
         },
       };
 
-      // Show the data (in production, this could trigger a download or email)
       const jsonString = JSON.stringify(exportData, null, 2);
+      const timestamp = new Date().toISOString().split('T')[0];
+      const fileName = `showthx-data-export-${timestamp}.json`;
+      const filePath = `${FileSystem.documentDirectory}${fileName}`;
+
+      // Write the file
+      await FileSystem.writeAsStringAsync(filePath, jsonString, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      console.log('📊 Data exported to:', filePath);
+
+      // Check if sharing is available
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+
+      if (isSharingAvailable) {
+        // Share/download the file
+        await Sharing.shareAsync(filePath, {
+          mimeType: 'application/json',
+          dialogTitle: 'Export Your ShowThx Data',
+          UTI: 'public.json',
+        });
+      } else {
+        // Fallback: Use Share API for the text content
+        await Share.share({
+          title: 'ShowThx Data Export',
+          message: jsonString,
+        });
+      }
 
       Alert.alert(
-        'Data Export Ready',
-        `Your data export contains:\n\n` +
+        'Export Complete',
+        `Your data has been exported.\n\n` +
+        `Included:\n` +
         `• Account information\n` +
         `• ${children?.length || 0} child profiles\n` +
         `• ${events?.length || 0} events\n` +
         `• ${videos?.length || 0} videos\n` +
-        `• ${guests.length} guests\n\n` +
-        `To receive a full copy, please email COPPA@showthx.com with subject "Data Export Request"`,
+        `• ${guests.length} guests\n` +
+        `• ${gifts.length} gifts`,
         [{ text: 'OK' }]
       );
-
-      console.log('📊 Data Export:', jsonString);
     } catch (error) {
       console.error('Error exporting data:', error);
       Alert.alert('Error', 'Failed to export data. Please try again.');
