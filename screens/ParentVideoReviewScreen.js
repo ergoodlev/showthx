@@ -24,6 +24,7 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { supabase } from '../supabaseClient';
 import { getFrameForGift } from '../services/frameTemplateService';
+import { getVideoUrl } from '../services/videoService';
 
 export const ParentVideoReviewScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -144,7 +145,27 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       setFetchedGiftId(videoData.gift_id);
       setFetchedGiftName(giftData.name);
       setFetchedKidName(childData.name);
-      setFetchedVideoUri(videoData.video_url);
+
+      // Regenerate signed URL if storage_path exists (for fresh, unexpired URL)
+      // Otherwise fall back to stored video_url
+      let videoUrlToUse = videoData.video_url;
+
+      if (videoData.storage_path || videoData.video_path) {
+        console.log('🔄 Regenerating signed URL for video playback');
+        const storagePath = videoData.storage_path || videoData.video_path;
+        const { url: freshUrl, error: urlError } = await getVideoUrl(storagePath);
+
+        if (!urlError && freshUrl) {
+          console.log('✅ Fresh signed URL generated (expires in 24 hours)');
+          videoUrlToUse = freshUrl;
+        } else {
+          console.warn('⚠️ Failed to generate fresh URL, using stored URL:', urlError);
+        }
+      } else {
+        console.log('ℹ️  No storage path found, using stored video_url');
+      }
+
+      setFetchedVideoUri(videoUrlToUse);
       setFetchedMusicTitle(videoData.metadata?.music_id || null);
     } catch (error) {
       console.error('❌ Error loading video details:', error);
@@ -236,6 +257,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       console.log('📋 Approving with video URL:', fetchedVideoUri);
 
       // Update video status to 'approved'
+      console.log('📝 Updating video table with ID:', videoId);
       const { data: videoUpdateData, error: videoError } = await supabase
         .from('videos')
         .update({
@@ -247,35 +269,47 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
 
       if (videoError) {
         console.error('❌ Error approving video in videos table:', videoError);
-        console.error('Error details:', JSON.stringify(videoError, null, 2));
-        Alert.alert('Error', `Failed to approve video: ${videoError.message || videoError.code}`);
+        console.error('Error code:', videoError.code);
+        console.error('Error message:', videoError.message);
+        console.error('Error hint:', videoError.hint);
+        console.error('Error details:', videoError.details);
+        Alert.alert(
+          'Approval Error',
+          `Failed to approve video.\n\nError: ${videoError.message}\nCode: ${videoError.code}\n\nThis might be a permissions issue. Check Supabase RLS policies for the videos table.`
+        );
         setLoading(false);
         return;
       }
 
       console.log('✅ Video status updated:', videoUpdateData);
 
-      // Update gift status to 'approved' and save video_url
+      // Update gift status to 'approved'
+      // Note: video_url is stored in videos table, not gifts table
+      console.log('📝 Updating gift table with ID:', fetchedGiftId);
       const { data: giftUpdateData, error: giftError } = await supabase
         .from('gifts')
         .update({
           status: 'approved',
           approved_at: new Date().toISOString(),
-          video_url: fetchedVideoUri, // CRITICAL: Save video URL so SendToGuests can find it
         })
         .eq('id', fetchedGiftId)
         .select();
 
       if (giftError) {
         console.error('❌ Error updating gift in gifts table:', giftError);
-        console.error('Error details:', JSON.stringify(giftError, null, 2));
-        Alert.alert('Error', `Failed to update gift: ${giftError.message || giftError.code}`);
+        console.error('Error code:', giftError.code);
+        console.error('Error message:', giftError.message);
+        console.error('Error hint:', giftError.hint);
+        console.error('Error details:', giftError.details);
+        Alert.alert(
+          'Gift Update Error',
+          `Failed to update gift status.\n\nError: ${giftError.message}\nCode: ${giftError.code}\n\nThis might be a permissions issue. Check Supabase RLS policies for the gifts table.`
+        );
         setLoading(false);
         return;
       }
 
       console.log('✅ Gift status updated:', giftUpdateData);
-      console.log('✅ Saved video_url to gift record:', fetchedVideoUri);
       console.log('✅ Video approved, navigating to share screen');
 
       // Navigate to send screen
@@ -304,13 +338,30 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       console.log('📋 Gift ID:', fetchedGiftId);
       console.log('📝 Feedback:', feedback);
 
-      // Update video status and add feedback
+      // Update video status - store feedback in metadata to avoid column dependency
+      // First get current metadata
+      const { data: currentVideo, error: fetchError } = await supabase
+        .from('videos')
+        .select('metadata')
+        .eq('id', videoId)
+        .single();
+
+      if (fetchError) {
+        console.error('❌ Error fetching video metadata:', fetchError);
+      }
+
+      const currentMetadata = currentVideo?.metadata || {};
+      const updatedMetadata = {
+        ...currentMetadata,
+        parent_feedback: feedback,
+        feedback_sent_at: new Date().toISOString(),
+      };
+
       const { data: videoData, error: videoError } = await supabase
         .from('videos')
         .update({
           status: 'needs_rerecord',
-          parent_feedback: feedback,
-          feedback_sent_at: new Date().toISOString(),
+          metadata: updatedMetadata,
         })
         .eq('id', videoId)
         .select();
@@ -323,15 +374,13 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
         return;
       }
 
-      console.log('✅ Video feedback updated:', videoData);
+      console.log('✅ Video status updated to needs_rerecord:', videoData);
 
-      // Also update gift status
+      // Also update gift status (just status, not feedback columns which may not exist)
       const { data: giftData, error: giftError } = await supabase
         .from('gifts')
         .update({
           status: 'needs_rerecord',
-          parent_feedback: feedback,
-          feedback_sent_at: new Date().toISOString(),
         })
         .eq('id', fetchedGiftId)
         .select();
@@ -339,12 +388,11 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       if (giftError) {
         console.error('❌ Error updating gift:', giftError);
         console.error('Error details:', JSON.stringify(giftError, null, 2));
-        Alert.alert('Error', `Failed to update gift: ${giftError.message || giftError.code}`);
-        setLoading(false);
-        return;
+        // Don't block on gift update error - video was already updated
+        console.warn('⚠️ Gift status update failed, but video was updated successfully');
+      } else {
+        console.log('✅ Gift status updated:', giftData);
       }
-
-      console.log('✅ Gift feedback updated:', giftData);
 
       // Show confirmation and go back
       Alert.alert('Feedback Sent', 'Your feedback has been sent to the child. They can re-record the video now.');
@@ -395,9 +443,24 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
               }}
               onError={(error) => {
                 console.error('❌ Video playback error:', error);
+                console.error('❌ Error details:', JSON.stringify(error, null, 2));
+                console.error('❌ Video URI being used:', fetchedVideoUri);
+                console.error('❌ Is signed URL?', fetchedVideoUri?.includes('token=') ? 'YES (signed)' : 'NO (public)');
+
+                // Show alert to user
+                Alert.alert(
+                  'Video Playback Error',
+                  `Cannot play video. This may be due to expired URL or permission issues.\n\nError: ${error.error?.code || 'Unknown'}\n\nURL type: ${fetchedVideoUri?.includes('token=') ? 'Signed URL' : 'Public URL'}\n\nTry refreshing the screen.`,
+                  [
+                    { text: 'Refresh', onPress: () => loadVideoDetails() },
+                    { text: 'OK' }
+                  ]
+                );
               }}
               onLoad={() => {
                 console.log('✅ Video loaded successfully');
+                console.log('✅ Video URI:', fetchedVideoUri);
+                console.log('✅ Is signed URL?', fetchedVideoUri?.includes('token=') ? 'YES' : 'NO');
               }}
               shouldPlay={false}
             />

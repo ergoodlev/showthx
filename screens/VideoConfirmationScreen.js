@@ -42,7 +42,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
     const textColor = frameTemplate.custom_text_color || '#FFFFFF';
 
     return (
-      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
+      <>
         {/* Custom Frame Border */}
         <CustomFrameOverlay frameTemplate={frameTemplate} />
 
@@ -74,7 +74,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             </View>
           </View>
         )}
-      </View>
+      </>
     );
   };
 
@@ -199,11 +199,21 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
 
       if (videoError) {
         console.error('❌ Error creating video record:', videoError);
+        console.error('❌ Error code:', videoError.code);
+        console.error('❌ Error message:', videoError.message);
+        console.error('❌ Error details:', JSON.stringify(videoError, null, 2));
+        console.error('❌ Error hint:', videoError.hint);
+
         // Provide user-friendly error message
         if (videoError.message?.includes('child does not belong')) {
           throw new Error('Session expired. Please log in again.');
         } else if (videoError.message?.includes('gift does not belong')) {
           throw new Error('This gift is not available. Please go back and try again.');
+        } else if (videoError.message?.includes('length') || videoError.code === '22001') {
+          console.error('❌ LENGTH ERROR DETECTED!');
+          console.error('❌ Video URL length:', uploadResult.url?.length);
+          console.error('❌ Metadata:', JSON.stringify(metadata, null, 2));
+          throw new Error(`Database error: ${videoError.message}. The video URL or metadata may be too long.`);
         }
         throw videoError;
       }
@@ -224,6 +234,12 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       });
     } catch (error) {
       console.error('❌ Error submitting video:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error name:', error.name);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+
       alert('Error submitting video: ' + error.message);
       setLoading(false);
     }
@@ -256,18 +272,23 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           <Video
             ref={videoRef}
             source={{ uri: videoUri }}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', zIndex: 0 }}
             resizeMode="contain"
             useNativeControls={false}
             onPlaybackStatusUpdate={(status) => setIsPlaying(status.isPlaying)}
           />
 
-          {/* Frame Overlay */}
-          {renderFrameOverlay()}
+          {/* Frame Overlay - Layered above video */}
+          <View style={[StyleSheet.absoluteFill, { zIndex: 10 }]} pointerEvents="none">
+            {renderFrameOverlay()}
+          </View>
 
-          {/* Decoration Overlays */}
-          {renderDecorations()}
+          {/* Decoration Overlays - Layered above frame */}
+          <View style={[StyleSheet.absoluteFill, { zIndex: 15 }]} pointerEvents="none">
+            {renderDecorations()}
+          </View>
 
+          {/* Play Button - Layered above all */}
           {!isPlaying && (
             <TouchableOpacity
               onPress={handlePlayPause}
@@ -279,6 +300,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                 backgroundColor: 'rgba(255, 107, 107, 0.9)',
                 justifyContent: 'center',
                 alignItems: 'center',
+                zIndex: 20,
               }}
             >
               <Ionicons name="play" size={40} color="#FFFFFF" />
@@ -409,7 +431,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
         }}
       >
         <ThankCastButton
-          title="Submit Video"
+          title="Send to my grown-ups!"
           onPress={handleSubmit}
           loading={loading}
           disabled={loading}

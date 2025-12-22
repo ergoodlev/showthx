@@ -110,7 +110,26 @@ export const GiftManagementScreen = ({ navigation, route }) => {
         .order('created_at', { ascending: false });
 
       if (queryError) throw queryError;
-      setGifts(data || []);
+
+      // Filter out placeholder gifts (gifts for guests who didn't bring anything)
+      // These have the pattern "Gift from {guest name}" or are empty/null
+      const filteredGifts = (data || []).filter((gift) => {
+        const isPlaceholderGift =
+          !gift.name ||
+          gift.name.trim() === '' ||
+          gift.name.toLowerCase().startsWith('gift from') ||
+          gift.name.toLowerCase().includes('(no gift)') ||
+          gift.name.toLowerCase() === 'no gift';
+
+        if (isPlaceholderGift) {
+          console.log('🚫 Filtering out placeholder gift:', gift.name, 'from', gift.giver_name);
+          return false;
+        }
+        return true;
+      });
+
+      console.log(`📊 Loaded ${data?.length || 0} total gifts, ${filteredGifts.length} after filtering placeholders`);
+      setGifts(filteredGifts);
     } catch (err) {
       console.error('Error loading gifts:', err);
       setError(err.message || 'Failed to load gifts');
@@ -554,6 +573,8 @@ export const GiftManagementScreen = ({ navigation, route }) => {
                   padding: 0,
                 }}
                 placeholderTextColor={theme.neutralColors.mediumGray}
+                autoCorrect={true}
+                spellCheck={true}
               />
             </View>
 
@@ -573,6 +594,7 @@ export const GiftManagementScreen = ({ navigation, route }) => {
                   <FlatList
                     data={filteredGuests}
                     scrollEnabled
+                    nestedScrollEnabled={true}
                     keyExtractor={item => item.id}
                     renderItem={({ item }) => (
                       <TouchableOpacity
@@ -676,6 +698,8 @@ export const GiftManagementScreen = ({ navigation, route }) => {
                     marginBottom: theme.spacing.sm,
                   }}
                   placeholderTextColor={theme.neutralColors.mediumGray}
+                  autoCorrect={true}
+                  spellCheck={true}
                 />
 
                 <TextInput

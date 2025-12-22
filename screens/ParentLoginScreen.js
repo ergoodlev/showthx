@@ -30,6 +30,7 @@ import {
   getBiometricTypeName,
   attemptBiometricLogin,
   enableBiometricLogin,
+  getStoredCredentials,
 } from '../services/biometricService';
 
 export const ParentLoginScreen = ({ navigation }) => {
@@ -189,20 +190,28 @@ export const ParentLoginScreen = ({ navigation }) => {
         await AsyncStorage.removeItem('parentEmail');
       }
 
-      // Check if biometric is supported but not yet enabled
+      // Check if biometric is supported - always offer to save/update credentials
       const biometricSupported = await isBiometricSupported();
       const biometricEnabled = await isBiometricLoginEnabled();
 
-      console.log('🔐 Biometric check:', { biometricSupported, biometricEnabled });
+      // Check if credentials are actually stored (they don't sync between devices)
+      const storedCredentials = await getStoredCredentials();
+      const hasCredentials = storedCredentials?.email && storedCredentials?.password;
 
-      if (biometricSupported && !biometricEnabled) {
+      console.log('🔐 Biometric check:', { biometricSupported, biometricEnabled, hasCredentials });
+
+      // Prompt to enable/re-enable if: not enabled yet, OR enabled but no credentials (new device)
+      if (biometricSupported && (!biometricEnabled || !hasCredentials)) {
         const biometricType = await getBiometricTypeName();
-        console.log(`📱 Showing ${biometricType} enrollment prompt`);
+        const isNewDevice = biometricEnabled && !hasCredentials;
+        console.log(`📱 Showing ${biometricType} enrollment prompt (new device: ${isNewDevice})`);
         // Prompt user to enable biometric login immediately (no delay)
         // Show alert before RootNavigator's next polling cycle detects the session
         Alert.alert(
-          `Enable ${biometricType}?`,
-          `Would you like to use ${biometricType} for faster sign-in next time?`,
+          isNewDevice ? `Set Up ${biometricType} on This Device` : `Enable ${biometricType}?`,
+          isNewDevice
+            ? `${biometricType} needs to be set up again on this new device. Save your login for faster sign-in?`
+            : `Would you like to use ${biometricType} for faster sign-in next time?`,
           [
             {
               text: 'Not Now',

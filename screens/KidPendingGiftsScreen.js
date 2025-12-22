@@ -98,22 +98,24 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
 
       if (giftsError) throw giftsError;
 
-      // Load videos for this kid (to match with gifts)
+      // Load videos for this kid (to match with gifts) - include metadata for feedback
       console.log('🎬 Loading videos for child:', storedKidId);
 
       const { data: videosData, error: videosError } = await supabase
         .from('videos')
-        .select('gift_id, id, status, recorded_at')
+        .select('gift_id, id, status, recorded_at, metadata')
         .eq('child_id', storedKidId);
 
       console.log('📹 Videos query result:', { videosData, videosError });
 
       if (videosError) throw videosError;
 
-      // Create a map of gift_id -> video for quick lookup
+      // Create a map of gift_id -> video for quick lookup (prefer most recent)
       const videosByGiftId = {};
       videosData?.forEach((video) => {
-        if (!videosByGiftId[video.gift_id]) {
+        // Always use the most recent video for each gift
+        if (!videosByGiftId[video.gift_id] ||
+            new Date(video.recorded_at) > new Date(videosByGiftId[video.gift_id].recorded_at)) {
           videosByGiftId[video.gift_id] = video;
         }
       });
@@ -127,24 +129,49 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
             name: assignment.gift.name,
             giver_name: assignment.gift.giver_name,
             event_name: assignment.gift.event?.name,
+            event_id: assignment.gift.event_id, // CRITICAL: Include event_id for frame lookup
             status: video?.status || 'pending',
             has_video: !!video,
             video_id: video?.id,
+            // Include parent feedback for needs_rerecord status
+            parent_feedback: video?.metadata?.parent_feedback || null,
           };
         })
-        // Filter out gifts that are approved or sent - kids shouldn't see these
+        // Filter out placeholder gifts but show ALL video statuses (including approved/sent)
         .filter((gift) => {
-          const status = gift.status;
-          // Show gifts that need action: pending, needs_rerecord, pending_approval
-          // Hide gifts that are done: approved, sent
-          return status !== 'approved' && status !== 'sent';
+          // Filter out placeholder gifts for guests who didn't bring anything
+          // These have the pattern "Gift from {guest name}" or are empty/null
+          const isPlaceholderGift =
+            !gift.name ||
+            gift.name.trim() === '' ||
+            gift.name.toLowerCase().startsWith('gift from') ||
+            gift.name.toLowerCase().includes('(no gift)') ||
+            gift.name.toLowerCase() === 'no gift';
+
+          if (isPlaceholderGift) {
+            console.log('🚫 Filtering out placeholder gift:', gift.name, 'from', gift.giver_name);
+            return false;
+          }
+
+          return true;
         })
         .sort((a, b) => {
-          // Pending first, then recorded
-          if (a.status === 'pending' && b.status !== 'pending') return -1;
-          if (a.status !== 'pending' && b.status === 'pending') return 1;
-          return 0;
+          // Priority: needs_rerecord (urgent) > pending > pending_approval > approved > sent
+          const statusPriority = {
+            needs_rerecord: 0, // Highest priority - parent requested changes
+            pending: 1,
+            pending_approval: 2,
+            approved: 3,
+            sent: 4,
+          };
+          const aPriority = statusPriority[a.status] ?? 5;
+          const bPriority = statusPriority[b.status] ?? 5;
+          return aPriority - bPriority;
         });
+
+      const totalBeforeFilter = giftsData?.length || 0;
+      const totalAfterFilter = transformedGifts?.length || 0;
+      console.log(`📊 Kid gifts: ${totalBeforeFilter} total assignments, ${totalAfterFilter} after filtering`);
 
       setGifts(transformedGifts || []);
     } catch (err) {
@@ -157,6 +184,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
 
   const getGiftStatus = (gift) => {
     if (!gift.has_video) return 'pending';
+    if (gift.status === 'needs_rerecord') return 'needs_rerecord';
     if (gift.status === 'pending_approval') return 'recorded';
     if (gift.status === 'approved') return 'approved';
     if (gift.status === 'sent') return 'sent';
@@ -167,6 +195,8 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
     switch (status) {
       case 'pending':
         return 'Record Thank You';
+      case 'needs_rerecord':
+        return 'Re-record Needed';
       case 'recorded':
         return 'Parent Reviewing';
       case 'approved':
@@ -329,10 +359,10 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                   marginVertical: theme.spacing.sm,
                 }}
                 onPress={() => {
-                  if (giftStatus === 'pending') {
+                  if (giftStatus === 'pending' || giftStatus === 'needs_rerecord') {
                     handleRecordGift(item);
                   } else {
-                    // View status
+                    // For recorded/approved/sent - tapping card does nothing (use re-record button)
                   }
                 }}
               >
@@ -389,6 +419,45 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                     at {item.event_name}
                   </Text>
 
+                  {/* Parent Feedback - shown when parent requests changes */}
+                  {giftStatus === 'needs_rerecord' && item.parent_feedback && (
+                    <View
+                      style={{
+                        backgroundColor: '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: '#F59E0B',
+                        borderRadius: 8,
+                        padding: theme.spacing.sm,
+                        marginBottom: theme.spacing.md,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Ionicons name="chatbubble-outline" size={14} color="#B45309" />
+                        <Text
+                          style={{
+                            fontSize: isKidsEdition ? 12 : 10,
+                            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                            color: '#B45309',
+                            marginLeft: 4,
+                            fontWeight: '600',
+                          }}
+                        >
+                          Message from Parent:
+                        </Text>
+                      </View>
+                      <Text
+                        style={{
+                          fontSize: isKidsEdition ? 14 : 12,
+                          fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                          color: '#78350F',
+                          fontWeight: '400',
+                        }}
+                      >
+                        {item.parent_feedback}
+                      </Text>
+                    </View>
+                  )}
+
                   {/* Status Button Row */}
                   <View
                     style={{
@@ -415,6 +484,22 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                             }}
                           >
                             Record
+                          </Text>
+                        </>
+                      )}
+                      {giftStatus === 'needs_rerecord' && (
+                        <>
+                          <Ionicons name="refresh-circle" size={18} color={theme.semanticColors.error} />
+                          <Text
+                            style={{
+                              fontSize: isKidsEdition ? 14 : 12,
+                              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                              color: theme.semanticColors.error,
+                              marginLeft: 6,
+                              fontWeight: '600',
+                            }}
+                          >
+                            Re-record
                           </Text>
                         </>
                       )}
@@ -468,7 +553,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                       )}
                     </View>
 
-                    {/* Record Button */}
+                    {/* Record Button - for pending gifts */}
                     {giftStatus === 'pending' && (
                       <TouchableOpacity
                         onPress={() => handleRecordGift(item)}
@@ -488,6 +573,69 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                           }}
                         >
                           Record
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Re-record Button - for needs_rerecord (parent requested changes) */}
+                    {giftStatus === 'needs_rerecord' && (
+                      <TouchableOpacity
+                        onPress={() => handleRecordGift(item)}
+                        style={{
+                          backgroundColor: theme.semanticColors.error,
+                          paddingHorizontal: theme.spacing.md,
+                          paddingVertical: theme.spacing.sm,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: '#FFFFFF',
+                            fontSize: isKidsEdition ? 14 : 12,
+                            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                            fontWeight: '600',
+                          }}
+                        >
+                          Re-record
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Re-record Button - for recorded (pending review) and approved */}
+                    {(giftStatus === 'recorded' || giftStatus === 'approved') && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          Alert.alert(
+                            'Re-record Video?',
+                            'Your current video will be replaced with a new one. This cannot be undone.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Re-record',
+                                style: 'destructive',
+                                onPress: () => handleRecordGift(item),
+                              },
+                            ]
+                          );
+                        }}
+                        style={{
+                          backgroundColor: 'transparent',
+                          paddingHorizontal: theme.spacing.md,
+                          paddingVertical: theme.spacing.sm,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: theme.neutralColors.mediumGray,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: theme.neutralColors.mediumGray,
+                            fontSize: isKidsEdition ? 14 : 12,
+                            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                            fontWeight: '600',
+                          }}
+                        >
+                          Re-record
                         </Text>
                       </TouchableOpacity>
                     )}

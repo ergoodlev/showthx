@@ -1,12 +1,19 @@
 /**
  * CustomFrameOverlay
  * Renders custom frame templates created by parents in FrameCreationScreen
- * Supports all frame shapes: bold-classic, rounded-thick, double-border, polaroid, etc.
+ * NOW WITH SVG DECORATIVE SHAPES! ⭐☁️❤️
  */
 
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path, Circle, Ellipse, Rect, Defs, RadialGradient, Stop } from 'react-native-svg';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Portrait video aspect ratio (9:16) - viewBox dimensions
+const VB_WIDTH = 56;  // 9:16 ratio
+const VB_HEIGHT = 100;
 
 /**
  * Render a custom frame overlay based on frameTemplate data
@@ -14,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
  */
 export const CustomFrameOverlay = ({ frameTemplate, style }) => {
   if (!frameTemplate || !frameTemplate.frame_shape) {
+    console.log('⚠️  CustomFrameOverlay: No frameTemplate provided');
     return null;
   }
 
@@ -24,140 +32,476 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
     border_radius = 12,
   } = frameTemplate;
 
-  // Get shape-specific styles
-  const getShapeStyles = () => {
-    const baseStyle = {
-      borderColor: primary_color,
-      borderWidth: border_width,
-      borderRadius: border_radius,
+  console.log('🎨 CustomFrameOverlay rendering:', {
+    frame_shape,
+    primary_color,
+    border_width,
+    border_radius,
+    isSVGShape: ['star-burst', 'cloud-fluffy', 'heart-love', 'wavy-thick', 'spikey-fun', 'scalloped-fancy', 'neon-glow'].includes(frame_shape)
+  });
+
+  // STAR-BURST: Star points radiating from corners and edges
+  const renderStarBurst = () => {
+    const stars = [];
+    const W = VB_WIDTH;
+    const H = VB_HEIGHT;
+    const positions = [
+      // Corners
+      { x: 5, y: 5 },
+      { x: W - 5, y: 5 },
+      { x: 5, y: H - 5 },
+      { x: W - 5, y: H - 5 },
+      // Top/Bottom edges
+      { x: W / 2, y: 3 },
+      { x: W / 2, y: H - 3 },
+      // Left/Right edges
+      { x: 3, y: H / 2 },
+      { x: W - 3, y: H / 2 },
+      // Additional mid-points
+      { x: W * 0.25, y: 3 },
+      { x: W * 0.75, y: 3 },
+      { x: W * 0.25, y: H - 3 },
+      { x: W * 0.75, y: H - 3 },
+      { x: 3, y: H * 0.25 },
+      { x: 3, y: H * 0.75 },
+      { x: W - 3, y: H * 0.25 },
+      { x: W - 3, y: H * 0.75 },
+    ];
+
+    positions.forEach((pos, i) => {
+      const size = 3;
+      const starPath = `M${pos.x},${pos.y - size} L${pos.x + size * 0.4},${pos.y + size * 0.4} L${pos.x + size},${pos.y} L${pos.x + size * 0.4},${pos.y - size * 0.4} Z`;
+      stars.push(
+        <Path
+          key={`star-${i}`}
+          d={starPath}
+          fill={primary_color}
+          opacity={0.9}
+          stroke={primary_color}
+          strokeWidth="0.3"
+        />
+      );
+    });
+
+    return (
+      <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          <Rect
+            x="1"
+            y="1"
+            width={W - 2}
+            height={H - 2}
+            rx={border_radius / 6}
+            fill="none"
+            stroke={primary_color}
+            strokeWidth="1.5"
+          />
+          {stars}
+        </Svg>
+      </View>
+    );
+  };
+
+  // CLOUD-FLUFFY: Cloud-like bubbles around the border
+  const renderCloudFluffy = () => {
+    const W = VB_WIDTH;
+    const H = VB_HEIGHT;
+    return (
+      <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          {/* Main border */}
+          <Rect
+            x="1"
+            y="1"
+            width={W - 2}
+            height={H - 2}
+            rx={border_radius / 4}
+            fill="none"
+            stroke={primary_color}
+            strokeWidth="1"
+            opacity={0.5}
+          />
+          {/* Cloud bubbles at corners */}
+          <Circle cx="6" cy="6" r="6" fill={primary_color} opacity={0.3} />
+          <Circle cx="6" cy="6" r="6" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.8} />
+          <Circle cx="10" cy="5" r="4" fill={primary_color} opacity={0.3} />
+          <Circle cx="10" cy="5" r="4" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.8} />
+
+          <Circle cx={W - 6} cy="6" r="6" fill={primary_color} opacity={0.3} />
+          <Circle cx={W - 6} cy="6" r="6" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.8} />
+          <Circle cx={W - 10} cy="5" r="4" fill={primary_color} opacity={0.3} />
+          <Circle cx={W - 10} cy="5" r="4" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.8} />
+
+          <Circle cx="6" cy={H - 6} r="6" fill={primary_color} opacity={0.3} />
+          <Circle cx="6" cy={H - 6} r="6" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.8} />
+          <Circle cx="10" cy={H - 5} r="4" fill={primary_color} opacity={0.3} />
+          <Circle cx="10" cy={H - 5} r="4" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.8} />
+
+          <Circle cx={W - 6} cy={H - 6} r="6" fill={primary_color} opacity={0.3} />
+          <Circle cx={W - 6} cy={H - 6} r="6" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.8} />
+          <Circle cx={W - 10} cy={H - 5} r="4" fill={primary_color} opacity={0.3} />
+          <Circle cx={W - 10} cy={H - 5} r="4" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.8} />
+
+          {/* Cloud bubbles on sides */}
+          <Circle cx={W / 2} cy="4" r="5" fill={primary_color} opacity={0.3} />
+          <Circle cx={W / 2} cy="4" r="5" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.7} />
+          <Circle cx={W / 2} cy={H - 4} r="5" fill={primary_color} opacity={0.3} />
+          <Circle cx={W / 2} cy={H - 4} r="5" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.7} />
+          <Circle cx="4" cy={H / 2} r="5" fill={primary_color} opacity={0.3} />
+          <Circle cx="4" cy={H / 2} r="5" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.7} />
+          <Circle cx={W - 4} cy={H / 2} r="5" fill={primary_color} opacity={0.3} />
+          <Circle cx={W - 4} cy={H / 2} r="5" fill="none" stroke={primary_color} strokeWidth="1.2" opacity={0.7} />
+        </Svg>
+      </View>
+    );
+  };
+
+  // HEART-LOVE: Hearts in the corners
+  const renderHeartLove = () => {
+    const W = VB_WIDTH;
+    const H = VB_HEIGHT;
+    const heartPath = (x, y, size = 2.5) => {
+      const path = `M${x},${y + size * 0.8}
+        C${x},${y + size * 0.3} ${x - size * 0.5},${y} ${x - size},${y}
+        C${x - size * 1.5},${y} ${x - size * 2},${y + size * 0.5} ${x - size * 2},${y + size}
+        C${x - size * 2},${y + size * 1.5} ${x - size},${y + size * 2} ${x},${y + size * 2.5}
+        C${x + size},${y + size * 2} ${x + size * 2},${y + size * 1.5} ${x + size * 2},${y + size}
+        C${x + size * 2},${y + size * 0.5} ${x + size * 1.5},${y} ${x + size},${y}
+        C${x + size * 0.5},${y} ${x},${y + size * 0.3} ${x},${y + size * 0.8} Z`;
+      return path;
     };
 
+    return (
+      <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          {/* Hearts in corners */}
+          <Path d={heartPath(10, 6, 2.5)} fill={primary_color} opacity={0.8} stroke={primary_color} strokeWidth="0.3" />
+          <Path d={heartPath(W - 10, 6, 2.5)} fill={primary_color} opacity={0.8} stroke={primary_color} strokeWidth="0.3" />
+          <Path d={heartPath(10, H - 10, 2.5)} fill={primary_color} opacity={0.8} stroke={primary_color} strokeWidth="0.3" />
+          <Path d={heartPath(W - 10, H - 10, 2.5)} fill={primary_color} opacity={0.8} stroke={primary_color} strokeWidth="0.3" />
+
+          {/* Hearts on sides */}
+          <Path d={heartPath(W / 2, 3, 2)} fill={primary_color} opacity={0.7} stroke={primary_color} strokeWidth="0.3" />
+          <Path d={heartPath(W / 2, H - 7, 2)} fill={primary_color} opacity={0.7} stroke={primary_color} strokeWidth="0.3" />
+          <Path d={heartPath(6, H / 2, 2)} fill={primary_color} opacity={0.7} stroke={primary_color} strokeWidth="0.3" />
+          <Path d={heartPath(W - 6, H / 2, 2)} fill={primary_color} opacity={0.7} stroke={primary_color} strokeWidth="0.3" />
+
+          {/* Main border */}
+          <Rect
+            x="1"
+            y="1"
+            width={W - 2}
+            height={H - 2}
+            rx={border_radius / 4}
+            fill="none"
+            stroke={primary_color}
+            strokeWidth="1"
+            opacity={0.6}
+          />
+        </Svg>
+      </View>
+    );
+  };
+
+  // WAVY-THICK: Wavy border using sine waves
+  const renderWavyThick = () => {
+    const W = VB_WIDTH;
+    const H = VB_HEIGHT;
+    const waveFreq = 8;
+    const waveAmp = 1.5;
+    let topWave = `M1,${4 + waveAmp}`;
+    let bottomWave = `M1,${H - 4 - waveAmp}`;
+    let leftWave = `M${4 + waveAmp},1`;
+    let rightWave = `M${W - 4 - waveAmp},1`;
+
+    for (let i = 0; i <= W; i += 2) {
+      const wave = Math.sin((i / W) * Math.PI * waveFreq) * waveAmp;
+      topWave += ` L${i},${4 + waveAmp + wave}`;
+      bottomWave += ` L${i},${H - 4 - waveAmp + wave}`;
+    }
+    for (let i = 0; i <= H; i += 2) {
+      const wave = Math.sin((i / H) * Math.PI * waveFreq) * waveAmp;
+      leftWave += ` L${4 + waveAmp + wave},${i}`;
+      rightWave += ` L${W - 4 - waveAmp + wave},${i}`;
+    }
+
+    return (
+      <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          <Path d={topWave} stroke={primary_color} strokeWidth={border_width / 6} fill="none" />
+          <Path d={bottomWave} stroke={primary_color} strokeWidth={border_width / 6} fill="none" />
+          <Path d={leftWave} stroke={primary_color} strokeWidth={border_width / 6} fill="none" />
+          <Path d={rightWave} stroke={primary_color} strokeWidth={border_width / 6} fill="none" />
+        </Svg>
+      </View>
+    );
+  };
+
+  // SPIKEY-FUN: Sharp spikes pointing outward
+  const renderSpikeyFun = () => {
+    const W = VB_WIDTH;
+    const H = VB_HEIGHT;
+    const spikes = [];
+    const numSpikesHoriz = 10;
+    const numSpikesVert = 18;
+
+    // Top edge spikes
+    for (let i = 1; i <= numSpikesHoriz; i++) {
+      const x = (W / (numSpikesHoriz + 1)) * i;
+      spikes.push(
+        <Path
+          key={`spike-top-${i}`}
+          d={`M${x},4 L${x - 1.5},0 L${x + 1.5},0 Z`}
+          fill={primary_color}
+          opacity={0.9}
+          stroke={primary_color}
+          strokeWidth="0.2"
+        />
+      );
+    }
+
+    // Bottom edge spikes
+    for (let i = 1; i <= numSpikesHoriz; i++) {
+      const x = (W / (numSpikesHoriz + 1)) * i;
+      spikes.push(
+        <Path
+          key={`spike-bottom-${i}`}
+          d={`M${x},${H - 4} L${x - 1.5},${H} L${x + 1.5},${H} Z`}
+          fill={primary_color}
+          opacity={0.9}
+          stroke={primary_color}
+          strokeWidth="0.2"
+        />
+      );
+    }
+
+    // Left edge spikes
+    for (let i = 1; i <= numSpikesVert; i++) {
+      const y = (H / (numSpikesVert + 1)) * i;
+      spikes.push(
+        <Path
+          key={`spike-left-${i}`}
+          d={`M4,${y} L0,${y - 1.5} L0,${y + 1.5} Z`}
+          fill={primary_color}
+          opacity={0.9}
+          stroke={primary_color}
+          strokeWidth="0.2"
+        />
+      );
+    }
+
+    // Right edge spikes
+    for (let i = 1; i <= numSpikesVert; i++) {
+      const y = (H / (numSpikesVert + 1)) * i;
+      spikes.push(
+        <Path
+          key={`spike-right-${i}`}
+          d={`M${W - 4},${y} L${W},${y - 1.5} L${W},${y + 1.5} Z`}
+          fill={primary_color}
+          opacity={0.9}
+          stroke={primary_color}
+          strokeWidth="0.2"
+        />
+      );
+    }
+
+    return (
+      <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          <Rect
+            x="1"
+            y="1"
+            width={W - 2}
+            height={H - 2}
+            rx={border_radius / 6}
+            fill="none"
+            stroke={primary_color}
+            strokeWidth="1"
+          />
+          {spikes}
+        </Svg>
+      </View>
+    );
+  };
+
+  // SCALLOPED-FANCY: Scalloped/scallop edges
+  const renderScallopedFancy = () => {
+    const W = VB_WIDTH;
+    const H = VB_HEIGHT;
+    const numScallopsHoriz = 8;
+    const numScallopsVert = 14;
+    const scallops = [];
+
+    // Top scallops
+    for (let i = 0; i <= numScallopsHoriz; i++) {
+      const x = (W / numScallopsHoriz) * i;
+      scallops.push(
+        <Circle key={`scallop-top-${i}`} cx={x} cy="3" r="2.5" fill={primary_color} opacity={0.3} />
+      );
+      scallops.push(
+        <Circle key={`scallop-top-outline-${i}`} cx={x} cy="3" r="2.5" fill="none" stroke={primary_color} strokeWidth="1" />
+      );
+    }
+
+    // Bottom scallops
+    for (let i = 0; i <= numScallopsHoriz; i++) {
+      const x = (W / numScallopsHoriz) * i;
+      scallops.push(
+        <Circle key={`scallop-bottom-${i}`} cx={x} cy={H - 3} r="2.5" fill={primary_color} opacity={0.3} />
+      );
+      scallops.push(
+        <Circle key={`scallop-bottom-outline-${i}`} cx={x} cy={H - 3} r="2.5" fill="none" stroke={primary_color} strokeWidth="1" />
+      );
+    }
+
+    // Left scallops
+    for (let i = 0; i <= numScallopsVert; i++) {
+      const y = (H / numScallopsVert) * i;
+      scallops.push(
+        <Circle key={`scallop-left-${i}`} cx="3" cy={y} r="2.5" fill={primary_color} opacity={0.3} />
+      );
+      scallops.push(
+        <Circle key={`scallop-left-outline-${i}`} cx="3" cy={y} r="2.5" fill="none" stroke={primary_color} strokeWidth="1" />
+      );
+    }
+
+    // Right scallops
+    for (let i = 0; i <= numScallopsVert; i++) {
+      const y = (H / numScallopsVert) * i;
+      scallops.push(
+        <Circle key={`scallop-right-${i}`} cx={W - 3} cy={y} r="2.5" fill={primary_color} opacity={0.3} />
+      );
+      scallops.push(
+        <Circle key={`scallop-right-outline-${i}`} cx={W - 3} cy={y} r="2.5" fill="none" stroke={primary_color} strokeWidth="1" />
+      );
+    }
+
+    return (
+      <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          {scallops}
+          <Rect
+            x="6"
+            y="6"
+            width={W - 12}
+            height={H - 12}
+            rx={border_radius / 5}
+            fill="none"
+            stroke={primary_color}
+            strokeWidth="1"
+            opacity={0.5}
+          />
+        </Svg>
+      </View>
+    );
+  };
+
+  // NEON-GLOW: Enhanced glow effect with SVG
+  const renderNeonGlow = () => {
+    const W = VB_WIDTH;
+    const H = VB_HEIGHT;
+    return (
+      <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          <Defs>
+            <RadialGradient id="neonGlow">
+              <Stop offset="0%" stopColor={primary_color} stopOpacity="1" />
+              <Stop offset="100%" stopColor={primary_color} stopOpacity="0.3" />
+            </RadialGradient>
+          </Defs>
+          {/* Multiple glowing borders for neon effect */}
+          <Rect
+            x="2"
+            y="2"
+            width={W - 4}
+            height={H - 4}
+            rx={border_radius / 3}
+            fill="none"
+            stroke={primary_color}
+            strokeWidth={border_width / 5}
+            opacity={1}
+          />
+          <Rect
+            x="1.5"
+            y="1.5"
+            width={W - 3}
+            height={H - 3}
+            rx={border_radius / 3}
+            fill="none"
+            stroke={primary_color}
+            strokeWidth={border_width / 8}
+            opacity={0.6}
+          />
+          <Rect
+            x="1"
+            y="1"
+            width={W - 2}
+            height={H - 2}
+            rx={border_radius / 3}
+            fill="none"
+            stroke={primary_color}
+            strokeWidth={border_width / 10}
+            opacity={0.3}
+          />
+        </Svg>
+        <View
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            right: 8,
+            bottom: 8,
+            borderRadius: border_radius,
+            shadowColor: primary_color,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 1.0,
+            shadowRadius: 20,
+            elevation: 15,
+          }}
+        />
+      </View>
+    );
+  };
+
+  // Route to appropriate shape renderer
+  const renderShape = () => {
     switch (frame_shape) {
-      case 'neon-glow':
-        return {
-          ...baseStyle,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 1.0,
-          shadowRadius: 20,
-          elevation: 15,
-        };
-
-      case 'wavy-thick':
-        return {
-          ...baseStyle,
-          borderStyle: 'dashed',
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.6,
-          shadowRadius: 10,
-          elevation: 8,
-        };
-
       case 'star-burst':
-      case 'spikey-fun':
-        return {
-          ...baseStyle,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.8,
-          shadowRadius: 15,
-          elevation: 12,
-        };
-
+        return renderStarBurst();
       case 'cloud-fluffy':
-        return {
-          ...baseStyle,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.5,
-          shadowRadius: 20,
-          elevation: 8,
-        };
-
+        return renderCloudFluffy();
       case 'heart-love':
-        return {
-          ...baseStyle,
-          shadowColor: '#FF6B6B',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.6,
-          shadowRadius: 15,
-          elevation: 8,
-        };
-
-      case 'bold-classic':
-        return {
-          ...baseStyle,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.5,
-          shadowRadius: 12,
-          elevation: 8,
-        };
-
-      case 'rounded-thick':
-        return {
-          ...baseStyle,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.4,
-          shadowRadius: 10,
-          elevation: 8,
-        };
-
-      case 'polaroid':
-        return {
-          ...baseStyle,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.4,
-          shadowRadius: 15,
-          elevation: 8,
-        };
-
+        return renderHeartLove();
+      case 'wavy-thick':
+        return renderWavyThick();
+      case 'spikey-fun':
+        return renderSpikeyFun();
       case 'scalloped-fancy':
-        return {
-          ...baseStyle,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.5,
-          shadowRadius: 10,
-          elevation: 8,
-        };
-
-      case 'double-border':
-        // Double border effect
-        return {
-          borderColor: primary_color,
-          borderWidth: border_width,
-          borderRadius: border_radius,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
-        };
-
-      case 'gradient-frame':
-        // Gradient will be handled separately below
-        return {
-          borderWidth: border_width,
-          borderRadius: border_radius,
-          shadowColor: primary_color,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.7,
-          shadowRadius: 12,
-          elevation: 8,
-        };
-
+        return renderScallopedFancy();
+      case 'neon-glow':
+        return renderNeonGlow();
       default:
-        return baseStyle;
+        return null; // Will fall through to standard border rendering
     }
   };
 
-  const shapeStyles = getShapeStyles();
+  // Check if this shape has custom SVG rendering
+  const hasCustomShape = [
+    'star-burst',
+    'cloud-fluffy',
+    'heart-love',
+    'wavy-thick',
+    'spikey-fun',
+    'scalloped-fancy',
+    'neon-glow',
+  ].includes(frame_shape);
 
-  // Special rendering for gradient frames
+  // If custom shape, render it
+  if (hasCustomShape) {
+    return renderShape();
+  }
+
+  // Special rendering for gradient frames (keep existing)
   if (frame_shape === 'gradient-frame') {
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
@@ -174,7 +518,6 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
             borderRadius: border_radius,
           }}
         />
-        {/* Inner cutout to create border effect */}
         <View
           style={{
             position: 'absolute',
@@ -190,12 +533,11 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
     );
   }
 
-  // Special rendering for double-border frames
+  // Special rendering for double-border frames (keep existing)
   if (frame_shape === 'double-border') {
     const outerBorderWidth = 4;
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        {/* Outer border */}
         <View
           style={{
             position: 'absolute',
@@ -209,7 +551,6 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
             opacity: 0.5,
           }}
         />
-        {/* Inner border */}
         <View
           style={{
             position: 'absolute',
@@ -220,14 +561,13 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
             borderRadius: Math.max(0, border_radius - 4),
             borderWidth: border_width,
             borderColor: primary_color,
-            ...shapeStyles,
           }}
         />
       </View>
     );
   }
 
-  // Standard border frame
+  // Standard thick borders for: bold-classic, rounded-thick, polaroid
   return (
     <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
       <View
@@ -237,7 +577,14 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
           left: 8,
           right: 8,
           bottom: 8,
-          ...shapeStyles,
+          borderWidth: border_width,
+          borderColor: primary_color,
+          borderRadius: border_radius,
+          shadowColor: primary_color,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.5,
+          shadowRadius: 12,
+          elevation: 8,
         }}
       />
     </View>

@@ -20,6 +20,7 @@ import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
+import { Modal } from '../components/Modal';
 import { supabase } from '../supabaseClient';
 
 export const GuestManagementScreen = ({ navigation, route }) => {
@@ -30,15 +31,22 @@ export const GuestManagementScreen = ({ navigation, route }) => {
 
   // State
   const [guests, setGuests] = useState([]);
+  const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [csvError, setCsvError] = useState(null);
 
-  // Load guests on mount
+  // CSV import child selection
+  const [showChildSelectionModal, setShowChildSelectionModal] = useState(false);
+  const [selectedChildIds, setSelectedChildIds] = useState([]);
+  const [pendingCsvData, setPendingCsvData] = useState(null);
+
+  // Load guests and children on mount
   useEffect(() => {
     loadGuests();
+    loadChildren();
   }, [eventId]);
 
   const loadGuests = async () => {
@@ -68,6 +76,27 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       Alert.alert('Error', 'Failed to load guests');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadChildren = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { data, error } = await supabase
+        .from('children')
+        .select('id, name')
+        .eq('parent_id', user.id)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setChildren(data || []);
+      console.log('✅ Loaded children:', data?.length || 0);
+    } catch (error) {
+      console.error('Error loading children:', error);
+      // Don't show error - children are loaded for CSV assignment
     }
   };
 
@@ -332,9 +361,47 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       const { guests: parsedGuests, warnings } = parseCSV(csvText);
       console.log(`📋 Parsed ${parsedGuests.length} guests from CSV (${warnings.length} warnings)`);
 
-      // Validate and insert
+      // Check if parent has any children
+      if (children.length === 0) {
+        setLoading(false);
+        Alert.alert(
+          'No Children Found',
+          'You need to add at least one child before importing gifts. Please add a child first.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Store parsed data and show child selection modal
+      setPendingCsvData({ parsedGuests, warnings, user });
+      setSelectedChildIds([]); // Reset selection
+      setLoading(false);
+      setShowChildSelectionModal(true);
+    } catch (error) {
+      console.error('Error importing CSV:', error);
+      const errorMsg = error.message || 'Failed to import CSV';
+      setCsvError(errorMsg);
+      Alert.alert('Import Error', errorMsg);
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmCsvImport = async () => {
+    if (selectedChildIds.length === 0) {
+      Alert.alert('Selection Required', 'Please select at least one child to assign these gifts to.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setShowChildSelectionModal(false);
+
+      const { parsedGuests, warnings, user } = pendingCsvData;
+
+      // Validate and insert gifts with assignments to selected children
       let insertedCount = 0;
       let skippedCount = 0;
+      const createdGiftIds = [];
 
       for (const guest of parsedGuests) {
         try {
@@ -376,10 +443,6 @@ export const GuestManagementScreen = ({ navigation, route }) => {
               email: guest.email,
               created_at: new Date().toISOString(),
             };
-            // Note: Phone column doesn't exist in guests table schema yet
-            // if (guest.phone) {
-            //   guestData.phone = guest.phone;
-            // }
 
             const { data: guestRecord, error: guestError } = await supabase
               .from('guests')
@@ -409,7 +472,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             hasGiftName: !!guest.giftName
           });
 
-          const { error: giftError } = await supabase
+          const { data: giftRecord, error: giftError } = await supabase
             .from('gifts')
             .insert({
               event_id: eventId,
@@ -419,27 +482,66 @@ export const GuestManagementScreen = ({ navigation, route }) => {
               giver_name: guest.name,
               status: 'pending',
               created_at: new Date().toISOString(),
-            });
+            })
+            .select()
+            .single();
 
           if (giftError) {
             console.error(`Error creating gift for ${guest.email}:`, giftError);
             skippedCount++;
-          } else {
-            insertedCount++;
+            continue;
           }
+
+          insertedCount++;
+          createdGiftIds.push(giftRecord.id);
+          console.log(`✅ Created gift ${giftRecord.id} for ${guest.name}`);
         } catch (err) {
           console.error(`Error processing guest ${guest.email}:`, err);
           skippedCount++;
         }
       }
 
-      console.log(`✅ CSV Import complete: ${insertedCount} added, ${skippedCount} skipped`);
+      // Now assign all created gifts to the selected children
+      console.log(`👶 Assigning ${createdGiftIds.length} gifts to ${selectedChildIds.length} children...`);
+
+      const assignments = [];
+      for (const giftId of createdGiftIds) {
+        for (const childId of selectedChildIds) {
+          assignments.push({
+            gift_id: giftId,
+            children_id: childId,
+          });
+        }
+      }
+
+      if (assignments.length > 0) {
+        const { error: assignError } = await supabase
+          .from('gift_assignments')
+          .insert(assignments);
+
+        if (assignError) {
+          console.error('❌ Error creating gift assignments:', assignError);
+          Alert.alert(
+            'Partial Success',
+            `Created ${insertedCount} gifts but failed to assign them to children. You can assign them manually from the Gift Management screen.`
+          );
+        } else {
+          console.log(`✅ Created ${assignments.length} gift assignments`);
+        }
+      }
+
+      console.log(`✅ CSV Import complete: ${insertedCount} gifts created, ${assignments.length} assignments made, ${skippedCount} skipped`);
 
       // Reload guests
       await loadGuests();
 
       // Build detailed message
-      let message = `Added ${insertedCount} guest${insertedCount !== 1 ? 's' : ''}`;
+      const selectedChildNames = children
+        .filter(c => selectedChildIds.includes(c.id))
+        .map(c => c.name)
+        .join(', ');
+
+      let message = `Added ${insertedCount} gift${insertedCount !== 1 ? 's' : ''} and assigned to: ${selectedChildNames}`;
       if (skippedCount > 0) {
         message += `\n${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} skipped`;
       }
@@ -448,6 +550,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       }
 
       Alert.alert('Import Complete', message);
+      setPendingCsvData(null);
     } catch (error) {
       console.error('Error importing CSV:', error);
       const errorMsg = error.message || 'Failed to import CSV';
@@ -455,6 +558,14 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       Alert.alert('Import Error', errorMsg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleChildSelection = (childId) => {
+    if (selectedChildIds.includes(childId)) {
+      setSelectedChildIds(selectedChildIds.filter(id => id !== childId));
+    } else {
+      setSelectedChildIds([...selectedChildIds, childId]);
     }
   };
 
@@ -796,6 +907,98 @@ export const GuestManagementScreen = ({ navigation, route }) => {
           )}
         </View>
       </ScrollView>
+
+      {/* Child Selection Modal for CSV Import */}
+      <Modal
+        visible={showChildSelectionModal}
+        onClose={() => {
+          setShowChildSelectionModal(false);
+          setPendingCsvData(null);
+        }}
+        title="Assign Gifts to Children"
+        size="medium"
+        actions={[
+          {
+            label: 'Cancel',
+            onPress: () => {
+              setShowChildSelectionModal(false);
+              setPendingCsvData(null);
+            },
+            variant: 'outline',
+          },
+          {
+            label: 'Import & Assign',
+            onPress: handleConfirmCsvImport,
+            variant: 'primary',
+          },
+        ]}
+      >
+        <View>
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 14 : 12,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+              marginBottom: theme.spacing.md,
+            }}
+          >
+            Select which child(ren) should receive these {pendingCsvData?.parsedGuests?.length || 0} gifts:
+          </Text>
+
+          {children.map((child) => (
+            <TouchableOpacity
+              key={child.id}
+              onPress={() => toggleChildSelection(child.id)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: theme.spacing.sm,
+                paddingHorizontal: theme.spacing.sm,
+                borderRadius: 8,
+                backgroundColor: selectedChildIds.includes(child.id)
+                  ? theme.brandColors.coral + '20'
+                  : 'transparent',
+                marginBottom: theme.spacing.xs,
+              }}
+            >
+              <Ionicons
+                name={selectedChildIds.includes(child.id) ? 'checkbox' : 'square-outline'}
+                size={24}
+                color={
+                  selectedChildIds.includes(child.id)
+                    ? theme.brandColors.coral
+                    : theme.neutralColors.mediumGray
+                }
+              />
+              <Text
+                style={{
+                  marginLeft: theme.spacing.sm,
+                  fontSize: isKidsEdition ? 16 : 14,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: theme.neutralColors.dark,
+                }}
+              >
+                {child.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          {children.length === 0 && (
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 13 : 12,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.mediumGray,
+                fontStyle: 'italic',
+                textAlign: 'center',
+                paddingVertical: theme.spacing.lg,
+              }}
+            >
+              No children found. Please add a child first.
+            </Text>
+          )}
+        </View>
+      </Modal>
 
       <LoadingSpinner visible={loading} message="Processing..." fullScreen />
     </SafeAreaView>

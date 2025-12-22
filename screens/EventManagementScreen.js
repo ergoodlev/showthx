@@ -41,6 +41,14 @@ export const EventManagementScreen = ({ navigation, route }) => {
   const [location, setLocation] = useState(existingEvent?.location || '');
   const [description, setDescription] = useState(existingEvent?.description || '');
 
+  // Email template state (simplified)
+  const [emailSubject, setEmailSubject] = useState(
+    existingEvent?.email_template_subject || 'A Thank You Video from [child_name]!'
+  );
+  const [emailMessage, setEmailMessage] = useState(
+    existingEvent?.email_template_message || 'Hi [name]! [child_name] made a special thank you video just for you. Click below to watch it!'
+  );
+
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -118,6 +126,9 @@ export const EventManagementScreen = ({ navigation, route }) => {
         event_date: formatDateForDB(eventDate),
         location: location || null,
         description: description || null,
+        // Email template fields (simplified)
+        email_template_subject: emailSubject,
+        email_template_message: emailMessage,
       };
 
       console.log('📝 DEBUG: Event data:', eventData);
@@ -279,28 +290,91 @@ export const EventManagementScreen = ({ navigation, route }) => {
             numberOfLines={4}
           />
 
-          {/* Frame Creation Section */}
-          <View style={styles.frameSection}>
-            <View style={styles.frameSectionHeader}>
-              <Ionicons name="image-outline" size={24} color="#06b6d4" />
-              <View style={styles.frameSectionText}>
-                <Text style={styles.frameSectionTitle}>Event Frame</Text>
-                <Text style={styles.frameSectionDesc}>
-                  Create a custom video frame for this event
+          {/* Email Template Section */}
+          <View style={styles.emailSection}>
+            <View style={styles.emailSectionHeader}>
+              <Ionicons name="mail-outline" size={24} color="#06b6d4" />
+              <View style={styles.emailSectionText}>
+                <Text style={styles.emailSectionTitle}>Email Template</Text>
+                <Text style={styles.emailSectionDesc}>
+                  Customize the email guests receive with the video
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
-              style={styles.createFrameButton}
-              onPress={() => navigation?.navigate('FrameCreation', {
-                eventId: existingEvent?.id || null, // Pass eventId for frame assignment
-                eventName: name || 'New Event',
-              })}
-            >
-              <Ionicons name="add-circle" size={20} color="#06b6d4" />
-              <Text style={styles.createFrameText}>Create Frame</Text>
-            </TouchableOpacity>
+
+            {/* Mail merge hint */}
+            <View style={styles.mailMergeHint}>
+              <Text style={styles.mailMergeHintText}>
+                Use <Text style={styles.placeholder}>[name]</Text> for guest name, <Text style={styles.placeholder}>[child_name]</Text> for your child's name, <Text style={styles.placeholder}>[gift_name]</Text> for the gift
+              </Text>
+            </View>
+
+            <TextField
+              label="Email Subject"
+              placeholder="A Thank You Video from [child_name]!"
+              value={emailSubject}
+              onChangeText={setEmailSubject}
+              autoCorrect={true}
+              spellCheck={true}
+            />
+
+            <TextField
+              label="Email Message"
+              placeholder="Hi [name]! [child_name] made a special video just for you..."
+              value={emailMessage}
+              onChangeText={setEmailMessage}
+              multiline={true}
+              numberOfLines={3}
+              autoCorrect={true}
+              spellCheck={true}
+            />
+
+            {/* Preview */}
+            <View style={styles.emailPreview}>
+              <Text style={styles.emailPreviewLabel}>Preview:</Text>
+              <Text style={styles.emailPreviewSubject}>
+                Subject: {emailSubject.replace(/\[child_name\]/gi, 'Emma').replace(/\[name\]/gi, 'Sarah').replace(/\[gift_name\]/gi, 'LEGO Set')}
+              </Text>
+              <Text style={styles.emailPreviewMessage}>
+                {emailMessage.replace(/\[child_name\]/gi, 'Emma').replace(/\[name\]/gi, 'Sarah').replace(/\[gift_name\]/gi, 'LEGO Set')}
+              </Text>
+            </View>
           </View>
+
+          {/* Frame Creation Hint - Show in create mode */}
+          {mode === 'create' && (
+            <View style={styles.frameHint}>
+              <Ionicons name="information-circle-outline" size={20} color="#0891b2" />
+              <Text style={styles.frameHintText}>
+                After saving this event, you'll be able to create a custom video frame.
+              </Text>
+            </View>
+          )}
+
+          {/* Frame Creation Section - Only show when editing existing event */}
+          {mode === 'edit' && existingEvent?.id && (
+            <View style={styles.frameSection}>
+              <View style={styles.frameSectionHeader}>
+                <Ionicons name="image-outline" size={24} color="#06b6d4" />
+                <View style={styles.frameSectionText}>
+                  <Text style={styles.frameSectionTitle}>Event Frame</Text>
+                  <Text style={styles.frameSectionDesc}>
+                    Create a custom video frame for this event
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.createFrameButton}
+                onPress={() => navigation?.navigate('FrameCreation', {
+                  eventId: existingEvent.id,
+                  eventName: name || existingEvent.name,
+                })}
+              >
+                <Ionicons name="add-circle" size={20} color="#06b6d4" />
+                <Text style={styles.createFrameText}>Create Frame</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           <ThankCastButton
             title={mode === 'create' ? 'Create Event' : 'Save Changes'}
@@ -390,6 +464,23 @@ const styles = StyleSheet.create({
   datePicker: {
     height: 216,
   },
+  frameHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFEFF',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#A5F3FC',
+  },
+  frameHintText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0E7490',
+    lineHeight: 18,
+  },
   frameSection: {
     backgroundColor: '#F0FDFA',
     borderRadius: 12,
@@ -432,6 +523,78 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#06b6d4',
+  },
+  // Email template section styles
+  emailSection: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  emailSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  emailSectionText: {
+    flex: 1,
+  },
+  emailSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E40AF',
+    marginBottom: 2,
+  },
+  emailSectionDesc: {
+    fontSize: 13,
+    color: '#60A5FA',
+  },
+  mailMergeHint: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  mailMergeHintText: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 18,
+  },
+  placeholder: {
+    fontWeight: '700',
+    color: '#B45309',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  emailPreview: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emailPreviewLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  emailPreviewSubject: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 6,
+  },
+  emailPreviewMessage: {
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 18,
   },
 });
 

@@ -260,48 +260,84 @@ export const getFrameAssignments = async (templateId) => {
  */
 export const getFrameForGift = async (giftId, childId, eventId, guestId = null) => {
   try {
-    // Build conditions for each level
-    const conditions = [];
+    console.log('🖼️  getFrameForGift called with:', { giftId, childId, eventId, guestId });
 
-    if (giftId) {
-      conditions.push(`gift_id.eq.${giftId}`);
-    }
-    if (guestId) {
-      conditions.push(`guest_id.eq.${guestId}`);
-    }
-    if (childId) {
-      conditions.push(`child_id.eq.${childId}`);
-    }
-    if (eventId) {
-      conditions.push(`event_id.eq.${eventId}`);
-    }
-
-    if (conditions.length === 0) {
-      return { success: true, data: null };
-    }
-
-    const { data, error } = await supabase
+    // Query for frame assignments using hierarchical matching
+    // Priority: gift-specific (100) > guest-specific (75) > child-specific (50) > event-wide (25)
+    let query = supabase
       .from('frame_assignments')
       .select(`
         *,
         frame_templates (*)
       `)
-      .eq('is_active', true)
-      .or(conditions.join(','))
-      .order('priority', { ascending: false })
-      .limit(1)
-      .single();
+      .eq('is_active', true);
 
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+    // Build OR conditions for hierarchical matching
+    // Each level can match if the specific ID matches OR if it's null (broader assignment)
+    const orConditions = [];
 
-    return { success: true, data: data?.frame_templates || null };
+    if (giftId) {
+      orConditions.push(`gift_id.eq.${giftId}`);
+    }
+    if (guestId) {
+      orConditions.push(`guest_id.eq.${guestId}`);
+    }
+    if (childId) {
+      orConditions.push(`child_id.eq.${childId}`);
+    }
+    if (eventId) {
+      orConditions.push(`event_id.eq.${eventId}`);
+    }
+
+    if (orConditions.length === 0) {
+      console.log('ℹ️  No IDs provided, returning null');
+      return { success: true, data: null };
+    }
+
+    console.log('🔍 Querying with OR conditions:', orConditions.join(','));
+
+    query = query.or(orConditions.join(','));
+
+    // Get ALL matching assignments, then pick the highest priority in JavaScript
+    // This is more reliable than relying on Postgres .single() with .order()
+    const { data: allMatches, error } = await query.order('priority', { ascending: false });
+
+    if (error) {
+      console.error('❌ Query error:', { code: error.code, message: error.message, details: error.details });
+      throw error;
+    }
+
+    console.log(`🔍 Found ${allMatches?.length || 0} matching frame assignment(s)`);
+
+    // Pick the highest priority match (first one since we ordered by priority DESC)
+    const bestMatch = allMatches && allMatches.length > 0 ? allMatches[0] : null;
+
+    if (bestMatch) {
+      console.log('✅ Frame found:', {
+        frameId: bestMatch.frame_template_id,
+        frameName: bestMatch.frame_templates?.name,
+        frameShape: bestMatch.frame_templates?.frame_shape,
+        priority: bestMatch.priority,
+        assignmentType: bestMatch.gift_id ? 'gift' : bestMatch.guest_id ? 'guest' : bestMatch.child_id ? 'child' : 'event'
+      });
+      return { success: true, data: bestMatch.frame_templates };
+    } else {
+      console.log('ℹ️  No frame assignment found for this gift/child/event');
+      return { success: true, data: null };
+    }
   } catch (error) {
     // PGRST205 = table not found - this is expected if frame_assignments table doesn't exist yet
     if (error.code === 'PGRST205') {
-      console.log('ℹ️  Frame assignments table not found - frames feature not yet set up in database');
+      console.log('⚠️  Frame assignments table not found - run database/frame_templates_schema.sql in Supabase');
       return { success: true, data: null };
     }
-    console.error('❌ Error getting frame for gift:', error);
+    // PGRST301 = RLS policy violation
+    if (error.code === 'PGRST301' || error.message?.includes('RLS') || error.message?.includes('policy')) {
+      console.error('🚫 RLS Policy Error - Kids cannot access frame assignments!');
+      console.error('   Fix: Run database/fix_frame_rls_for_kids.sql in Supabase');
+      return { success: true, data: null }; // Fail gracefully - video can still be recorded without frame
+    }
+    console.error('❌ Unexpected error getting frame for gift:', error);
     return { success: false, error: error.message, data: null };
   }
 };

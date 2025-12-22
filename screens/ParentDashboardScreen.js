@@ -45,6 +45,8 @@ export const ParentDashboardScreen = ({ navigation }) => {
   const [events, setEvents] = useState([]);
   const [children, setChildren] = useState([]);
   const [pendingVideos, setPendingVideos] = useState([]);
+  const [approvedVideos, setApprovedVideos] = useState([]); // Videos approved but not sent
+  const [sentVideos, setSentVideos] = useState([]); // Videos already sent (can be resent)
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -81,10 +83,16 @@ export const ParentDashboardScreen = ({ navigation }) => {
       if (parentError) throw parentError;
       setParentData(parent);
 
-      // Load events
+      // Load events with gifts and assignments (calculate counts in JavaScript)
       const { data: eventList, error: eventsError } = await supabase
         .from('events')
-        .select('*, gifts:gifts(count)')
+        .select(`
+          *,
+          gifts(
+            id,
+            gift_assignments(children_id)
+          )
+        `)
         .eq('parent_id', user.id)
         .order('event_date', { ascending: true });
 
@@ -131,6 +139,68 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
       if (videosError) throw videosError;
       setPendingVideos(videoList || []);
+
+      // Load approved videos (ready to send)
+      const { data: approvedList, error: approvedError } = await supabase
+        .from('videos')
+        .select(`
+          id,
+          status,
+          created_at,
+          child_id,
+          gift_id,
+          kid:children!videos_child_id_fkey(
+            id,
+            name
+          ),
+          gift:gifts!videos_gift_id_fkey(
+            id,
+            name,
+            giver_name,
+            guest:guests(
+              id,
+              name,
+              email
+            )
+          )
+        `)
+        .eq('parent_id', user.id)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
+
+      if (approvedError) throw approvedError;
+      setApprovedVideos(approvedList || []);
+
+      // Load sent videos (can be resent)
+      const { data: sentList, error: sentError } = await supabase
+        .from('videos')
+        .select(`
+          id,
+          status,
+          created_at,
+          child_id,
+          gift_id,
+          kid:children!videos_child_id_fkey(
+            id,
+            name
+          ),
+          gift:gifts!videos_gift_id_fkey(
+            id,
+            name,
+            giver_name,
+            guest:guests(
+              id,
+              name,
+              email
+            )
+          )
+        `)
+        .eq('parent_id', user.id)
+        .eq('status', 'sent')
+        .order('created_at', { ascending: false });
+
+      if (sentError) throw sentError;
+      setSentVideos(sentList || []);
     } catch (err) {
       console.error('Error loading dashboard:', err);
       setError(err.message || 'Failed to load dashboard data');
@@ -213,6 +283,24 @@ export const ParentDashboardScreen = ({ navigation }) => {
     navigation?.navigate('ParentVideoReview', { videoId: video.id });
   };
 
+  const handleApprovedVideoPress = (video) => {
+    // Navigate directly to SendToGuests for approved videos
+    navigation?.navigate('SendToGuests', {
+      giftId: video.gift_id,
+      giftName: video.gift?.name || 'Gift',
+      videoUri: null, // Will be fetched from database
+    });
+  };
+
+  const handleSentVideoPress = (video) => {
+    // Navigate to SendToGuests for resending sent videos
+    navigation?.navigate('SendToGuests', {
+      giftId: video.gift_id,
+      giftName: video.gift?.name || 'Gift',
+      videoUri: null, // Will be fetched from database
+    });
+  };
+
   const tabHeight = isKidsEdition ? 56 : 48;
   const tabFontSize = isKidsEdition ? 16 : 14;
 
@@ -220,19 +308,32 @@ export const ParentDashboardScreen = ({ navigation }) => {
     <FlatList
       data={events}
       keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <EventCard
-          eventName={item.name}
-          eventType={item.event_type}
-          eventDate={item.event_date}
-          giftCount={item.gifts?.[0]?.count || 0}
-          kidCount={0}
-          onPress={() => handleEventPress(item)}
-          onEdit={() => handleEventEdit(item)}
-          onDelete={() => handleEventDelete(item)}
-          style={{ marginHorizontal: theme.spacing.md }}
-        />
-      )}
+      renderItem={({ item }) => {
+        // Calculate gift count and unique child count from gift assignments
+        const giftCount = item.gifts?.length || 0;
+        const uniqueChildren = new Set();
+        item.gifts?.forEach(gift => {
+          gift.gift_assignments?.forEach(assignment => {
+            if (assignment.children_id) {
+              uniqueChildren.add(assignment.children_id);
+            }
+          });
+        });
+
+        return (
+          <EventCard
+            eventName={item.name}
+            eventType={item.event_type}
+            eventDate={item.event_date}
+            giftCount={giftCount}
+            kidCount={uniqueChildren.size}
+            onPress={() => handleEventPress(item)}
+            onEdit={() => handleEventEdit(item)}
+            onDelete={() => handleEventDelete(item)}
+            style={{ marginHorizontal: theme.spacing.md }}
+          />
+        );
+      }}
       ListHeaderComponent={
         <>
           {error && (
@@ -289,126 +390,220 @@ export const ParentDashboardScreen = ({ navigation }) => {
     />
   );
 
-  const renderVideosTab = () => (
-    <FlatList
-      data={pendingVideos}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <TouchableOpacity
-          onPress={() => handleVideoPress(item)}
-          style={{
-            marginHorizontal: theme.spacing.md,
-            marginVertical: theme.spacing.sm,
-            backgroundColor: theme.neutralColors.white,
-            borderColor: theme.neutralColors.lightGray,
-            borderWidth: 1,
-            borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
-            padding: theme.spacing.md,
-          }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontSize: isKidsEdition ? 16 : 14,
-                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
-                  color: theme.neutralColors.dark,
-                }}
-              >
-                {item.kid?.name || 'Unknown'} - {item.gift?.name || 'Unknown Gift'}
-              </Text>
-              <Text
-                style={{
-                  fontSize: isKidsEdition ? 12 : 11,
-                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                  color: theme.neutralColors.mediumGray,
-                  marginTop: 4,
-                }}
-              >
-                From: {item.gift?.guest?.name || item.gift?.giver_name || 'Unknown'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color={theme.brandColors.coral} />
-          </View>
-          <View
-            style={{
-              marginTop: theme.spacing.sm,
-              paddingTop: theme.spacing.sm,
-              borderTopColor: theme.neutralColors.lightGray,
-              borderTopWidth: 1,
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}
-          >
-            <Ionicons name="alert-circle" size={16} color={theme.semanticColors.warning} style={{ marginRight: 6 }} />
+  // cardType: 'pending' | 'approved' | 'sent'
+  const renderVideoCard = (item, cardType = 'pending') => {
+    const isPending = cardType === 'pending';
+    const isApproved = cardType === 'approved';
+    const isSent = cardType === 'sent';
+
+    const handlePress = () => {
+      if (isPending) return handleVideoPress(item);
+      if (isApproved) return handleApprovedVideoPress(item);
+      if (isSent) return handleSentVideoPress(item);
+    };
+
+    const getBorderColor = () => {
+      if (isPending) return theme.neutralColors.lightGray;
+      if (isApproved) return theme.brandColors.teal;
+      if (isSent) return theme.semanticColors.success;
+    };
+
+    const getIconColor = () => {
+      if (isPending) return theme.brandColors.coral;
+      if (isApproved) return theme.brandColors.teal;
+      if (isSent) return theme.semanticColors.success;
+    };
+
+    const getStatusIcon = () => {
+      if (isPending) return 'alert-circle';
+      if (isApproved) return 'checkmark-circle';
+      if (isSent) return 'checkmark-done-circle';
+    };
+
+    const getStatusColor = () => {
+      if (isPending) return theme.semanticColors.warning;
+      if (isApproved) return theme.brandColors.teal;
+      if (isSent) return theme.semanticColors.success;
+    };
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        onPress={handlePress}
+        style={{
+          marginHorizontal: theme.spacing.md,
+          marginVertical: theme.spacing.sm,
+          backgroundColor: theme.neutralColors.white,
+          borderColor: getBorderColor(),
+          borderWidth: isPending ? 1 : 2,
+          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+          padding: theme.spacing.md,
+        }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 16 : 14,
+                fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                color: theme.neutralColors.dark,
+              }}
+            >
+              {item.kid?.name || 'Unknown'} - {item.gift?.name || 'Unknown Gift'}
+            </Text>
             <Text
               style={{
                 fontSize: isKidsEdition ? 12 : 11,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                color: theme.semanticColors.warning,
+                color: theme.neutralColors.mediumGray,
+                marginTop: 4,
               }}
             >
-              Awaiting your review
+              From: {item.gift?.guest?.name || item.gift?.giver_name || 'Unknown'}
             </Text>
           </View>
-        </TouchableOpacity>
-      )}
-      ListHeaderComponent={
-        <>
-          {error && (
-            <ErrorMessage
-              message={error}
-              onDismiss={() => setError(null)}
-              style={{ margin: theme.spacing.md }}
-            />
-          )}
-          <View
+          <Ionicons name="chevron-forward" size={24} color={getIconColor()} />
+        </View>
+        <View
+          style={{
+            marginTop: theme.spacing.sm,
+            paddingTop: theme.spacing.sm,
+            borderTopColor: theme.neutralColors.lightGray,
+            borderTopWidth: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <Ionicons
+            name={getStatusIcon()}
+            size={16}
+            color={getStatusColor()}
+            style={{ marginRight: 6 }}
+          />
+          <Text
             style={{
-              paddingHorizontal: theme.spacing.md,
-              paddingVertical: theme.spacing.md,
-              marginBottom: theme.spacing.sm,
+              fontSize: isKidsEdition ? 12 : 11,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: getStatusColor(),
             }}
           >
+          {isPending ? 'Awaiting your review' : isApproved ? 'Tap to send to guest' : 'Sent - tap to resend'}
+        </Text>
+      </View>
+    </TouchableOpacity>
+    );
+  };
+
+  const renderVideosTab = () => (
+    <ScrollView
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={{ paddingTop: theme.spacing.md, paddingBottom: 40 }}
+    >
+      {error && (
+        <ErrorMessage
+          message={error}
+          onDismiss={() => setError(null)}
+          style={{ margin: theme.spacing.md }}
+        />
+      )}
+
+      {/* Pending Review Section */}
+      <View style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.md }}>
+        <Text
+          style={{
+            color: theme.neutralColors.dark,
+            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+            fontSize: isKidsEdition ? 16 : 14,
+            fontWeight: '600',
+          }}
+        >
+          {pendingVideos.length === 0
+            ? 'No pending videos'
+            : pendingVideos.length + ' pending review' + (pendingVideos.length !== 1 ? 's' : '')}
+        </Text>
+      </View>
+
+      {pendingVideos.length > 0 ? (
+        pendingVideos.map(item => renderVideoCard(item, 'pending'))
+      ) : !loading && (
+        <View style={{ paddingHorizontal: theme.spacing.md, paddingVertical: 40, alignItems: 'center' }}>
+          <Ionicons
+            name="film-outline"
+            size={48}
+            color={theme.neutralColors.lightGray}
+            style={{ marginBottom: theme.spacing.sm }}
+          />
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 14 : 12,
+              color: theme.neutralColors.mediumGray,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              textAlign: 'center',
+            }}
+          >
+            No videos awaiting review
+          </Text>
+        </View>
+      )}
+
+      {/* Ready to Send Section */}
+      {approvedVideos.length > 0 && (
+        <>
+          <View style={{ paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.lg, paddingBottom: theme.spacing.md }}>
             <Text
               style={{
-                color: theme.neutralColors.dark,
+                color: theme.brandColors.teal,
                 fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
                 fontSize: isKidsEdition ? 16 : 14,
                 fontWeight: '600',
               }}
             >
-              {pendingVideos.length === 0
-                ? 'No pending videos'
-                : pendingVideos.length + ' pending review' + (pendingVideos.length !== 1 ? 's' : '')}
+              {approvedVideos.length + ' ready to send'}
             </Text>
-          </View>
-        </>
-      }
-      ListEmptyComponent={
-        !loading ? (
-          <View style={{ paddingHorizontal: theme.spacing.md, paddingVertical: 60, alignItems: 'center' }}>
-            <Ionicons
-              name="film-outline"
-              size={64}
-              color={theme.neutralColors.lightGray}
-              style={{ marginBottom: theme.spacing.md }}
-            />
             <Text
               style={{
-                fontSize: isKidsEdition ? 16 : 14,
-                color: theme.neutralColors.mediumGray,
+                fontSize: isKidsEdition ? 12 : 11,
                 fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-                textAlign: 'center',
+                color: theme.neutralColors.mediumGray,
+                marginTop: 4,
               }}
             >
-              No videos awaiting review
+              Tap to send these approved videos to guests
             </Text>
           </View>
-        ) : null
-      }
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      contentContainerStyle={{ paddingTop: theme.spacing.md }}
-    />
+          {approvedVideos.map(item => renderVideoCard(item, 'approved'))}
+        </>
+      )}
+
+      {/* Sent Videos Section (can resend) */}
+      {sentVideos.length > 0 && (
+        <>
+          <View style={{ paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.lg, paddingBottom: theme.spacing.md }}>
+            <Text
+              style={{
+                color: theme.semanticColors.success,
+                fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                fontSize: isKidsEdition ? 16 : 14,
+                fontWeight: '600',
+              }}
+            >
+              {sentVideos.length + ' sent'}
+            </Text>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.mediumGray,
+                marginTop: 4,
+              }}
+            >
+              Tap to resend to guests if needed
+            </Text>
+          </View>
+          {sentVideos.map(item => renderVideoCard(item, 'sent'))}
+        </>
+      )}
+    </ScrollView>
   );
 
   const renderSettingsTab = () => (

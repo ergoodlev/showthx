@@ -56,17 +56,23 @@ export const uploadVideo = async (videoUri, giftId, parentId) => {
 
     console.log('✅ Upload successful:', data);
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
+    // Generate signed URL for private bucket (24 hour expiry)
+    const { data: urlData, error: urlError } = await supabase.storage
       .from(VIDEOS_BUCKET)
-      .getPublicUrl(filename);
+      .createSignedUrl(filename, 86400); // 24 hours in seconds
 
-    console.log('🔗 Video URL:', urlData.publicUrl);
+    if (urlError) {
+      console.error('❌ Failed to create signed URL:', urlError);
+      throw urlError;
+    }
+
+    console.log('🔗 Video signed URL created (expires in 24 hours)');
 
     return {
       success: true,
-      url: urlData.publicUrl,
+      url: urlData.signedUrl,
       path: filename,
+      expiresAt: new Date(Date.now() + 86400 * 1000).toISOString(),
     };
   } catch (error) {
     console.error('❌ Error uploading video:', error);
@@ -112,15 +118,19 @@ export const createSignedUrl = async (videoPath, expiresIn = 86400) => {
 };
 
 /**
- * Get video download URL
+ * Get video download URL (generates fresh signed URL)
  */
 export const getVideoUrl = async (videoPath) => {
   try {
-    const { data } = supabase.storage
+    const { data, error } = await supabase.storage
       .from(VIDEOS_BUCKET)
-      .getPublicUrl(videoPath);
+      .createSignedUrl(videoPath, 86400); // 24 hours
 
-    return { url: data.publicUrl, error: null };
+    if (error) {
+      throw error;
+    }
+
+    return { url: data.signedUrl, error: null };
   } catch (error) {
     console.error('Error getting video URL:', error);
     return { url: null, error: error.message };

@@ -22,6 +22,7 @@ import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { supabase } from '../supabaseClient';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -265,18 +266,40 @@ export const FrameCreationScreen = ({ navigation, route }) => {
 
         // Create assignment if event specified
         if (eventId) {
-          const { error: assignError } = await supabase
+          console.log('🔗 Creating frame assignment:', {
+            frameId,
+            eventId,
+            childId: childId || null,
+            priority: childId ? 50 : 25,
+          });
+
+          const { data: assignmentData, error: assignError } = await supabase
             .from('frame_assignments')
             .insert({
               frame_template_id: frameId,
               event_id: eventId,
               child_id: childId || null,
               priority: childId ? 50 : 25,
-            });
+              is_active: true,
+            })
+            .select();
 
           if (assignError) {
-            console.warn('Failed to create assignment:', assignError);
+            console.error('❌ Failed to create frame assignment:', {
+              code: assignError.code,
+              message: assignError.message,
+              details: assignError.details,
+            });
+            // Show warning to user but don't block frame creation
+            Alert.alert(
+              'Assignment Warning',
+              'Frame template saved but could not be assigned to the event. You can assign it manually later.\n\nError: ' + assignError.message
+            );
+          } else {
+            console.log('✅ Frame assignment created:', assignmentData);
           }
+        } else {
+          console.log('ℹ️  No eventId provided, skipping assignment creation');
         }
       }
 
@@ -302,141 +325,85 @@ export const FrameCreationScreen = ({ navigation, route }) => {
     }
   };
 
-  // Render frame preview
+  // Render frame preview with actual SVG frame overlay
   const renderFramePreview = () => {
-    const isPolaroid = selectedShape === 'polaroid';
-    const frameBorderWidth = currentShape.borderWidth || 4;
-
-    // Get special shape styles - make ALL frames look bold and prominent
-    const getSpecialShapeStyles = () => {
-      // Base shadow for all frames
-      const baseShadow = {
-        shadowColor: frameColor,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: currentShape.shadowOpacity || 0.4,
-        shadowRadius: currentShape.shadowRadius || 10,
-        elevation: 8,
-      };
-
-      if (currentShape.isWavy) {
-        return {
-          ...baseShadow,
-          borderStyle: 'dashed',
-          shadowOpacity: 0.6,
-        };
-      }
-      if (currentShape.isNeon) {
-        return {
-          shadowColor: frameColor,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 1.0,
-          shadowRadius: 20,
-          elevation: 15,
-        };
-      }
-      if (currentShape.isStar || currentShape.isSpikey) {
-        return {
-          shadowColor: frameColor,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.8,
-          shadowRadius: 15,
-          elevation: 12,
-        };
-      }
-      if (currentShape.isCloud) {
-        return {
-          ...baseShadow,
-          shadowOpacity: 0.5,
-          shadowRadius: 20,
-        };
-      }
-      if (currentShape.isHeart) {
-        return {
-          ...baseShadow,
-          shadowColor: '#FF6B6B',
-          shadowOpacity: 0.6,
-          shadowRadius: 15,
-        };
-      }
-      if (currentShape.isScalloped) {
-        return {
-          ...baseShadow,
-          shadowOpacity: 0.5,
-        };
-      }
-      if (currentShape.hasDoubleBorder) {
-        return {
-          ...baseShadow,
-          borderWidth: currentShape.borderWidth + currentShape.outerBorderWidth,
-        };
-      }
-      if (currentShape.isGradient) {
-        return {
-          ...baseShadow,
-          shadowOpacity: 0.7,
-        };
-      }
-      return baseShadow;
+    // Create mock frameTemplate object for preview
+    const mockFrameTemplate = {
+      id: 'preview',
+      name: frameName || 'Preview',
+      frame_shape: selectedShape,
+      primary_color: frameColor,
+      border_width: currentShape.borderWidth || 4,
+      border_radius: currentShape.borderRadius || 0,
+      custom_text: customText,
+      custom_text_position: textPosition,
+      custom_text_color: textColor,
+      custom_text_font: textFont,
+      frame_type: 'custom',
     };
 
     return (
       <View style={styles.previewContainer}>
+        {/* Preview container with aspect ratio for vertical video */}
         <View
-          style={[
-            styles.framePreview,
-            {
-              borderRadius: currentShape.borderRadius,
-              borderColor: frameColor,
-              borderWidth: frameBorderWidth,
-              paddingBottom: isPolaroid ? 40 : 0,
-            },
-            getSpecialShapeStyles(),
-          ]}
+          style={{
+            backgroundColor: '#000000',
+            aspectRatio: 9 / 16,
+            width: '70%',
+            alignSelf: 'center',
+            borderRadius: 12,
+            overflow: 'hidden',
+            position: 'relative',
+          }}
         >
           {/* Mock video content area */}
           <LinearGradient
             colors={['#1e293b', '#0f172a']}
-            style={[
-              styles.previewContent,
-              { borderRadius: Math.max(0, currentShape.borderRadius - 4) },
-            ]}
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 0,
+            }}
           >
             <Ionicons name="videocam" size={40} color="#64748b" />
-            <Text style={styles.previewPlaceholder}>Video Preview</Text>
+            <Text style={styles.previewPlaceholder}>Frame Preview</Text>
           </LinearGradient>
 
-          {/* Custom text preview */}
+          {/* Actual CustomFrameOverlay component - same as used in videos */}
+          <View style={[StyleSheet.absoluteFill, { zIndex: 10 }]} pointerEvents="none">
+            <CustomFrameOverlay frameTemplate={mockFrameTemplate} />
+          </View>
+
+          {/* Custom text overlay */}
           {customText && (
             <View
               style={[
                 styles.textOverlay,
                 textPosition === 'top' ? styles.textTop : styles.textBottom,
+                { zIndex: 15 },
               ]}
+              pointerEvents="none"
             >
-              <Text
-                style={[
-                  styles.customTextPreview,
-                  { color: textColor },
-                  textFont === 'playful' && styles.fontPlayful,
-                  textFont === 'elegant' && styles.fontElegant,
-                  textFont === 'bold' && styles.fontBold,
-                ]}
-              >
-                {customText}
-              </Text>
-            </View>
-          )}
-
-          {/* Polaroid caption area */}
-          {isPolaroid && (
-            <View style={styles.polaroidCaption}>
-              <Text style={styles.polaroidCaptionText}>ShowThx</Text>
+              <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+                <Text
+                  style={[
+                    styles.customTextPreview,
+                    { color: textColor },
+                    textFont === 'playful' && styles.fontPlayful,
+                    textFont === 'elegant' && styles.fontElegant,
+                    textFont === 'bold' && styles.fontBold,
+                  ]}
+                >
+                  {customText}
+                </Text>
+              </View>
             </View>
           )}
         </View>
 
         <Text style={styles.previewHint}>
-          Kids will decorate this frame with emojis and textures
+          Preview of how the frame will look in videos
         </Text>
       </View>
     );

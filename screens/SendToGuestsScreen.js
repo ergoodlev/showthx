@@ -11,9 +11,8 @@ import {
   TouchableOpacity,
   SafeAreaView,
   FlatList,
-  Switch,
-  Modal,
   TextInput,
+  Modal,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -23,7 +22,7 @@ import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { supabase } from '../supabaseClient';
-import { sendVideoToGuests, getDefaultVideoEmailTemplate } from '../services/emailService';
+import { sendVideoToGuests } from '../services/emailService';
 import { updateGift } from '../services/databaseService';
 import { sendVideoViaSMS, checkSMSAvailable } from '../services/smsService';
 
@@ -42,10 +41,21 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [smsAvailable, setSmsAvailable] = useState(false);
   const [videoUrl, setVideoUrl] = useState(videoUri); // Will be replaced with database URL
 
-  // Email customization state
-  const [showEmailCustomizer, setShowEmailCustomizer] = useState(false);
-  const [emailTemplate, setEmailTemplate] = useState(() => getDefaultVideoEmailTemplate(giftName));
+  // Email template state (simplified - just subject and message)
+  const [emailTemplate, setEmailTemplate] = useState({
+    subject: 'A Thank You Video for You!',
+    message: 'Someone special made a thank you video just for you!',
+  });
   const [childName, setChildName] = useState('');
+  const [parentName, setParentName] = useState('');
+  const [eventId, setEventId] = useState(null);
+  const [eventName, setEventName] = useState('');
+
+  // Email editor state (for one-time edits before sending)
+  const [showEmailEditor, setShowEmailEditor] = useState(false);
+  const [editedSubject, setEditedSubject] = useState('');
+  const [editedMessage, setEditedMessage] = useState('');
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
 
   // Check SMS availability on mount
   useEffect(() => {
@@ -62,14 +72,44 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
       try {
         setFetchingGuests(true);
 
-        // First, get the gift to find guest_id and parent_id
+        console.log('📧 SendToGuests: Starting data fetch...');
+        console.log('📧 Gift ID from route:', giftId);
+        console.log('📧 Gift Name from route:', giftName);
+        console.log('📧 Video URI from route:', videoUri);
+
+        if (!giftId) {
+          console.error('❌ No gift ID provided!');
+          alert('Error: No gift ID provided. Please go back and try again.');
+          setFetchingGuests(false);
+          return;
+        }
+
+        // First, get the gift to find guest_id, parent_id, and event_id
         const { data: giftData, error: giftError } = await supabase
           .from('gifts')
-          .select('parent_id, guest_id, video_url')
+          .select(`
+            parent_id,
+            guest_id,
+            event_id,
+            events:event_id (
+              name,
+              email_template_subject,
+              email_template_greeting,
+              email_template_message,
+              email_template_gift_label,
+              email_template_button_text,
+              email_template_sign_off
+            )
+          `)
           .eq('id', giftId)
           .single();
 
-        if (giftError) throw giftError;
+        if (giftError) {
+          console.error('❌ Error fetching gift:', giftError);
+          throw giftError;
+        }
+
+        console.log('✅ Gift data loaded:', { parent_id: giftData?.parent_id, guest_id: giftData?.guest_id, event_id: giftData?.event_id });
 
         if (!giftData) {
           console.warn('Gift not found');
@@ -78,10 +118,143 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           return;
         }
 
-        // Set the video URL from the gift record
-        if (giftData.video_url) {
-          setVideoUrl(giftData.video_url);
-          console.log('✅ Loaded video URL from gift');
+        // Set event info and load simplified email template
+        if (giftData.events) {
+          setEventId(giftData.event_id);
+          setEventName(giftData.events.name || '');
+
+          // Load simplified email template from event (just subject + message)
+          const loadedSubject = giftData.events.email_template_subject || 'A Thank You Video for You!';
+          const loadedMessage = giftData.events.email_template_message || 'Someone special made a thank you video just for you!';
+          setEmailTemplate({
+            subject: loadedSubject,
+            message: loadedMessage,
+          });
+          // Also set editable versions (for one-time edits)
+          setEditedSubject(loadedSubject);
+          setEditedMessage(loadedMessage);
+          console.log('✅ Loaded email template from event:', giftData.events.name);
+        }
+
+        // Get video URL and child info from videos table (videos are linked by gift_id)
+        // First try approved videos, then fall back to any video for this gift
+        let videoData = null;
+        let videoError = null;
+
+        // Get video for this gift - simplified query without foreign key join
+        // (The children join was causing query failures in some cases)
+        console.log('🔍 Looking for video with gift_id:', giftId);
+
+        // Using .or() instead of .in() for better compatibility
+        const { data: approvedVideo, error: approvedError } = await supabase
+          .from('videos')
+          .select('id, video_url, storage_path, status, child_id')
+          .eq('gift_id', giftId)
+          .or('status.eq.approved,status.eq.sent')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        console.log('🔍 Video query result:', { data: approvedVideo, error: approvedError });
+
+        if (approvedError) {
+          console.error('❌ Error querying approved video:', approvedError);
+          console.error('❌ Error details:', JSON.stringify(approvedError, null, 2));
+        }
+
+        if (approvedVideo) {
+          videoData = approvedVideo;
+          console.log('✅ Found video for gift:', { id: approvedVideo.id, status: approvedVideo.status });
+
+          // Fetch child name separately (to avoid join issues)
+          if (approvedVideo.child_id) {
+            const { data: childData, error: childError } = await supabase
+              .from('children')
+              .select('name')
+              .eq('id', approvedVideo.child_id)
+              .maybeSingle();
+
+            if (!childError && childData) {
+              videoData.children = childData;
+              console.log('✅ Loaded child name:', childData.name);
+            } else {
+              console.warn('⚠️ Could not load child name:', childError?.message);
+            }
+          }
+        } else {
+          // Log what videos exist for debugging
+          const { data: allVideos } = await supabase
+            .from('videos')
+            .select('id, status, gift_id, created_at')
+            .eq('gift_id', giftId);
+
+          console.warn('⚠️ No approved/sent video found for this gift');
+          console.log('📹 Gift ID being searched:', giftId);
+          console.log('📹 All videos for this gift:', allVideos || 'none');
+
+          // If there's a video but with different status, log it
+          if (allVideos && allVideos.length > 0) {
+            console.log('📹 Video statuses found:', allVideos.map(v => v.status));
+          }
+        }
+
+        if (videoData) {
+          console.log('📹 Video data found:', {
+            id: videoData.id,
+            status: videoData.status,
+            has_video_url: !!videoData.video_url,
+            has_storage_path: !!videoData.storage_path,
+            child_id: videoData.child_id,
+          });
+
+          // Set child name for mail merge
+          if (videoData.children) {
+            setChildName(videoData.children.name || '');
+            console.log('✅ Loaded child name for mail merge:', videoData.children.name);
+          }
+
+          // Try to get fresh signed URL if storage path exists
+          if (videoData.storage_path) {
+            console.log('🔄 Regenerating signed URL for sharing');
+            const storagePath = videoData.storage_path;
+
+            // Import getVideoUrl at top of file if not already imported
+            const { data: signedUrlData, error: urlError } = await supabase.storage
+              .from('videos')
+              .createSignedUrl(storagePath, 86400); // 24 hours
+
+            if (!urlError && signedUrlData) {
+              setVideoUrl(signedUrlData.signedUrl);
+              console.log('✅ Fresh signed URL generated for sharing');
+            } else {
+              setVideoUrl(videoData.video_url);
+              console.log('⚠️ Using stored video URL (failed to generate fresh signed URL)');
+            }
+          } else {
+            setVideoUrl(videoData.video_url);
+            console.log('✅ Loaded video URL from videos table');
+          }
+        } else {
+          console.warn('⚠️ No approved video found for this gift');
+          // Show alert to user about missing video
+          alert('No approved video found for this gift. The video may have been deleted or is still pending approval. Please go back and check the video status.');
+        }
+
+        // Get parent name for mail merge
+        if (giftData.parent_id) {
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user) {
+            const { data: parentData } = await supabase
+              .from('users')
+              .select('name')
+              .eq('id', userData.user.id)
+              .single();
+
+            if (parentData) {
+              setParentName(parentData.name || '');
+              console.log('✅ Loaded parent name for mail merge:', parentData.name);
+            }
+          }
         }
 
         // Only fetch the guest assigned to this gift
@@ -139,21 +312,38 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
       return;
     }
 
+    if (!videoUrl) {
+      alert('No video available to send. Please make sure the video has been approved first.');
+      return;
+    }
+
     try {
       setLoading(true);
 
       const selectedGuestData = guests.filter(g => selectedGuests.has(g.id));
 
       if (sendMethod === 'email') {
-        // Send via email with custom template
-        const selectedGuestEmails = selectedGuestData.map(g => g.email);
+        // Send via email with custom template and mail merge
+        // Pass guest objects with email and name for personalization
+        const guestsWithNames = selectedGuestData.map(g => ({
+          email: g.email,
+          name: g.name || '',
+        }));
+
+        // Use edited values (which may have been customized by user for this send)
+        const customizedTemplate = {
+          subject: editedSubject || emailTemplate.subject,
+          message: editedMessage || emailTemplate.message,
+        };
 
         const emailResult = await sendVideoToGuests(
-          selectedGuestEmails,
+          guestsWithNames, // Pass guest objects with names
           giftName,
-          videoUrl, // Use public video URL from database
+          videoUrl, // Use video URL from database
           '30 days',
-          emailTemplate // Pass custom template
+          customizedTemplate, // Use the edited template
+          childName, // Pass child name for mail merge
+          parentName // Pass parent name for mail merge
         );
 
         if (!emailResult.success) {
@@ -188,16 +378,29 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         }
       }
 
-      // Update gift status to 'sent'
+      // Update gift status to 'sent' (only update status, other columns may not exist)
       const { error } = await updateGift(giftId, {
         status: 'sent',
-        sent_at: new Date().toISOString(),
-        sent_to_count: selectedGuests.size,
       });
 
       if (error) {
-        console.error('Error updating gift status:', error);
-        throw new Error(error);
+        // Log but don't throw - email was already sent successfully
+        console.warn('⚠️ Error updating gift status (email was sent successfully):', error);
+      } else {
+        console.log('✅ Gift status updated to sent');
+      }
+
+      // Also update video status to 'sent'
+      const { error: videoError } = await supabase
+        .from('videos')
+        .update({ status: 'sent' })
+        .eq('gift_id', giftId)
+        .eq('status', 'approved');
+
+      if (videoError) {
+        console.warn('⚠️ Error updating video status:', videoError);
+      } else {
+        console.log('✅ Video status updated to sent');
       }
 
       // Navigate to success
@@ -207,8 +410,15 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         sendMethod,
       });
     } catch (error) {
-      console.error('Error sending to guests:', error);
-      alert('Failed to send videos. Please try again.');
+      console.error('❌ Error sending to guests:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error name:', error.name);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+
+      alert(`Failed to send videos: ${error.message || error}`);
       setLoading(false);
     }
   };
@@ -406,34 +616,154 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             </Text>
           )}
 
-          {/* Customize Email Button */}
+          {/* Email Editor Section */}
           {sendMethod === 'email' && (
-            <TouchableOpacity
-              onPress={() => setShowEmailCustomizer(true)}
+            <View
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
                 marginTop: theme.spacing.md,
-                paddingVertical: theme.spacing.sm,
+                padding: theme.spacing.md,
                 borderWidth: 1,
                 borderColor: theme.brandColors.teal,
-                borderRadius: 8,
-                backgroundColor: 'rgba(0, 166, 153, 0.05)',
+                borderRadius: 12,
+                backgroundColor: '#f0fdfa',
               }}
             >
-              <Ionicons name="create-outline" size={18} color={theme.brandColors.teal} />
+              {/* From info */}
               <Text
                 style={{
-                  fontSize: isKidsEdition ? 13 : 12,
+                  fontSize: 11,
                   fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                  color: theme.brandColors.teal,
-                  marginLeft: 6,
+                  color: theme.neutralColors.mediumGray,
+                  marginBottom: theme.spacing.sm,
                 }}
               >
-                Customize Email Message
+                From: {childName && parentName ? `${childName} and ${parentName}` : childName || parentName || 'ShowThx'} via ShowThx
               </Text>
-            </TouchableOpacity>
+
+              {/* Subject input */}
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: theme.neutralColors.dark,
+                  marginBottom: 4,
+                }}
+              >
+                Subject:
+              </Text>
+              <TextInput
+                value={editedSubject}
+                onChangeText={setEditedSubject}
+                placeholder="Email subject..."
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: theme.neutralColors.lightGray,
+                  borderRadius: 8,
+                  padding: theme.spacing.sm,
+                  fontSize: 14,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.neutralColors.dark,
+                  marginBottom: theme.spacing.md,
+                }}
+                placeholderTextColor={theme.neutralColors.mediumGray}
+              />
+
+              {/* Message input */}
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: theme.neutralColors.dark,
+                  marginBottom: 4,
+                }}
+              >
+                Message:
+              </Text>
+              <TextInput
+                value={editedMessage}
+                onChangeText={setEditedMessage}
+                placeholder="Your personalized message..."
+                multiline
+                numberOfLines={4}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: theme.neutralColors.lightGray,
+                  borderRadius: 8,
+                  padding: theme.spacing.sm,
+                  fontSize: 14,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.neutralColors.dark,
+                  minHeight: 100,
+                  textAlignVertical: 'top',
+                  marginBottom: theme.spacing.sm,
+                }}
+                placeholderTextColor={theme.neutralColors.mediumGray}
+              />
+
+              {/* Mail merge hint */}
+              <View
+                style={{
+                  backgroundColor: '#FEF3C7',
+                  borderRadius: 6,
+                  padding: 8,
+                  marginBottom: theme.spacing.sm,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                    color: '#92400E',
+                    lineHeight: 16,
+                  }}
+                >
+                  Placeholders: <Text style={{ fontWeight: '700' }}>[name]</Text> = guest name, <Text style={{ fontWeight: '700' }}>[child_name]</Text> = {childName || 'your child'}, <Text style={{ fontWeight: '700' }}>[gift_name]</Text> = {giftName || 'gift'}
+                </Text>
+              </View>
+
+              {/* Preview button */}
+              <TouchableOpacity
+                onPress={() => setShowEmailPreview(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: theme.spacing.sm,
+                  borderWidth: 1,
+                  borderColor: theme.brandColors.teal,
+                  borderRadius: 8,
+                  backgroundColor: '#FFFFFF',
+                }}
+              >
+                <Ionicons name="eye-outline" size={18} color={theme.brandColors.teal} />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.brandColors.teal,
+                    marginLeft: 6,
+                  }}
+                >
+                  Preview Email
+                </Text>
+              </TouchableOpacity>
+
+              {/* Note about one-time edits */}
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.neutralColors.mediumGray,
+                  textAlign: 'center',
+                  marginTop: 8,
+                  fontStyle: 'italic',
+                }}
+              >
+                Edits here are for this send only. To change the default, edit the event.
+              </Text>
+            </View>
           )}
         </View>
 
@@ -500,7 +830,8 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             data={guests}
             renderItem={renderGuestCard}
             keyExtractor={item => item.id}
-            scrollEnabled={false}
+            scrollEnabled
+            nestedScrollEnabled={true}
             contentContainerStyle={{ paddingBottom: theme.spacing.lg }}
           />
         ) : (
@@ -588,308 +919,281 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
 
       <LoadingSpinner visible={loading} message="Sending videos..." fullScreen />
 
-      {/* Email Customization Modal */}
+      {/* Email Preview Modal */}
       <Modal
-        visible={showEmailCustomizer}
+        visible={showEmailPreview}
         animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowEmailCustomizer(false)}
+        transparent={true}
+        onRequestClose={() => setShowEmailPreview(false)}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            padding: theme.spacing.md,
+          }}
+        >
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
+            style={{ flex: 1, justifyContent: 'center' }}
           >
-            {/* Header */}
             <View
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingHorizontal: theme.spacing.md,
-                paddingVertical: theme.spacing.md,
-                borderBottomWidth: 1,
-                borderBottomColor: theme.neutralColors.lightGray,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 16,
+                maxHeight: '85%',
+                overflow: 'hidden',
               }}
             >
-              <TouchableOpacity onPress={() => setShowEmailCustomizer(false)}>
-                <Text style={{ fontSize: 16, color: theme.neutralColors.mediumGray }}>Cancel</Text>
-              </TouchableOpacity>
-              <Text
-                style={{
-                  fontSize: isKidsEdition ? 18 : 16,
-                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                  color: theme.neutralColors.dark,
-                }}
-              >
-                Customize Email
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowEmailCustomizer(false);
-                }}
-              >
-                <Text style={{ fontSize: 16, color: theme.brandColors.teal, fontWeight: '600' }}>Done</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ flex: 1, padding: theme.spacing.md }}>
-              {/* Subject */}
-              <View style={{ marginBottom: theme.spacing.lg }}>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 14 : 12,
-                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: theme.neutralColors.dark,
-                    marginBottom: theme.spacing.sm,
-                  }}
-                >
-                  Email Subject
-                </Text>
-                <TextInput
-                  value={emailTemplate.subject}
-                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, subject: text })}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.neutralColors.lightGray,
-                    borderRadius: 8,
-                    padding: theme.spacing.md,
-                    fontSize: 14,
-                    color: theme.neutralColors.dark,
-                  }}
-                  placeholder="Email subject line"
-                />
-              </View>
-
-              {/* Greeting */}
-              <View style={{ marginBottom: theme.spacing.lg }}>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 14 : 12,
-                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: theme.neutralColors.dark,
-                    marginBottom: theme.spacing.sm,
-                  }}
-                >
-                  Greeting/Headline
-                </Text>
-                <TextInput
-                  value={emailTemplate.greeting}
-                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, greeting: text })}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.neutralColors.lightGray,
-                    borderRadius: 8,
-                    padding: theme.spacing.md,
-                    fontSize: 14,
-                    color: theme.neutralColors.dark,
-                  }}
-                  placeholder="Email headline"
-                />
-              </View>
-
-              {/* Message */}
-              <View style={{ marginBottom: theme.spacing.lg }}>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 14 : 12,
-                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: theme.neutralColors.dark,
-                    marginBottom: theme.spacing.sm,
-                  }}
-                >
-                  Message
-                </Text>
-                <TextInput
-                  value={emailTemplate.message}
-                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, message: text })}
-                  multiline
-                  numberOfLines={3}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.neutralColors.lightGray,
-                    borderRadius: 8,
-                    padding: theme.spacing.md,
-                    fontSize: 14,
-                    color: theme.neutralColors.dark,
-                    minHeight: 80,
-                    textAlignVertical: 'top',
-                  }}
-                  placeholder="Your message to guests"
-                />
-              </View>
-
-              {/* Gift Label */}
-              <View style={{ marginBottom: theme.spacing.lg }}>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 14 : 12,
-                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: theme.neutralColors.dark,
-                    marginBottom: theme.spacing.sm,
-                  }}
-                >
-                  Gift Label
-                </Text>
-                <TextInput
-                  value={emailTemplate.giftLabel}
-                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, giftLabel: text })}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.neutralColors.lightGray,
-                    borderRadius: 8,
-                    padding: theme.spacing.md,
-                    fontSize: 14,
-                    color: theme.neutralColors.dark,
-                  }}
-                  placeholder="e.g., Thank you for: [Gift Name]"
-                />
-              </View>
-
-              {/* Button Text */}
-              <View style={{ marginBottom: theme.spacing.lg }}>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 14 : 12,
-                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: theme.neutralColors.dark,
-                    marginBottom: theme.spacing.sm,
-                  }}
-                >
-                  Button Text
-                </Text>
-                <TextInput
-                  value={emailTemplate.buttonText}
-                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, buttonText: text })}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.neutralColors.lightGray,
-                    borderRadius: 8,
-                    padding: theme.spacing.md,
-                    fontSize: 14,
-                    color: theme.neutralColors.dark,
-                  }}
-                  placeholder="e.g., Watch the Video"
-                />
-              </View>
-
-              {/* Sign Off */}
-              <View style={{ marginBottom: theme.spacing.lg }}>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 14 : 12,
-                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: theme.neutralColors.dark,
-                    marginBottom: theme.spacing.sm,
-                  }}
-                >
-                  Sign Off
-                </Text>
-                <TextInput
-                  value={emailTemplate.signOff}
-                  onChangeText={(text) => setEmailTemplate({ ...emailTemplate, signOff: text })}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.neutralColors.lightGray,
-                    borderRadius: 8,
-                    padding: theme.spacing.md,
-                    fontSize: 14,
-                    color: theme.neutralColors.dark,
-                  }}
-                  placeholder="e.g., With gratitude,"
-                />
-              </View>
-
-              {/* Reset to Default */}
-              <TouchableOpacity
-                onPress={() => setEmailTemplate(getDefaultVideoEmailTemplate(giftName))}
+              {/* Modal Header */}
+              <View
                 style={{
                   flexDirection: 'row',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingVertical: theme.spacing.md,
-                  marginBottom: theme.spacing.xl,
+                  padding: theme.spacing.md,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.neutralColors.lightGray,
+                  backgroundColor: theme.brandColors.teal,
                 }}
               >
-                <Ionicons name="refresh-outline" size={18} color={theme.neutralColors.mediumGray} />
                 <Text
                   style={{
-                    fontSize: 14,
-                    color: theme.neutralColors.mediumGray,
-                    marginLeft: 6,
+                    fontSize: 16,
+                    fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                    color: '#FFFFFF',
                   }}
                 >
-                  Reset to Default
+                  Email Preview
                 </Text>
-              </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowEmailPreview(false)}>
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
 
-              {/* Email Preview */}
-              <View style={{ marginBottom: theme.spacing.xl }}>
-                <Text
-                  style={{
-                    fontSize: isKidsEdition ? 14 : 12,
-                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: theme.neutralColors.dark,
-                    marginBottom: theme.spacing.sm,
-                  }}
-                >
-                  Preview
-                </Text>
+              {/* Preview Content */}
+              <ScrollView style={{ padding: theme.spacing.md }}>
+                {/* Sample guest note */}
                 <View
                   style={{
-                    backgroundColor: '#f8f9fa',
+                    backgroundColor: '#FEF3C7',
+                    padding: 10,
                     borderRadius: 8,
+                    marginBottom: theme.spacing.md,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: '#92400E',
+                      textAlign: 'center',
+                    }}
+                  >
+                    Preview using sample guest: "{guests.length > 0 ? guests[0].name : 'Guest Name'}"
+                  </Text>
+                </View>
+
+                {/* Email From */}
+                <View style={{ marginBottom: theme.spacing.md }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                      color: theme.neutralColors.mediumGray,
+                      marginBottom: 4,
+                    }}
+                  >
+                    FROM:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                      color: theme.neutralColors.dark,
+                    }}
+                  >
+                    {childName && parentName ? `${childName} and ${parentName}` : childName || parentName || 'ShowThx'} via ShowThx
+                  </Text>
+                </View>
+
+                {/* Email Subject */}
+                <View style={{ marginBottom: theme.spacing.md }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                      color: theme.neutralColors.mediumGray,
+                      marginBottom: 4,
+                    }}
+                  >
+                    SUBJECT:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                      color: theme.neutralColors.dark,
+                    }}
+                  >
+                    {(editedSubject || emailTemplate.subject)
+                      .replace(/\[name\]/gi, guests.length > 0 ? guests[0].name : 'Guest Name')
+                      .replace(/\[guest_name\]/gi, guests.length > 0 ? guests[0].name : 'Guest Name')
+                      .replace(/\[child_name\]/gi, childName || 'Your Child')
+                      .replace(/\[gift_name\]/gi, giftName || 'Gift')
+                      .replace(/\[parent_name\]/gi, parentName || 'Parent')}
+                  </Text>
+                </View>
+
+                {/* Divider */}
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: theme.neutralColors.lightGray,
+                    marginVertical: theme.spacing.md,
+                  }}
+                />
+
+                {/* Email Body Preview (styled like actual email) */}
+                <View
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    borderRadius: 12,
                     padding: theme.spacing.md,
                     borderWidth: 1,
                     borderColor: theme.neutralColors.lightGray,
                   }}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.brandColors.teal, marginBottom: 8 }}>
-                    {emailTemplate.greeting}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: theme.brandColors.teal, fontWeight: '600', marginBottom: 8 }}>
-                    #REELYTHANKFUL
-                  </Text>
-                  <Text style={{ fontSize: 14, color: theme.neutralColors.dark, marginBottom: 12 }}>
-                    {emailTemplate.message}
-                  </Text>
-                  <View
+                  {/* Hashtag */}
+                  <Text
                     style={{
-                      backgroundColor: '#e0f2fe',
-                      padding: 12,
-                      borderRadius: 8,
-                      borderLeftWidth: 4,
-                      borderLeftColor: theme.brandColors.teal,
-                      marginBottom: 12,
+                      color: theme.brandColors.teal,
+                      fontWeight: 'bold',
+                      fontSize: 12,
+                      marginBottom: theme.spacing.md,
                     }}
                   >
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.neutralColors.dark }}>
-                      {emailTemplate.giftLabel}
-                    </Text>
-                  </View>
+                    #REELYTHANKFUL
+                  </Text>
+
+                  {/* Message */}
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      lineHeight: 22,
+                      color: '#333',
+                      marginBottom: theme.spacing.md,
+                    }}
+                  >
+                    {(editedMessage || emailTemplate.message)
+                      .replace(/\[name\]/gi, guests.length > 0 ? guests[0].name : 'Guest Name')
+                      .replace(/\[guest_name\]/gi, guests.length > 0 ? guests[0].name : 'Guest Name')
+                      .replace(/\[child_name\]/gi, childName || 'Your Child')
+                      .replace(/\[gift_name\]/gi, giftName || 'Gift')
+                      .replace(/\[parent_name\]/gi, parentName || 'Parent')}
+                  </Text>
+
+                  {/* Gift info box */}
+                  {giftName && (
+                    <View
+                      style={{
+                        backgroundColor: '#e0f2fe',
+                        padding: theme.spacing.md,
+                        borderRadius: 8,
+                        borderLeftWidth: 4,
+                        borderLeftColor: theme.brandColors.teal,
+                        marginBottom: theme.spacing.md,
+                      }}
+                    >
+                      <Text style={{ fontSize: 14, color: '#333' }}>
+                        <Text style={{ fontWeight: 'bold' }}>Thank you for:</Text> {giftName}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Watch Video button preview */}
                   <View
                     style={{
                       backgroundColor: theme.brandColors.teal,
-                      paddingVertical: 12,
-                      paddingHorizontal: 24,
+                      paddingVertical: 14,
+                      paddingHorizontal: 32,
                       borderRadius: 12,
                       alignSelf: 'center',
-                      marginBottom: 12,
+                      marginVertical: theme.spacing.md,
                     }}
                   >
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>{emailTemplate.buttonText}</Text>
+                    <Text
+                      style={{
+                        color: '#FFFFFF',
+                        fontWeight: 'bold',
+                        fontSize: 16,
+                      }}
+                    >
+                      Watch the Video
+                    </Text>
                   </View>
-                  <Text style={{ fontSize: 12, color: theme.neutralColors.mediumGray }}>
-                    {emailTemplate.signOff}
+
+                  {/* Expiry note */}
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: '#666',
+                      marginTop: theme.spacing.sm,
+                    }}
+                  >
+                    <Text style={{ fontWeight: 'bold' }}>Note:</Text> This link expires in 30 days.
                   </Text>
-                  <Text style={{ fontSize: 12, color: theme.neutralColors.mediumGray }}>
-                    The ShowThx Team
-                  </Text>
+
+                  {/* Footer */}
+                  <View
+                    style={{
+                      marginTop: theme.spacing.lg,
+                      paddingTop: theme.spacing.md,
+                      borderTopWidth: 1,
+                      borderTopColor: '#eee',
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, color: '#999' }}>
+                      Sent with love via ShowThx
+                    </Text>
+                  </View>
                 </View>
+
+                {/* Padding at bottom */}
+                <View style={{ height: theme.spacing.xl }} />
+              </ScrollView>
+
+              {/* Modal Footer */}
+              <View
+                style={{
+                  padding: theme.spacing.md,
+                  borderTopWidth: 1,
+                  borderTopColor: theme.neutralColors.lightGray,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => setShowEmailPreview(false)}
+                  style={{
+                    backgroundColor: theme.brandColors.teal,
+                    paddingVertical: theme.spacing.md,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: '#FFFFFF',
+                      fontWeight: 'bold',
+                      fontSize: 14,
+                    }}
+                  >
+                    Close Preview
+                  </Text>
+                </TouchableOpacity>
               </View>
-            </ScrollView>
+            </View>
           </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
       </Modal>
     </SafeAreaView>
   );

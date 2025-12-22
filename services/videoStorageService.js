@@ -57,15 +57,20 @@ export async function uploadVideoToCloud(localVideoUri, guestId) {
 
     console.log('Upload successful:', data);
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
+    // Generate signed URL for private bucket (24 hour expiry)
+    const { data: urlData, error: urlError } = await supabase.storage
       .from('gratitugram-videos')
-      .getPublicUrl(filename);
+      .createSignedUrl(filename, 86400); // 24 hours in seconds
 
-    const publicUrl = urlData.publicUrl;
-    console.log('Public URL:', publicUrl);
+    if (urlError) {
+      console.error('Failed to create signed URL:', urlError);
+      throw new Error(`Failed to create signed URL: ${urlError.message}`);
+    }
 
-    return publicUrl;
+    const signedUrl = urlData.signedUrl;
+    console.log('Signed URL created (expires in 24 hours)');
+
+    return signedUrl;
   } catch (error) {
     console.error('Failed to upload video:', error);
     throw error;

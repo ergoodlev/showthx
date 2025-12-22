@@ -102,12 +102,21 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
     const textPosition = frameTemplate?.custom_text_position || 'bottom';
     const textColor = frameTemplate?.custom_text_color || '#FFFFFF';
 
+    if (!frameTemplate) {
+      console.log('⚠️  No frameTemplate available in renderFrameOverlay');
+      return null;
+    }
+
+    console.log('🎨 Rendering frame overlay during recording:', {
+      frame_shape: frameTemplate.frame_shape,
+      primary_color: frameTemplate.primary_color,
+      has_custom_text: !!customText,
+    });
+
     return (
-      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
+      <>
         {/* Custom Frame Border - Created by parent in FrameCreationScreen */}
-        {frameTemplate && (
-          <CustomFrameOverlay frameTemplate={frameTemplate} />
-        )}
+        <CustomFrameOverlay frameTemplate={frameTemplate} />
 
         {/* Parent's Custom Text */}
         {customText && (
@@ -137,7 +146,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             </View>
           </View>
         )}
-      </View>
+      </>
     );
   };
 
@@ -199,7 +208,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
           {/* Camera View */}
           <CameraView
             ref={cameraRef}
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, { zIndex: 0 }]}
             facing={facing}
             mode="video"
             onCameraReady={() => {
@@ -208,19 +217,21 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             }}
           />
 
-          {/* Frame overlay (from parent template + kid decorations) */}
-          {renderFrameOverlay()}
+          {/* Frame overlay (from parent template + kid decorations) - zIndex 10 to be above camera */}
+          <View style={[StyleSheet.absoluteFill, { zIndex: 10 }]} pointerEvents="none">
+            {renderFrameOverlay()}
+          </View>
 
           {/* Loading indicator while camera initializes */}
           {!cameraReady && (
-            <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 50 }]}>
               <ActivityIndicator size="large" color="#fff" />
               <Text style={{ color: '#fff', marginTop: 10 }}>Starting camera...</Text>
             </View>
           )}
 
-          {/* Overlay UI */}
-          <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+          {/* Overlay UI - zIndex 20 to be above frame but below loading */}
+          <View style={[StyleSheet.absoluteFillObject, { zIndex: 20 }]} pointerEvents="box-none">
             {/* Camera flip button */}
             <TouchableOpacity
               style={{
@@ -262,8 +273,8 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
               </View>
             )}
 
-            {/* Kid instructions */}
-            {isKidsEdition && !isRecording && cameraReady && (
+            {/* Kid instructions - stays visible during recording */}
+            {isKidsEdition && cameraReady && (
               <View style={{
                 position: 'absolute',
                 top: 80,
