@@ -1093,24 +1093,6 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
                       .replace(/\[parent_name\]/gi, parentName || 'Parent')}
                   </Text>
 
-                  {/* Gift info box */}
-                  {giftName && (
-                    <View
-                      style={{
-                        backgroundColor: '#e0f2fe',
-                        padding: theme.spacing.md,
-                        borderRadius: 8,
-                        borderLeftWidth: 4,
-                        borderLeftColor: theme.brandColors.teal,
-                        marginBottom: theme.spacing.md,
-                      }}
-                    >
-                      <Text style={{ fontSize: 14, color: '#333' }}>
-                        <Text style={{ fontWeight: 'bold' }}>Thank you for:</Text> {giftName}
-                      </Text>
-                    </View>
-                  )}
-
                   {/* Watch Video button preview */}
                   <View
                     style={{

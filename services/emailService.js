@@ -263,8 +263,6 @@ export const sendVideoToGuests = async (guestsData, giftName, videoLink, expires
 
                 <p style="font-size: 16px; color: #333; line-height: 1.6; margin-bottom: 20px;">${content.message}</p>
 
-                ${content.giftName ? `<p style="background: #e0f2fe; padding: 15px; border-radius: 8px; border-left: 4px solid #06b6d4; margin-bottom: 20px;"><strong>Thank you for:</strong> ${content.giftName}</p>` : ''}
-
                 <div style="text-align: center; margin: 30px 0;">
                   <a href="${content.videoLink}" style="background: #06b6d4; color: white; padding: 16px 40px; text-decoration: none; border-radius: 12px; display: inline-block; font-weight: bold; font-size: 16px;">Watch the Video</a>
                 </div>
