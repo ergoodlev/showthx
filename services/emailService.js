@@ -244,6 +244,23 @@ export const sendVideoToGuests = async (guestsData, giftName, videoLink, expires
     for (const personalization of personalizations) {
       const content = personalization._content;
 
+      // Plain text version (improves deliverability)
+      const plainTextContent = `#REELYTHANKFUL
+
+${content.message}
+
+Watch the Video: ${content.videoLink}
+
+Note: This link expires in ${content.expiresIn}.
+
+---
+Sent with love via ShowThx (https://showthx.com)
+
+This is a one-time thank you video sent on behalf of a ShowThx user.
+To stop receiving these emails, reply with "unsubscribe" or contact support@showthx.com
+
+ShowThx Inc. | San Francisco, CA`;
+
       // Build the message with dynamic from name
       const msg = {
         personalizations: [{
@@ -253,8 +270,23 @@ export const sendVideoToGuests = async (guestsData, giftName, videoLink, expires
           email: fromEmail,
           name: fromName, // e.g., "Emma and John via ShowThx"
         },
+        reply_to: {
+          email: 'support@showthx.com',
+          name: 'ShowThx Support',
+        },
         subject: personalization.subject,
+        // Headers for better deliverability
+        headers: {
+          'X-Priority': '3',
+          'X-Mailer': 'ShowThx App',
+        },
+        // Categories for SendGrid tracking
+        categories: ['thank-you-video', 'transactional'],
         content: [
+          {
+            type: 'text/plain',
+            value: plainTextContent,
+          },
           {
             type: 'text/html',
             value: `
@@ -272,6 +304,12 @@ export const sendVideoToGuests = async (guestsData, giftName, videoLink, expires
                 <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
 
                 <p style="color: #999; font-size: 12px;">Sent with love via <a href="https://showthx.com" style="color: #06b6d4;">ShowThx</a></p>
+
+                <p style="color: #bbb; font-size: 10px; margin-top: 20px; line-height: 1.5;">
+                  This is a one-time thank you video sent on behalf of a ShowThx user.<br/>
+                  To stop receiving these emails, reply with "unsubscribe" or <a href="mailto:support@showthx.com?subject=Unsubscribe" style="color: #999;">click here</a>.<br/>
+                  ShowThx Inc. | San Francisco, CA
+                </p>
               </div>
             `,
           },
