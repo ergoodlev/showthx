@@ -12,6 +12,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEdition } from '../context/EditionContext';
+import { scheduleAutomaticCleanup } from '../services/dataRetentionService';
+import { registerForPushNotifications, addNotificationResponseListener } from '../services/notificationService';
 
 // Screen imports - Parent flows
 import ParentSignupScreen from '../screens/ParentSignupScreen';
@@ -25,6 +27,7 @@ import ParentVideoReviewScreen from '../screens/ParentVideoReviewScreen';
 import SendToGuestsScreen from '../screens/SendToGuestsScreen';
 import SendSuccessScreen from '../screens/SendSuccessScreen';
 import FrameCreationScreen from '../screens/FrameCreationScreen';
+import PrivacyDashboardScreen from '../screens/PrivacyDashboardScreen';
 
 // Screen imports - Kid flows
 import KidPINLoginScreen from '../screens/KidPINLoginScreen';
@@ -73,6 +76,7 @@ const ParentAppStack = () => {
       <Stack.Screen name="SendToGuests" component={SendToGuestsScreen} />
       <Stack.Screen name="SendSuccess" component={SendSuccessScreen} />
       <Stack.Screen name="FrameCreation" component={FrameCreationScreen} />
+      <Stack.Screen name="PrivacyDashboard" component={PrivacyDashboardScreen} />
     </Stack.Navigator>
   );
 };
@@ -119,25 +123,27 @@ export const RootNavigator = () => {
   const appState = useRef(AppState.currentState);
 
   const loadSessions = async () => {
-    const startTime = Date.now();
-    const MIN_SPLASH_DURATION = 4000; // 4 seconds minimum
-
     try {
       // Check for parent session
       const parentSessionId = await AsyncStorage.getItem('parentSessionId');
       setParentSession(parentSessionId || null);
 
+      // COPPA Compliance: Run automatic data cleanup when parent logs in
+      if (parentSessionId) {
+        // Run cleanup in background (non-blocking)
+        scheduleAutomaticCleanup(parentSessionId).catch(error => {
+          console.log('[RETENTION] Background cleanup failed (non-blocking):', error.message);
+        });
+
+        // Register for push notifications (non-blocking)
+        registerForPushNotifications().catch(error => {
+          console.log('[NOTIFICATIONS] Push registration failed (non-blocking):', error.message);
+        });
+      }
+
       // Check for kid session
       const kidSessionId = await AsyncStorage.getItem('kidSessionId');
       setKidSession(kidSessionId || null);
-
-      // Ensure splash screen shows for at least MIN_SPLASH_DURATION
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, MIN_SPLASH_DURATION - elapsedTime);
-
-      if (remainingTime > 0) {
-        await new Promise(resolve => setTimeout(resolve, remainingTime));
-      }
     } catch (error) {
       console.error('Error loading sessions:', error);
     } finally {

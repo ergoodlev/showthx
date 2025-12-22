@@ -29,6 +29,8 @@ export const TextField = ({
   showPasswordToggle = false,
   autoCapitalize = 'sentences',
   textContentType = undefined,
+  multiline = false,
+  numberOfLines = 1,
   style,
   ...props
 }) => {
@@ -70,11 +72,14 @@ export const TextField = ({
       <View style={[
         styles.inputContainer,
         {
-          height: inputHeight,
+          height: multiline ? undefined : inputHeight,
+          minHeight: multiline ? inputHeight * numberOfLines * 0.7 : inputHeight,
           borderRadius: borderRadius,
           borderColor: borderColor,
           backgroundColor: disabled ? theme.neutralColors.lightGray : theme.neutralColors.white,
           paddingHorizontal,
+          paddingVertical: multiline ? theme.spacing.sm : 0,
+          alignItems: multiline ? 'flex-start' : 'center',
         },
       ]}>
         <TextInput
@@ -85,6 +90,8 @@ export const TextField = ({
               fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
               color: disabled ? theme.neutralColors.gray : theme.neutralColors.dark,
               flex: 1,
+              textAlignVertical: multiline ? 'top' : 'center',
+              paddingTop: multiline ? 4 : 0,
             },
           ]}
           placeholder={placeholder}
@@ -96,6 +103,8 @@ export const TextField = ({
           editable={editable && !disabled}
           autoCapitalize={autoCapitalize}
           textContentType={textContentType}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
           {...props}
         />
 

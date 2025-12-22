@@ -660,13 +660,16 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
                   borderWidth: 1,
                   borderColor: theme.neutralColors.lightGray,
                   borderRadius: 8,
-                  padding: theme.spacing.sm,
-                  fontSize: 14,
+                  padding: theme.spacing.md,
+                  fontSize: 16,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                   color: theme.neutralColors.dark,
                   marginBottom: theme.spacing.md,
                 }}
                 placeholderTextColor={theme.neutralColors.mediumGray}
+                autoCorrect={true}
+                autoCapitalize="sentences"
+                spellCheck={true}
               />
 
               {/* Message input */}
@@ -685,21 +688,24 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
                 onChangeText={setEditedMessage}
                 placeholder="Your personalized message..."
                 multiline
-                numberOfLines={4}
+                numberOfLines={6}
                 style={{
                   backgroundColor: '#FFFFFF',
                   borderWidth: 1,
                   borderColor: theme.neutralColors.lightGray,
                   borderRadius: 8,
-                  padding: theme.spacing.sm,
-                  fontSize: 14,
+                  padding: theme.spacing.md,
+                  fontSize: 16,
                   fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
                   color: theme.neutralColors.dark,
-                  minHeight: 100,
+                  minHeight: 150,
                   textAlignVertical: 'top',
                   marginBottom: theme.spacing.sm,
                 }}
                 placeholderTextColor={theme.neutralColors.mediumGray}
+                autoCorrect={true}
+                autoCapitalize="sentences"
+                spellCheck={true}
               />
 
               {/* Mail merge hint */}

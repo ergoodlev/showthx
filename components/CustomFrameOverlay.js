@@ -7,7 +7,7 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Circle, Ellipse, Rect, Defs, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Circle, Ellipse, Rect, Defs, RadialGradient, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -85,7 +85,7 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
 
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
           <Rect
             x="1"
             y="1"
@@ -108,7 +108,7 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
     const H = VB_HEIGHT;
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
           {/* Main border */}
           <Rect
             x="1"
@@ -173,7 +173,7 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
 
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
           {/* Hearts in corners */}
           <Path d={heartPath(10, 6, 2.5)} fill={primary_color} opacity={0.8} stroke={primary_color} strokeWidth="0.3" />
           <Path d={heartPath(W - 10, 6, 2.5)} fill={primary_color} opacity={0.8} stroke={primary_color} strokeWidth="0.3" />
@@ -227,7 +227,7 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
 
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
           <Path d={topWave} stroke={primary_color} strokeWidth={border_width / 6} fill="none" />
           <Path d={bottomWave} stroke={primary_color} strokeWidth={border_width / 6} fill="none" />
           <Path d={leftWave} stroke={primary_color} strokeWidth={border_width / 6} fill="none" />
@@ -307,7 +307,7 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
 
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
           <Rect
             x="1"
             y="1"
@@ -378,7 +378,7 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
 
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
           {scallops}
           <Rect
             x="6"
@@ -402,7 +402,7 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
     const H = VB_HEIGHT;
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
           <Defs>
             <RadialGradient id="neonGlow">
               <Stop offset="0%" stopColor={primary_color} stopOpacity="1" />
@@ -501,34 +501,48 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
     return renderShape();
   }
 
-  // Special rendering for gradient frames (keep existing)
+  // Special rendering for gradient frames - rainbow border using SVG
   if (frame_shape === 'gradient-frame') {
+    const W = VB_WIDTH;
+    const H = VB_HEIGHT;
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-        <LinearGradient
-          colors={[primary_color, '#FFD93D', '#FF6B6B', '#8B5CF6']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            right: 8,
-            bottom: 8,
-            borderRadius: border_radius,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            top: 8 + border_width,
-            left: 8 + border_width,
-            right: 8 + border_width,
-            bottom: 8 + border_width,
-            borderRadius: Math.max(0, border_radius - 4),
-            backgroundColor: 'transparent',
-          }}
-        />
+        <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
+          <Defs>
+            <SvgLinearGradient id="rainbowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor="#FF0000" />
+              <Stop offset="17%" stopColor="#FF7F00" />
+              <Stop offset="33%" stopColor="#FFFF00" />
+              <Stop offset="50%" stopColor="#00FF00" />
+              <Stop offset="67%" stopColor="#0000FF" />
+              <Stop offset="83%" stopColor="#4B0082" />
+              <Stop offset="100%" stopColor="#9400D3" />
+            </SvgLinearGradient>
+          </Defs>
+          {/* Rainbow gradient border */}
+          <Rect
+            x="2"
+            y="2"
+            width={W - 4}
+            height={H - 4}
+            rx={border_radius / 4}
+            fill="none"
+            stroke="url(#rainbowGradient)"
+            strokeWidth={border_width / 2}
+          />
+          {/* Inner glow effect */}
+          <Rect
+            x="3"
+            y="3"
+            width={W - 6}
+            height={H - 6}
+            rx={border_radius / 4}
+            fill="none"
+            stroke="url(#rainbowGradient)"
+            strokeWidth={border_width / 4}
+            opacity={0.5}
+          />
+        </Svg>
       </View>
     );
   }

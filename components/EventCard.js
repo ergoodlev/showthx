@@ -41,7 +41,7 @@ export const EventCard = ({
   };
 
   return (
-    <TouchableOpacity
+    <View
       style={[
         styles.card,
         {
@@ -60,9 +60,8 @@ export const EventCard = ({
         },
         style,
       ]}
-      onPress={onPress}
-      activeOpacity={0.7}
     >
+      {/* Event Header */}
       <View style={styles.header}>
         <View style={styles.titleSection}>
           <Text
@@ -94,35 +93,9 @@ export const EventCard = ({
             </Text>
           )}
         </View>
-
-        <View style={styles.actions}>
-          {onEdit && (
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={onEdit}
-            >
-              <Ionicons
-                name="pencil"
-                size={18}
-                color={theme.brandColors.teal}
-              />
-            </TouchableOpacity>
-          )}
-          {onDelete && (
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={onDelete}
-            >
-              <Ionicons
-                name="trash"
-                size={18}
-                color={theme.semanticColors.error}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
 
+      {/* Event Details */}
       <View style={[
         styles.details,
         {
@@ -210,7 +183,94 @@ export const EventCard = ({
           )}
         </View>
       </View>
-    </TouchableOpacity>
+
+      {/* Action Buttons - Clear labels for each action */}
+      <View
+        style={{
+          marginTop: theme.spacing.md,
+          paddingTop: theme.spacing.sm,
+          borderTopWidth: 1,
+          borderTopColor: theme.neutralColors.lightGray,
+          flexDirection: 'row',
+          gap: 8,
+        }}
+      >
+        {/* Main Action: Manage Guests */}
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.brandColors.coral,
+            paddingVertical: theme.spacing.sm,
+            paddingHorizontal: theme.spacing.sm,
+            borderRadius: 6,
+          }}
+          onPress={onPress}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="people" size={16} color="#FFFFFF" />
+          <Text
+            style={{
+              color: '#FFFFFF',
+              fontSize: isKidsEdition ? 12 : 11,
+              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+              marginLeft: 6,
+            }}
+          >
+            Guests & Gifts
+          </Text>
+        </TouchableOpacity>
+
+        {/* Edit Settings */}
+        {onEdit && (
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.brandColors.teal,
+              paddingVertical: theme.spacing.sm,
+              paddingHorizontal: theme.spacing.md,
+              borderRadius: 6,
+            }}
+            onPress={onEdit}
+          >
+            <Ionicons name="settings-outline" size={16} color="#FFFFFF" />
+            <Text
+              style={{
+                color: '#FFFFFF',
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                marginLeft: 4,
+              }}
+            >
+              Settings
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Delete */}
+        {onDelete && (
+          <TouchableOpacity
+            style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              paddingVertical: theme.spacing.sm,
+              paddingHorizontal: theme.spacing.sm,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: theme.semanticColors.error,
+            }}
+            onPress={onDelete}
+          >
+            <Ionicons name="trash-outline" size={16} color={theme.semanticColors.error} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
   );
 };
 

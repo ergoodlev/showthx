@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  Linking,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,6 +24,7 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { parentSignup } from '../services/authService';
 import { sendParentWelcomeEmail } from '../services/emailService';
+import { TERMS_OF_SERVICE, PRIVACY_POLICY, COPPA_COMPLIANCE } from '../constants/legalTexts';
 
 export const ParentSignupScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
@@ -37,11 +38,34 @@ export const ParentSignupScreen = ({ navigation }) => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [agreedToCOPPA, setAgreedToCOPPA] = useState(false);
+  const [isEighteenOrOlder, setIsEighteenOrOlder] = useState(false);
 
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
+
+  // Modal state for viewing policies
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [activePolicyType, setActivePolicyType] = useState(null);
+
+  const openPolicyModal = (type) => {
+    setActivePolicyType(type);
+    setShowPolicyModal(true);
+  };
+
+  const getPolicyContent = () => {
+    switch (activePolicyType) {
+      case 'terms':
+        return { title: 'Terms of Service', content: TERMS_OF_SERVICE };
+      case 'privacy':
+        return { title: 'Privacy Policy', content: PRIVACY_POLICY };
+      case 'coppa':
+        return { title: 'COPPA Compliance', content: COPPA_COMPLIANCE };
+      default:
+        return { title: '', content: '' };
+    }
+  };
 
   // Validation
   const validateForm = () => {
@@ -69,6 +93,10 @@ export const ParentSignupScreen = ({ navigation }) => {
 
     if (password !== confirmPassword) {
       errors.confirmPassword = 'Passwords do not match';
+    }
+
+    if (!isEighteenOrOlder) {
+      errors.age = 'You must be at least 18 years old to create an account';
     }
 
     if (!agreedToTerms) {
@@ -303,6 +331,72 @@ export const ParentSignupScreen = ({ navigation }) => {
               Agreements
             </Text>
 
+            {/* Age Verification - 18+ COPPA REQUIRED */}
+            <TouchableOpacity
+              style={[
+                styles.checkboxRow,
+                {
+                  marginBottom: theme.spacing.md,
+                },
+              ]}
+              onPress={() => setIsEighteenOrOlder(!isEighteenOrOlder)}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  {
+                    width: checkboxSize,
+                    height: checkboxSize,
+                    borderRadius: checkboxSize / 4,
+                    borderColor: theme.brandColors.teal,
+                    backgroundColor: isEighteenOrOlder
+                      ? theme.brandColors.teal
+                      : 'transparent',
+                  },
+                ]}
+              >
+                {isEighteenOrOlder && (
+                  <Ionicons
+                    name="checkmark"
+                    size={checkboxSize - 4}
+                    color="#FFFFFF"
+                  />
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.checkboxLabel,
+                  {
+                    fontSize,
+                    color: validationErrors.age
+                      ? theme.semanticColors.error
+                      : theme.neutralColors.dark,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    marginLeft: theme.spacing.sm,
+                  },
+                ]}
+              >
+                I confirm that I am at least 18 years old
+              </Text>
+            </TouchableOpacity>
+
+            {validationErrors.age && (
+              <Text
+                style={[
+                  {
+                    fontSize: isKidsEdition ? 12 : 11,
+                    color: theme.semanticColors.error,
+                    fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                    marginLeft: checkboxSize + theme.spacing.sm,
+                    marginTop: -theme.spacing.sm,
+                    marginBottom: theme.spacing.sm,
+                  },
+                ]}
+              >
+                {validationErrors.age}
+              </Text>
+            )}
+
             {/* Terms of Service */}
             <TouchableOpacity
               style={[
@@ -501,6 +595,39 @@ export const ParentSignupScreen = ({ navigation }) => {
             )}
           </View>
 
+          {/* Parental Attestation Disclosure - COPPA Required */}
+          <View
+            style={{
+              backgroundColor: theme.neutralColors.lightGray,
+              borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+              padding: theme.spacing.md,
+              marginBottom: theme.spacing.md,
+              borderLeftWidth: 4,
+              borderLeftColor: theme.brandColors.teal,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                color: theme.neutralColors.dark,
+                marginBottom: theme.spacing.xs,
+              }}
+            >
+              Parental Responsibility Notice
+            </Text>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 11 : 10,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.mediumGray,
+                lineHeight: isKidsEdition ? 16 : 14,
+              }}
+            >
+              By creating an account, you attest that you are at least 18 years old and will supervise all content created by your children. All videos created by children require your review and approval before they can be shared with anyone.
+            </Text>
+          </View>
+
           {/* Sign Up Button */}
           <ThankCastButton
             title="Create Account"
@@ -510,10 +637,10 @@ export const ParentSignupScreen = ({ navigation }) => {
             style={{ marginBottom: theme.spacing.md }}
           />
 
-          {/* Policy Links */}
+          {/* Policy Links - Open in-app modals */}
           <View style={[styles.policyLinksContainer, { marginBottom: theme.spacing.md }]}>
             <TouchableOpacity
-              onPress={() => Linking.openURL('https://showthx.app/terms')}
+              onPress={() => openPolicyModal('terms')}
               style={{ marginBottom: theme.spacing.xs }}
             >
               <Text
@@ -527,12 +654,12 @@ export const ParentSignupScreen = ({ navigation }) => {
                   },
                 ]}
               >
-                Terms of Service
+                Read Terms of Service
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => Linking.openURL('https://showthx.app/privacy')}
+              onPress={() => openPolicyModal('privacy')}
               style={{ marginBottom: theme.spacing.xs }}
             >
               <Text
@@ -546,12 +673,12 @@ export const ParentSignupScreen = ({ navigation }) => {
                   },
                 ]}
               >
-                Privacy Policy
+                Read Privacy Policy
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => Linking.openURL('https://showthx.app/coppa')}
+              onPress={() => openPolicyModal('coppa')}
             >
               <Text
                 style={[
@@ -564,7 +691,7 @@ export const ParentSignupScreen = ({ navigation }) => {
                   },
                 ]}
               >
-                COPPA Compliance
+                Read COPPA Compliance
               </Text>
             </TouchableOpacity>
           </View>
@@ -598,6 +725,83 @@ export const ParentSignupScreen = ({ navigation }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Policy Modal */}
+      <Modal
+        visible={showPolicyModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPolicyModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: theme.spacing.md,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.neutralColors.lightGray,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 18 : 16,
+                fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                color: theme.neutralColors.dark,
+              }}
+            >
+              {getPolicyContent().title}
+            </Text>
+            <TouchableOpacity onPress={() => setShowPolicyModal(false)}>
+              <Ionicons name="close" size={28} color={theme.neutralColors.dark} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: theme.spacing.md }}
+          >
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 14 : 13,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.dark,
+                lineHeight: isKidsEdition ? 22 : 20,
+              }}
+            >
+              {getPolicyContent().content}
+            </Text>
+          </ScrollView>
+          <View
+            style={{
+              padding: theme.spacing.md,
+              borderTopWidth: 1,
+              borderTopColor: theme.neutralColors.lightGray,
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => setShowPolicyModal(false)}
+              style={{
+                backgroundColor: theme.brandColors.coral,
+                paddingVertical: theme.spacing.md,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  color: '#FFFFFF',
+                  fontSize: isKidsEdition ? 16 : 14,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                }}
+              >
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* Loading Overlay */}
       <LoadingSpinner

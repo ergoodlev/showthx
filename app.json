@@ -56,7 +56,14 @@
         }
       ],
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#06b6d4"
+        }
+      ]
     ],
     "extra": {
       "SUPABASE_URL": "@SUPABASE_URL",

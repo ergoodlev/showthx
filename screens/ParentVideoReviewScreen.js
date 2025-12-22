@@ -326,6 +326,91 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
     }
   };
 
+  // COPPA Compliant: Allow parent to permanently delete video
+  const handleDeleteVideo = async () => {
+    Alert.alert(
+      'Delete This Video?',
+      'This will permanently delete this video. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              console.log('🗑️ Deleting video:', videoId);
+
+              // Get video details for storage path
+              const { data: videoData, error: fetchError } = await supabase
+                .from('videos')
+                .select('video_url, storage_path, video_path')
+                .eq('id', videoId)
+                .single();
+
+              if (fetchError) {
+                console.error('Error fetching video for deletion:', fetchError);
+              }
+
+              // Try to delete from storage
+              if (videoData) {
+                const storagePath = videoData.storage_path || videoData.video_path;
+                if (storagePath) {
+                  try {
+                    await supabase.storage.from('videos').remove([storagePath]);
+                    console.log('✅ Storage file deleted');
+                  } catch (storageErr) {
+                    console.warn('Could not delete storage file:', storageErr.message);
+                  }
+                } else if (videoData.video_url) {
+                  // Extract path from URL
+                  try {
+                    const urlParts = videoData.video_url.split('/videos/');
+                    if (urlParts[1]) {
+                      const pathFromUrl = urlParts[1].split('?')[0];
+                      await supabase.storage.from('videos').remove([pathFromUrl]);
+                      console.log('✅ Storage file deleted via URL extraction');
+                    }
+                  } catch (urlErr) {
+                    console.warn('Could not extract/delete storage file from URL:', urlErr.message);
+                  }
+                }
+              }
+
+              // Delete video record from database
+              const { error: deleteError } = await supabase
+                .from('videos')
+                .delete()
+                .eq('id', videoId);
+
+              if (deleteError) {
+                console.error('Error deleting video record:', deleteError);
+                throw deleteError;
+              }
+
+              // Update gift status back to pending
+              if (fetchedGiftId) {
+                await supabase
+                  .from('gifts')
+                  .update({ status: 'pending' })
+                  .eq('id', fetchedGiftId);
+              }
+
+              console.log('✅ Video deleted successfully');
+              Alert.alert('Video Deleted', 'The video has been permanently deleted.');
+              navigation?.goBack();
+            } catch (error) {
+              console.error('Error deleting video:', error);
+              Alert.alert('Error', 'Failed to delete video. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleRequestChanges = async () => {
     try {
       if (!feedback.trim()) {
@@ -417,11 +502,15 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 120 }}
       >
-        {/* Video Preview */}
+        {/* Video Preview - 9:16 aspect ratio for portrait video */}
         <View
           style={{
             backgroundColor: '#000000',
-            height: 250,
+            aspectRatio: 9 / 16,
+            maxHeight: 400,
+            alignSelf: 'center',
+            width: '100%',
+            maxWidth: 225,
             justifyContent: 'center',
             alignItems: 'center',
             margin: theme.spacing.md,
@@ -694,6 +783,48 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
                 }}
               >
                 Child can record again
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Delete Video Option - COPPA Parental Control */}
+          <TouchableOpacity
+            onPress={handleDeleteVideo}
+            style={{
+              backgroundColor: theme.neutralColors.white,
+              borderColor: theme.semanticColors.error,
+              borderWidth: 1,
+              borderRadius: 8,
+              padding: theme.spacing.md,
+              marginBottom: theme.spacing.md,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={24}
+              color={theme.semanticColors.error}
+            />
+            <View style={{ marginLeft: theme.spacing.sm, flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 14 : 12,
+                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
+                  color: theme.semanticColors.error,
+                }}
+              >
+                Delete Video
+              </Text>
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 12 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.neutralColors.mediumGray,
+                  marginTop: 2,
+                }}
+              >
+                Permanently remove this video
               </Text>
             </View>
           </TouchableOpacity>

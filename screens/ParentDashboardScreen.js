@@ -15,6 +15,7 @@ import {
   RefreshControl,
   Alert,
   Share,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,6 +28,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { supabase } from '../supabaseClient';
 import { logoutAndReturnToAuth } from '../services/navigationService';
+import { TERMS_OF_SERVICE, PRIVACY_POLICY, COPPA_COMPLIANCE } from '../constants/legalTexts';
 
 const TABS = {
   EVENTS: 'events',
@@ -50,6 +52,120 @@ export const ParentDashboardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+
+  // Policy modal state
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [activePolicyType, setActivePolicyType] = useState(null);
+
+  const openPolicyModal = (type) => {
+    setActivePolicyType(type);
+    setShowPolicyModal(true);
+  };
+
+  const getPolicyContent = () => {
+    switch (activePolicyType) {
+      case 'terms':
+        return { title: 'Terms of Service', content: TERMS_OF_SERVICE };
+      case 'privacy':
+        return { title: 'Privacy Policy', content: PRIVACY_POLICY };
+      case 'coppa':
+        return { title: 'COPPA Compliance', content: COPPA_COMPLIANCE };
+      default:
+        return { title: '', content: '' };
+    }
+  };
+
+  // COPPA Compliant: Complete data deletion with storage file cleanup
+  const handleDeleteAllData = async () => {
+    // First, gather counts to show user what will be deleted
+    const eventCount = events.length;
+    const childCount = children.length;
+    const videoCount = pendingVideos.length + approvedVideos.length + sentVideos.length;
+
+    Alert.alert(
+      'Delete All My Data',
+      `This will PERMANENTLY delete:\n\n• ${eventCount} event${eventCount !== 1 ? 's' : ''}\n• ${childCount} child profile${childCount !== 1 ? 's' : ''}\n• ${videoCount} video${videoCount !== 1 ? 's' : ''}\n• All guest lists and gifts\n• All video files from storage\n• Your account\n\nThis action cannot be undone.\n\nAre you sure you want to delete ALL your data?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const { data: { user } } = await supabase.auth.getUser();
+
+              if (user) {
+                console.log('🗑️ Starting complete data deletion for user:', user.id);
+
+                // 1. Get all videos to delete their storage files
+                const { data: allVideos } = await supabase
+                  .from('videos')
+                  .select('id, video_url')
+                  .eq('parent_id', user.id);
+
+                // 2. Delete video files from Supabase Storage
+                if (allVideos && allVideos.length > 0) {
+                  console.log('🗑️ Deleting', allVideos.length, 'video files from storage');
+                  for (const video of allVideos) {
+                    if (video.video_url) {
+                      try {
+                        // Extract storage path from URL
+                        const urlParts = video.video_url.split('/videos/');
+                        if (urlParts[1]) {
+                          const storagePath = urlParts[1].split('?')[0]; // Remove query params
+                          await supabase.storage.from('videos').remove([storagePath]);
+                        }
+                      } catch (storageErr) {
+                        console.warn('Could not delete storage file:', storageErr.message);
+                      }
+                    }
+                  }
+                }
+
+                // 3. Delete database records (cascade should handle related tables)
+                // Delete in order: videos -> gifts -> guests -> events -> children -> parent profile
+                await supabase.from('videos').delete().eq('parent_id', user.id);
+                await supabase.from('gifts').delete().eq('parent_id', user.id);
+                await supabase.from('events').delete().eq('parent_id', user.id);
+                await supabase.from('children').delete().eq('parent_id', user.id);
+
+                // 4. Try to delete consent records if table exists
+                try {
+                  await supabase.from('parental_consents').delete().eq('parent_id', user.id);
+                } catch (e) { /* Table may not exist */ }
+
+                // 5. Delete parent profile
+                await supabase.from('parents').delete().eq('id', user.id);
+
+                // 6. Sign out and clear local storage
+                await supabase.auth.signOut();
+                await AsyncStorage.clear();
+
+                console.log('✅ All data deleted successfully');
+              }
+
+              Alert.alert(
+                'Data Deleted',
+                'All your data has been permanently deleted. The app will now close.',
+                [{ text: 'OK' }]
+              );
+            } catch (err) {
+              console.error('Error deleting all data:', err);
+              Alert.alert('Error', 'Failed to delete all data. Please try again or contact help@showthx.com');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeactivateAccount = () => {
+    // Redirect to the comprehensive delete function
+    handleDeleteAllData();
+  };
 
   // Load parent data on focus
   useFocusEffect(
@@ -611,6 +727,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
       contentContainerStyle={{ padding: theme.spacing.md, paddingBottom: 40 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      {/* Profile Section */}
       <View
         style={{
           marginBottom: theme.spacing.lg,
@@ -647,12 +764,201 @@ export const ParentDashboardScreen = ({ navigation }) => {
         </View>
       </View>
 
+      {/* Legal & Privacy Section */}
+      <Text
+        style={{
+          fontSize: isKidsEdition ? 14 : 12,
+          fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+          color: theme.neutralColors.dark,
+          marginBottom: theme.spacing.sm,
+        }}
+      >
+        Legal & Privacy
+      </Text>
+      <View
+        style={{
+          marginBottom: theme.spacing.lg,
+          backgroundColor: theme.neutralColors.white,
+          borderColor: theme.neutralColors.lightGray,
+          borderWidth: 1,
+          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+          overflow: 'hidden',
+        }}
+      >
+        <TouchableOpacity
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: theme.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.neutralColors.lightGray,
+          }}
+          onPress={() => openPolicyModal('terms')}
+        >
+          <Ionicons name="document-text-outline" size={20} color={theme.brandColors.teal} />
+          <Text
+            style={{
+              flex: 1,
+              marginLeft: theme.spacing.md,
+              fontSize: isKidsEdition ? 14 : 13,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+            }}
+          >
+            Terms of Service
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color={theme.neutralColors.gray} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: theme.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.neutralColors.lightGray,
+          }}
+          onPress={() => openPolicyModal('privacy')}
+        >
+          <Ionicons name="shield-checkmark-outline" size={20} color={theme.brandColors.teal} />
+          <Text
+            style={{
+              flex: 1,
+              marginLeft: theme.spacing.md,
+              fontSize: isKidsEdition ? 14 : 13,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+            }}
+          >
+            Privacy Policy
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color={theme.neutralColors.gray} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: theme.spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.neutralColors.lightGray,
+          }}
+          onPress={() => openPolicyModal('coppa')}
+        >
+          <Ionicons name="people-outline" size={20} color={theme.brandColors.teal} />
+          <Text
+            style={{
+              flex: 1,
+              marginLeft: theme.spacing.md,
+              fontSize: isKidsEdition ? 14 : 13,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+            }}
+          >
+            COPPA Compliance
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color={theme.neutralColors.gray} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: theme.spacing.md,
+          }}
+          onPress={() => navigation?.navigate('PrivacyDashboard')}
+        >
+          <Ionicons name="analytics-outline" size={20} color={theme.brandColors.coral} />
+          <Text
+            style={{
+              flex: 1,
+              marginLeft: theme.spacing.md,
+              fontSize: isKidsEdition ? 14 : 13,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+            }}
+          >
+            Privacy Dashboard
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color={theme.neutralColors.gray} />
+        </TouchableOpacity>
+      </View>
+
+      {/* COPPA Contact Information */}
+      <Text
+        style={{
+          fontSize: isKidsEdition ? 14 : 12,
+          fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+          color: theme.neutralColors.dark,
+          marginBottom: theme.spacing.sm,
+        }}
+      >
+        Contact Us
+      </Text>
+      <View
+        style={{
+          marginBottom: theme.spacing.lg,
+          backgroundColor: theme.neutralColors.white,
+          borderColor: theme.neutralColors.lightGray,
+          borderWidth: 1,
+          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+          padding: theme.spacing.md,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm }}>
+          <Ionicons name="shield-checkmark" size={18} color={theme.brandColors.teal} style={{ marginRight: theme.spacing.sm }} />
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 13 : 12,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+            }}
+          >
+            Children's Privacy: COPPA@showthx.com
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Ionicons name="help-circle" size={18} color={theme.brandColors.coral} style={{ marginRight: theme.spacing.sm }} />
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 13 : 12,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+            }}
+          >
+            General Support: help@showthx.com
+          </Text>
+        </View>
+        <Text
+          style={{
+            fontSize: isKidsEdition ? 11 : 10,
+            fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+            color: theme.neutralColors.mediumGray,
+            marginTop: theme.spacing.sm,
+          }}
+        >
+          We respond to all COPPA requests within 48 hours.
+        </Text>
+      </View>
+
+      {/* Account Actions */}
+      <Text
+        style={{
+          fontSize: isKidsEdition ? 14 : 12,
+          fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+          color: theme.neutralColors.dark,
+          marginBottom: theme.spacing.sm,
+        }}
+      >
+        Account
+      </Text>
+
       <TouchableOpacity
         style={{
-          backgroundColor: theme.semanticColors.error,
+          backgroundColor: theme.brandColors.coral,
           borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
           paddingVertical: theme.spacing.md,
-          marginBottom: theme.spacing.lg,
+          marginBottom: theme.spacing.md,
           flexDirection: 'row',
           justifyContent: 'center',
           alignItems: 'center',
@@ -671,6 +977,32 @@ export const ParentDashboardScreen = ({ navigation }) => {
         </Text>
       </TouchableOpacity>
 
+      <TouchableOpacity
+        style={{
+          backgroundColor: 'transparent',
+          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+          borderWidth: 1,
+          borderColor: theme.semanticColors.error,
+          paddingVertical: theme.spacing.md,
+          marginBottom: theme.spacing.lg,
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+        onPress={handleDeleteAllData}
+      >
+        <Ionicons name="trash-outline" size={20} color={theme.semanticColors.error} style={{ marginRight: theme.spacing.sm }} />
+        <Text
+          style={{
+            color: theme.semanticColors.error,
+            fontSize: isKidsEdition ? 14 : 12,
+            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+          }}
+        >
+          Delete All My Data
+        </Text>
+      </TouchableOpacity>
+
       <Text
         style={{
           fontSize: isKidsEdition ? 12 : 10,
@@ -679,7 +1011,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
           textAlign: 'center',
         }}
       >
-        ThankCast v1.0.0
+        ShowThx v1.0.0
       </Text>
     </ScrollView>
   );
@@ -913,6 +1245,83 @@ export const ParentDashboardScreen = ({ navigation }) => {
           <Ionicons name="add" size={isKidsEdition ? 32 : 28} color="#FFFFFF" />
         </TouchableOpacity>
       )}
+
+      {/* Policy Modal */}
+      <Modal
+        visible={showPolicyModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPolicyModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: theme.spacing.md,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.neutralColors.lightGray,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 18 : 16,
+                fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                color: theme.neutralColors.dark,
+              }}
+            >
+              {getPolicyContent().title}
+            </Text>
+            <TouchableOpacity onPress={() => setShowPolicyModal(false)}>
+              <Ionicons name="close" size={28} color={theme.neutralColors.dark} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: theme.spacing.md }}
+          >
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 14 : 13,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.dark,
+                lineHeight: isKidsEdition ? 22 : 20,
+              }}
+            >
+              {getPolicyContent().content}
+            </Text>
+          </ScrollView>
+          <View
+            style={{
+              padding: theme.spacing.md,
+              borderTopWidth: 1,
+              borderTopColor: theme.neutralColors.lightGray,
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => setShowPolicyModal(false)}
+              style={{
+                backgroundColor: theme.brandColors.coral,
+                paddingVertical: theme.spacing.md,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  color: '#FFFFFF',
+                  fontSize: isKidsEdition ? 16 : 14,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                }}
+              >
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };

@@ -316,6 +316,7 @@ export const EventManagementScreen = ({ navigation, route }) => {
               onChangeText={setEmailSubject}
               autoCorrect={true}
               spellCheck={true}
+              autoCapitalize="sentences"
             />
 
             <TextField
@@ -324,9 +325,10 @@ export const EventManagementScreen = ({ navigation, route }) => {
               value={emailMessage}
               onChangeText={setEmailMessage}
               multiline={true}
-              numberOfLines={3}
+              numberOfLines={6}
               autoCorrect={true}
               spellCheck={true}
+              autoCapitalize="sentences"
             />
 
             {/* Preview */}

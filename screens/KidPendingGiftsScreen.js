@@ -471,22 +471,6 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                   >
                     {/* Status Indicator */}
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      {giftStatus === 'pending' && (
-                        <>
-                          <Ionicons name="videocam" size={18} color={theme.brandColors.coral} />
-                          <Text
-                            style={{
-                              fontSize: isKidsEdition ? 14 : 12,
-                              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                              color: theme.brandColors.coral,
-                              marginLeft: 6,
-                              fontWeight: '600',
-                            }}
-                          >
-                            Record
-                          </Text>
-                        </>
-                      )}
                       {giftStatus === 'needs_rerecord' && (
                         <>
                           <Ionicons name="refresh-circle" size={18} color={theme.semanticColors.error} />
@@ -537,7 +521,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                       )}
                       {giftStatus === 'sent' && (
                         <>
-                          <Ionicons name="checkmark-done-all" size={18} color={theme.semanticColors.success} />
+                          <Ionicons name="checkmark-done" size={18} color={theme.semanticColors.success} />
                           <Text
                             style={{
                               fontSize: isKidsEdition ? 14 : 12,
@@ -552,6 +536,41 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                         </>
                       )}
                     </View>
+
+                    {/* Rewatch Button - for sent gifts */}
+                    {giftStatus === 'sent' && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          // Navigate to video playback to rewatch sent video
+                          navigation?.navigate('VideoPlayback', {
+                            giftId: item.id,
+                            giftName: item.name,
+                            videoId: item.video_id,
+                            viewOnly: true,
+                          });
+                        }}
+                        style={{
+                          backgroundColor: theme.brandColors.teal,
+                          paddingHorizontal: theme.spacing.md,
+                          paddingVertical: theme.spacing.sm,
+                          borderRadius: 6,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Ionicons name="play-circle" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text
+                          style={{
+                            color: '#FFFFFF',
+                            fontSize: isKidsEdition ? 14 : 12,
+                            fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                            fontWeight: '600',
+                          }}
+                        >
+                          Rewatch
+                        </Text>
+                      </TouchableOpacity>
+                    )}
 
                     {/* Record Button - for pending gifts */}
                     {giftStatus === 'pending' && (

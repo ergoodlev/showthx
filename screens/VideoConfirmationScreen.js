@@ -23,6 +23,8 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { supabase } from '../supabaseClient';
 import { uploadVideo, validateVideo } from '../services/videoService';
+import { sendVideoReadyNotification } from '../services/emailService';
+import { notifyParentOfPendingVideo } from '../services/notificationService';
 
 export const VideoConfirmationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -222,6 +224,46 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
 
       // Gift status is automatically updated by the secure function
       console.log('✅ Gift status updated to pending_approval');
+
+      // COPPA Compliance: Notify parent that video is pending approval
+      try {
+        // Get child's name
+        const childName = await AsyncStorage.getItem('kidName') || 'Your child';
+
+        // Get parent's email and name from database
+        const { data: parentData } = await supabase
+          .from('parents')
+          .select('email, full_name')
+          .eq('id', parentId)
+          .single();
+
+        if (parentData?.email) {
+          console.log('📧 Sending parent notification email...');
+          const emailResult = await sendVideoReadyNotification(
+            parentData.email,
+            parentData.full_name || 'Parent',
+            childName,
+            giftName
+          );
+          if (emailResult.success) {
+            console.log('✅ Parent notification email sent');
+          } else {
+            console.log('⚠️ Parent notification email failed (non-blocking):', emailResult.error);
+          }
+        }
+
+        // Also send push notification (for when parent has app open on another device)
+        console.log('🔔 Sending push notification...');
+        const pushResult = await notifyParentOfPendingVideo(childName, giftName);
+        if (pushResult.success) {
+          console.log('✅ Push notification sent');
+        } else {
+          console.log('⚠️ Push notification failed (non-blocking):', pushResult.error);
+        }
+      } catch (notifyError) {
+        // Don't block video submission if notification fails
+        console.log('⚠️ Parent notification failed (non-blocking):', notifyError.message);
+      }
 
       // Create videoData object for navigation
       const videoData = { id: videoId };

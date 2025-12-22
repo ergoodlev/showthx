@@ -21,6 +21,7 @@ import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
+import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { DECORATIONS, createPlacedDecoration } from '../services/decorationService';
 
 export const VideoCustomizationScreen = ({ navigation, route }) => {
@@ -172,6 +173,11 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             useNativeControls={false}
             isLooping
           />
+
+          {/* Frame Overlay */}
+          {frameTemplate && (
+            <CustomFrameOverlay frameTemplate={frameTemplate} />
+          )}
 
           {/* Decoration Overlays - Draggable */}
           {placedDecorations.map(decoration => (

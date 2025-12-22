@@ -46,10 +46,6 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
     navigation?.navigate('KidPendingGifts');
   };
 
-  const handleViewMore = () => {
-    navigation?.navigate('KidPendingGifts');
-  };
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
       <ScrollView
@@ -215,7 +211,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
         </Text>
       </ScrollView>
 
-      {/* Action Buttons */}
+      {/* Action Button */}
       <View
         style={{
           backgroundColor: theme.neutralColors.white,
@@ -228,26 +224,7 @@ export const VideoSuccessScreen = ({ navigation, route }) => {
         <ThankCastButton
           title="Back to My Gifts"
           onPress={handleContinue}
-          style={{ marginBottom: theme.spacing.md }}
         />
-        <TouchableOpacity
-          onPress={handleViewMore}
-          style={{
-            paddingVertical: theme.spacing.md,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Text
-            style={{
-              fontSize: isKidsEdition ? 14 : 12,
-              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.brandColors.teal,
-            }}
-          >
-            View Dashboard
-          </Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
