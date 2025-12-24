@@ -2,6 +2,7 @@
   "expo": {
     "name": "ShowThx",
     "slug": "showthx",
+    "scheme": "showthx",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,6 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.EricGoodlev.ShowThx",
       "buildNumber": "25",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "ShowThx needs access to your camera to record thank you videos.",
         "NSMicrophoneUsageDescription": "ShowThx needs access to your microphone to record audio for your thank you videos.",
@@ -63,7 +65,8 @@
           "icon": "./assets/icon.png",
           "color": "#06b6d4"
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
     "extra": {
       "SUPABASE_URL": "@SUPABASE_URL",

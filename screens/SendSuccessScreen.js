@@ -163,40 +163,6 @@ export const SendSuccessScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Tips Section */}
-        <View
-          style={{
-            backgroundColor: 'rgba(0, 166, 153, 0.05)',
-            borderLeftWidth: 4,
-            borderLeftColor: theme.brandColors.teal,
-            borderRadius: 8,
-            padding: theme.spacing.md,
-            marginBottom: theme.spacing.xl,
-            width: '100%',
-          }}
-        >
-          <Text
-            style={{
-              fontSize: isKidsEdition ? 14 : 12,
-              fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-              color: theme.neutralColors.dark,
-              marginBottom: theme.spacing.sm,
-            }}
-          >
-            Share the Joy
-          </Text>
-          <Text
-            style={{
-              fontSize: isKidsEdition ? 13 : 11,
-              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: theme.neutralColors.mediumGray,
-              lineHeight: 20,
-            }}
-          >
-            The guests have received personal thank you videos that will make their day special. What a wonderful way to share gratitude!
-          </Text>
-        </View>
-
         {/* Action Text */}
         <Text
           style={{

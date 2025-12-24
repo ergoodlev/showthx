@@ -32,19 +32,52 @@ export const parentSignup = async (email, password, fullName, consentData = {}) 
       },
     });
 
-    if (authError) throw authError;
+    if (authError) {
+      // Handle specific Supabase auth errors
+      if (authError.message?.includes('already registered') || authError.message?.includes('already exists')) {
+        throw new Error('This email is already registered. Please log in instead.');
+      }
+      throw authError;
+    }
 
     if (!authData?.user?.id) {
       throw new Error('No user returned from signup');
     }
 
+    // Check if user needs email confirmation
+    // If identities array is empty, email confirmation is pending
+    const needsEmailConfirmation = authData.user.identities?.length === 0;
+
+    if (needsEmailConfirmation) {
+      // User created but needs to confirm email first
+      // We'll still try to create their profile using service role or skip sign-in
+      console.log('User needs email confirmation - proceeding with limited signup');
+    }
+
     // Sign in the user to establish session (required for RLS policy)
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (signInError) throw signInError;
+    // If sign-in fails due to email confirmation, handle gracefully
+    if (signInError) {
+      if (signInError.message?.includes('Email not confirmed') ||
+          signInError.message?.includes('Invalid login credentials')) {
+        // Email confirmation is required - user needs to verify email first
+        console.log('Email confirmation required, signup partially complete');
+
+        // Store a flag indicating email needs confirmation
+        return {
+          success: true,
+          userId: authData.user.id,
+          email: authData.user.email,
+          emailConfirmationRequired: true,
+          message: 'Please check your email and click the confirmation link to complete signup.',
+        };
+      }
+      throw signInError;
+    }
 
     // Prepare consent timestamps for COPPA compliance
     const consentTimestamp = new Date().toISOString();
@@ -200,6 +233,101 @@ export const parentLogout = async () => {
     return { success: true };
   } catch (error) {
     console.error('Logout error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Request password reset email
+ * @param {string} email - Email address to send reset link to
+ */
+export const requestPasswordReset = async (email) => {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'showthx://reset-password',
+    });
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Password reset error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Sign in with Apple
+ * Uses native Apple Sign In and Supabase OAuth
+ */
+export const signInWithApple = async () => {
+  try {
+    // Dynamic import to avoid issues on Android
+    const AppleAuthentication = await import('expo-apple-authentication');
+
+    const credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+
+    if (!credential.identityToken) {
+      throw new Error('No identity token received from Apple');
+    }
+
+    // Sign in with Supabase using Apple's identity token
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'apple',
+      token: credential.identityToken,
+    });
+
+    if (error) throw error;
+
+    // Get the user's name from Apple (only provided on first sign-in)
+    const fullName = credential.fullName
+      ? `${credential.fullName.givenName || ''} ${credential.fullName.familyName || ''}`.trim()
+      : null;
+
+    // Check if parent profile exists
+    const { data: existingParent } = await supabase
+      .from('parents')
+      .select('id, full_name')
+      .eq('id', data.user.id)
+      .single();
+
+    if (!existingParent) {
+      // Create parent profile for first-time Apple Sign In users
+      const consentTimestamp = new Date().toISOString();
+      await supabase.from('parents').insert({
+        id: data.user.id,
+        email: data.user.email,
+        full_name: fullName || 'Apple User',
+        parental_consent_given: true,
+        consent_given_at: consentTimestamp,
+        terms_accepted: true,
+        terms_accepted_at: consentTimestamp,
+      });
+    } else if (fullName && !existingParent.full_name) {
+      // Update name if we got it from Apple and profile doesn't have one
+      await supabase
+        .from('parents')
+        .update({ full_name: fullName })
+        .eq('id', data.user.id);
+    }
+
+    // Store session
+    await AsyncStorage.setItem(SESSION_KEY, data.user.id);
+
+    return {
+      success: true,
+      userId: data.user.id,
+      email: data.user.email,
+      isNewUser: !existingParent,
+    };
+  } catch (error) {
+    if (error.code === 'ERR_REQUEST_CANCELED') {
+      return { success: false, cancelled: true };
+    }
+    console.error('Apple Sign In error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -366,6 +494,8 @@ export default {
   getParentSession,
   restoreParentSession,
   parentLogout,
+  requestPasswordReset,
+  signInWithApple,
   getOrCreateKidCode,
   validateKidPin,
   getKidSession,

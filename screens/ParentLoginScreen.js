@@ -14,8 +14,9 @@ import {
   Platform,
   SafeAreaView,
   Alert,
-  Image,
+  Modal,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEdition } from '../context/EditionContext';
@@ -23,7 +24,7 @@ import { TextField } from '../components/TextField';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { parentLogin, restoreParentSession } from '../services/authService';
+import { parentLogin, restoreParentSession, requestPasswordReset, signInWithApple } from '../services/authService';
 import {
   isBiometricSupported,
   isBiometricLoginEnabled,
@@ -51,11 +52,27 @@ export const ParentLoginScreen = ({ navigation }) => {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricName, setBiometricName] = useState('Face ID');
 
-  // Load saved email and check biometric availability on mount
+  // Forgot password state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+
+  // Apple Sign In state
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+
+  // Load saved email and check biometric/Apple availability on mount
   useEffect(() => {
     loadSavedEmail();
     checkBiometricAvailability();
+    checkAppleAuthAvailability();
   }, []);
+
+  const checkAppleAuthAvailability = async () => {
+    if (Platform.OS === 'ios') {
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      setAppleAuthAvailable(isAvailable);
+    }
+  };
 
   const checkBiometricAvailability = async () => {
     try {
@@ -144,6 +161,69 @@ export const ParentLoginScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Error loading saved email:', err);
+    }
+  };
+
+  // Handle forgot password
+  const handleForgotPassword = async () => {
+    if (!resetEmail.trim()) {
+      Alert.alert('Email Required', 'Please enter your email address.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+
+    try {
+      setResetLoading(true);
+      const result = await requestPasswordReset(resetEmail);
+
+      if (result.success) {
+        setShowForgotModal(false);
+        setResetEmail('');
+        Alert.alert(
+          'Check Your Email',
+          'If an account exists with that email, you will receive a password reset link shortly.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to send reset email. Please try again.');
+      }
+    } catch (err) {
+      console.error('Forgot password error:', err);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  // Handle Apple Sign In
+  const handleAppleSignIn = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result = await signInWithApple();
+
+      if (result.cancelled) {
+        // User cancelled - do nothing
+        return;
+      }
+
+      if (!result.success) {
+        setError(result.error || 'Apple Sign In failed. Please try again.');
+        return;
+      }
+
+      console.log('✅ Apple Sign In successful');
+      // RootNavigator will detect session and switch to ParentAppStack
+    } catch (err) {
+      console.error('❌ Apple Sign In error:', err);
+      setError('Apple Sign In failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -296,17 +376,8 @@ export const ParentLoginScreen = ({ navigation }) => {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header with ShowThx branding */}
+          {/* Header */}
           <View style={[styles.header, { marginBottom: theme.spacing.lg }]}>
-            <Image
-              source={require('../assets/icon.png')}
-              style={{
-                width: 140,
-                height: 140,
-                marginBottom: theme.spacing.md,
-              }}
-              resizeMode="contain"
-            />
             <Text
               style={[
                 styles.title,
@@ -318,19 +389,7 @@ export const ParentLoginScreen = ({ navigation }) => {
                 },
               ]}
             >
-              Welcome to ShowThx
-            </Text>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '700',
-                color: '#06b6d4',
-                letterSpacing: 1.5,
-                textTransform: 'uppercase',
-                marginBottom: theme.spacing.sm,
-              }}
-            >
-              #REELYTHANKFUL
+              Parent Login
             </Text>
             <Text
               style={[
@@ -342,7 +401,7 @@ export const ParentLoginScreen = ({ navigation }) => {
                 },
               ]}
             >
-              Sign in to continue
+              Sign in to your account
             </Text>
           </View>
 
@@ -434,13 +493,16 @@ export const ParentLoginScreen = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            {/* Forgot Password Link - Disabled for now */}
-            <TouchableOpacity disabled onPress={() => {}}>
+            {/* Forgot Password Link */}
+            <TouchableOpacity onPress={() => {
+              setResetEmail(email); // Pre-fill with current email if available
+              setShowForgotModal(true);
+            }}>
               <Text
                 style={[
                   {
                     fontSize,
-                    color: theme.neutralColors.lightGray,
+                    color: theme.brandColors.coral,
                     fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
                   },
                 ]}
@@ -495,6 +557,22 @@ export const ParentLoginScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
 
+          {/* Apple Sign In Button */}
+          {appleAuthAvailable && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={isKidsEdition ? 12 : 8}
+              style={{
+                width: '100%',
+                height: 50,
+                marginBottom: theme.spacing.md,
+                opacity: loading ? 0.6 : 1,
+              }}
+              onPress={handleAppleSignIn}
+            />
+          )}
+
           {/* Signup Link */}
           <View style={[styles.signupLinkContainer, { marginBottom: theme.spacing.lg }]}>
             <Text
@@ -508,7 +586,7 @@ export const ParentLoginScreen = ({ navigation }) => {
             >
               Don't have an account?{' '}
             </Text>
-            <TouchableOpacity onPress={() => navigation?.replace('ParentSignup')}>
+            <TouchableOpacity onPress={() => navigation?.navigate('ParentSignup')}>
               <Text
                 style={[
                   {
@@ -524,6 +602,74 @@ export const ParentLoginScreen = ({ navigation }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        visible={showForgotModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowForgotModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingHorizontal: theme.spacing.md,
+              paddingVertical: theme.spacing.md,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.neutralColors.lightGray,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 18 : 16,
+                fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                color: theme.neutralColors.dark,
+              }}
+            >
+              Reset Password
+            </Text>
+            <TouchableOpacity onPress={() => setShowForgotModal(false)}>
+              <Ionicons name="close" size={28} color={theme.neutralColors.dark} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ padding: theme.spacing.lg }}>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 14 : 13,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.mediumGray,
+                marginBottom: theme.spacing.lg,
+                lineHeight: 20,
+              }}
+            >
+              Enter your email address and we'll send you a link to reset your password.
+            </Text>
+
+            <TextField
+              label="Email Address"
+              placeholder="your@email.com"
+              value={resetEmail}
+              onChangeText={setResetEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              textContentType="emailAddress"
+              autoComplete="email"
+            />
+
+            <ThankCastButton
+              title={resetLoading ? 'Sending...' : 'Send Reset Link'}
+              onPress={handleForgotPassword}
+              loading={resetLoading}
+              disabled={resetLoading}
+              style={{ marginTop: theme.spacing.md }}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* Loading Overlay */}
       <LoadingSpinner
