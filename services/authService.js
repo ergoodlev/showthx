@@ -148,6 +148,38 @@ export const parentLogin = async (email, password) => {
     if (error) throw error;
 
     if (data?.user?.id) {
+      // Check if parent profile exists (may not exist if signup required email confirmation)
+      const { data: existingParent, error: profileCheckError } = await supabase
+        .from('parents')
+        .select('id')
+        .eq('id', data.user.id)
+        .maybeSingle(); // Use maybeSingle() to avoid error when 0 rows
+
+      // If no parent profile exists, create one now
+      if (!existingParent && !profileCheckError) {
+        const consentTimestamp = new Date().toISOString();
+        const fullName = data.user.user_metadata?.full_name || 'Parent';
+
+        const { error: createError } = await supabase
+          .from('parents')
+          .insert({
+            id: data.user.id,
+            email: data.user.email,
+            full_name: fullName,
+            parental_consent_given: true,
+            consent_given_at: consentTimestamp,
+            terms_accepted: true,
+            terms_accepted_at: consentTimestamp,
+          });
+
+        if (createError) {
+          console.error('Error creating parent profile on login:', createError);
+          // Don't fail login, just log the error
+        } else {
+          console.log('Created missing parent profile on login');
+        }
+      }
+
       // Store session
       await AsyncStorage.setItem(SESSION_KEY, data.user.id);
 
@@ -287,12 +319,12 @@ export const signInWithApple = async () => {
       ? `${credential.fullName.givenName || ''} ${credential.fullName.familyName || ''}`.trim()
       : null;
 
-    // Check if parent profile exists
+    // Check if parent profile exists (use maybeSingle to avoid error when 0 rows)
     const { data: existingParent } = await supabase
       .from('parents')
       .select('id, full_name')
       .eq('id', data.user.id)
-      .single();
+      .maybeSingle();
 
     if (!existingParent) {
       // Create parent profile for first-time Apple Sign In users

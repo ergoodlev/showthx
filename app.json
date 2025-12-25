@@ -20,6 +20,7 @@
       "bundleIdentifier": "com.EricGoodlev.ShowThx",
       "buildNumber": "25",
       "usesAppleSignIn": true,
+      "associatedDomains": ["applinks:showthx.com"],
       "infoPlist": {
         "NSCameraUsageDescription": "ShowThx needs access to your camera to record thank you videos.",
         "NSMicrophoneUsageDescription": "ShowThx needs access to your microphone to record audio for your thank you videos.",
