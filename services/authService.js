@@ -21,7 +21,7 @@ const KID_SESSION_KEY = 'kidSessionId';
  */
 export const parentSignup = async (email, password, fullName, consentData = {}) => {
   try {
-    // Create auth user
+    // Create auth user with redirect URL for email confirmation
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -29,6 +29,7 @@ export const parentSignup = async (email, password, fullName, consentData = {}) 
         data: {
           full_name: fullName,
         },
+        emailRedirectTo: 'showthx://auth-callback',
       },
     });
 

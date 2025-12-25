@@ -15,6 +15,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEdition } from '../context/EditionContext';
@@ -24,7 +25,6 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { supabase } from '../supabaseClient';
 import { sendVideoToGuests } from '../services/emailService';
 import { updateGift } from '../services/databaseService';
-import { sendVideoViaSMS, checkSMSAvailable } from '../services/smsService';
 
 export const SendToGuestsScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -37,8 +37,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [guests, setGuests] = useState([]);
   const [selectedGuests, setSelectedGuests] = useState(new Set());
   const [fetchingGuests, setFetchingGuests] = useState(true);
-  const [sendMethod, setSendMethod] = useState('email'); // 'email' or 'sms'
-  const [smsAvailable, setSmsAvailable] = useState(false);
+  const [sendMethod, setSendMethod] = useState('email'); // 'email' or 'share'
   const [videoUrl, setVideoUrl] = useState(videoUri); // Will be replaced with database URL
 
   // Email template state (simplified - just subject and message)
@@ -57,14 +56,6 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [editedMessage, setEditedMessage] = useState('');
   const [showEmailPreview, setShowEmailPreview] = useState(false);
 
-  // Check SMS availability on mount
-  useEffect(() => {
-    const checkSms = async () => {
-      const available = await checkSMSAvailable();
-      setSmsAvailable(available);
-    };
-    checkSms();
-  }, []);
 
   // Fetch video URL and assigned guest on mount
   useEffect(() => {
@@ -349,32 +340,25 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         if (!emailResult.success) {
           throw new Error(emailResult.error || 'Failed to send emails');
         }
-      } else if (sendMethod === 'sms') {
-        // Send via SMS - opens native SMS composer
-        const phoneNumbers = selectedGuestData
-          .filter(g => g.phone)
-          .map(g => g.phone);
+      } else if (sendMethod === 'share') {
+        // Open native share sheet
+        const shareMessage = `🎁 Thank You Video for ${giftName}!\n\nSomeone special made a thank you video just for you.\n\n📺 Watch the video: ${videoUrl}\n\n#REELYTHANKFUL - Sent via ShowThx`;
 
-        if (phoneNumbers.length === 0) {
-          alert('Selected guests do not have phone numbers. Please use email instead.');
-          setLoading(false);
-          return;
-        }
+        try {
+          const result = await Share.share({
+            message: shareMessage,
+            title: `Thank You Video for ${giftName}`,
+            url: Platform.OS === 'ios' ? videoUrl : undefined, // iOS can share URL separately
+          });
 
-        const smsResult = await sendVideoViaSMS(
-          phoneNumbers,
-          giftName,
-          videoUrl // Use public video URL from database
-        );
-
-        if (!smsResult.success && smsResult.error !== 'Message was cancelled') {
-          throw new Error(smsResult.error || 'Failed to open SMS');
-        }
-
-        // If cancelled, don't proceed
-        if (smsResult.error === 'Message was cancelled') {
-          setLoading(false);
-          return;
+          if (result.action === Share.dismissedAction) {
+            // User dismissed the share sheet
+            setLoading(false);
+            return;
+          }
+        } catch (shareError) {
+          console.error('Share error:', shareError);
+          throw new Error('Failed to open share sheet');
         }
       }
 
@@ -571,8 +555,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => smsAvailable && setSendMethod('sms')}
-              disabled={!smsAvailable}
+              onPress={() => setSendMethod('share')}
               style={{
                 flex: 1,
                 flexDirection: 'row',
@@ -581,40 +564,27 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
                 gap: 8,
                 paddingVertical: theme.spacing.md,
                 borderRadius: 8,
-                backgroundColor: sendMethod === 'sms' ? theme.brandColors.teal : theme.neutralColors.lightGray,
+                backgroundColor: sendMethod === 'share' ? theme.brandColors.teal : theme.neutralColors.lightGray,
                 borderWidth: 2,
-                borderColor: sendMethod === 'sms' ? theme.brandColors.teal : 'transparent',
-                opacity: smsAvailable ? 1 : 0.5,
+                borderColor: sendMethod === 'share' ? theme.brandColors.teal : 'transparent',
               }}
             >
               <Ionicons
-                name="chatbubble"
+                name="share-outline"
                 size={20}
-                color={sendMethod === 'sms' ? '#FFFFFF' : theme.neutralColors.mediumGray}
+                color={sendMethod === 'share' ? '#FFFFFF' : theme.neutralColors.mediumGray}
               />
               <Text
                 style={{
                   fontSize: isKidsEdition ? 14 : 12,
                   fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                  color: sendMethod === 'sms' ? '#FFFFFF' : theme.neutralColors.dark,
+                  color: sendMethod === 'share' ? '#FFFFFF' : theme.neutralColors.dark,
                 }}
               >
-                SMS
+                Share another way
               </Text>
             </TouchableOpacity>
           </View>
-          {!smsAvailable && (
-            <Text
-              style={{
-                fontSize: 10,
-                color: theme.neutralColors.mediumGray,
-                marginTop: 4,
-                fontStyle: 'italic',
-              }}
-            >
-              SMS not available on this device
-            </Text>
-          )}
 
           {/* Email Editor Section */}
           {sendMethod === 'email' && (

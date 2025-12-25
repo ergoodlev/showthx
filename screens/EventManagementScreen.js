@@ -120,6 +120,35 @@ export const EventManagementScreen = ({ navigation, route }) => {
         return;
       }
 
+      // Ensure parent profile exists before creating event (fixes foreign key constraint)
+      const { data: parentProfile, error: parentCheckError } = await supabase
+        .from('parents')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!parentProfile && !parentCheckError) {
+        console.log('📝 Parent profile missing, creating before event creation...');
+        const consentTimestamp = new Date().toISOString();
+        const { error: createParentError } = await supabase
+          .from('parents')
+          .insert({
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || 'Parent',
+            parental_consent_given: true,
+            consent_given_at: consentTimestamp,
+            terms_accepted: true,
+            terms_accepted_at: consentTimestamp,
+          });
+
+        if (createParentError) {
+          console.error('❌ Failed to create parent profile:', createParentError);
+          throw new Error('Failed to set up your profile. Please try logging out and back in.');
+        }
+        console.log('✅ Parent profile created successfully');
+      }
+
       const eventData = {
         name,
         event_type: eventType,

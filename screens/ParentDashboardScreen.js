@@ -189,15 +189,41 @@ export const ParentDashboardScreen = ({ navigation }) => {
         return;
       }
 
-      // Load parent profile
+      // Load parent profile (use maybeSingle to handle case where profile doesn't exist yet)
       const { data: parent, error: parentError } = await supabase
         .from('parents')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (parentError) throw parentError;
-      setParentData(parent);
+
+      // If parent profile doesn't exist, create it now (handles edge cases like email confirmation delays)
+      if (!parent) {
+        console.log('📝 Parent profile missing, creating now...');
+        const consentTimestamp = new Date().toISOString();
+        const { data: newParent, error: createError } = await supabase
+          .from('parents')
+          .insert({
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || 'Parent',
+            parental_consent_given: true,
+            consent_given_at: consentTimestamp,
+            terms_accepted: true,
+            terms_accepted_at: consentTimestamp,
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('❌ Failed to create parent profile:', createError);
+          throw new Error('Failed to set up your profile. Please try logging out and back in.');
+        }
+        setParentData(newParent);
+      } else {
+        setParentData(parent);
+      }
 
       // Load events with gifts and assignments (calculate counts in JavaScript)
       const { data: eventList, error: eventsError } = await supabase
@@ -1172,7 +1198,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
         showBack={false}
         rightButton={{
           onPress: () => logoutAndReturnToAuth(),
-          icon: <Ionicons name="people" size={24} color={theme.brandColors.coral} />,
+          icon: <Ionicons name="log-out-outline" size={24} color={theme.brandColors.coral} />,
         }}
       />
 
