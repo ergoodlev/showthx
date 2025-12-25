@@ -25,6 +25,7 @@ import { supabase } from '../supabaseClient';
 import { uploadVideo, validateVideo } from '../services/videoService';
 import { sendVideoReadyNotification } from '../services/emailService';
 import { notifyParentOfPendingVideo } from '../services/notificationService';
+import { prepareVideoForSharing, isCompositingAvailable } from '../services/videoCompositingService';
 
 export const VideoConfirmationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -130,6 +131,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
 
   const videoRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
 
   const handlePlayPause = async () => {
@@ -146,6 +148,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
   const handleSubmit = async () => {
     try {
       setLoading(true);
+      setLoadingMessage('Preparing video...');
       console.log('📹 Submitting video for gift:', giftName);
 
       // Get kid session info
@@ -168,15 +171,50 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       }
       console.log('✅ Video validated, size:', Math.round(validation.size / 1024), 'KB');
 
+      // Step 1.5: Composite video with overlays (frame, text, stickers) before upload
+      let videoToUpload = videoUri;
+      const hasOverlays = frameTemplate || (decorations && decorations.length > 0);
+
+      if (hasOverlays) {
+        setLoadingMessage('Adding frame and stickers...');
+        console.log('🎬 Compositing video with overlays...');
+        const canComposite = await isCompositingAvailable();
+
+        if (canComposite) {
+          try {
+            const compositedResult = await prepareVideoForSharing(
+              videoUri,
+              frameTemplate,
+              frameTemplate?.custom_text,
+              decorations
+            );
+
+            if (compositedResult.success && compositedResult.outputPath && !compositedResult.fallback) {
+              videoToUpload = compositedResult.outputPath;
+              console.log('✅ Video composited with overlays:', compositedResult.outputPath);
+            } else {
+              console.log('⚠️ Using original video (compositing returned fallback)');
+            }
+          } catch (compError) {
+            console.warn('⚠️ Compositing failed, uploading original video:', compError.message);
+          }
+        } else {
+          console.log('⚠️ FFmpeg not available - uploading video without baked-in overlays');
+          console.log('⚠️ Overlays will be stored in metadata and rendered by app');
+        }
+      }
+
       // Step 2: Upload video to Supabase Storage
+      setLoadingMessage('Uploading video...');
       console.log('📤 Uploading video to storage...');
-      const uploadResult = await uploadVideo(videoUri, giftId, parentId);
+      const uploadResult = await uploadVideo(videoToUpload, giftId, parentId);
       if (!uploadResult.success) {
         throw new Error(uploadResult.error || 'Failed to upload video');
       }
       console.log('✅ Video uploaded:', uploadResult.url);
 
       // Step 3: Create video record using secure function (bypasses RLS for kid submissions)
+      setLoadingMessage('Saving video...');
       console.log('💾 Creating database record via secure function...');
 
       // Build metadata object with decorations and frame info
@@ -283,7 +321,9 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       console.error('❌ Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
 
       alert('Error submitting video: ' + error.message);
+    } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -499,7 +539,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
         </TouchableOpacity>
       </View>
 
-      <LoadingSpinner visible={loading} message="Submitting your video..." fullScreen />
+      <LoadingSpinner visible={loading} message={loadingMessage || 'Submitting your video...'} fullScreen />
     </SafeAreaView>
   );
 };

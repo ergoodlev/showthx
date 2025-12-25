@@ -26,6 +26,8 @@ import { supabase } from '../supabaseClient';
 import { sendVideoToGuests } from '../services/emailService';
 import { updateGift } from '../services/databaseService';
 import { createShortVideoUrl } from '../services/secureShareService';
+import { prepareVideoForSharing, isCompositingAvailable } from '../services/videoCompositingService';
+import { getFrameForGift } from '../services/frameTemplateService';
 
 export const SendToGuestsScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -43,6 +45,9 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [videoId, setVideoId] = useState(null); // Video ID for short URL generation
   const [storagePath, setStoragePath] = useState(null); // Storage path for short URL
   const [parentId, setParentId] = useState(null); // Parent ID for share token
+  const [frameTemplate, setFrameTemplate] = useState(null); // Frame overlay for compositing
+  const [decorations, setDecorations] = useState([]); // Stickers for compositing
+  const [loadingMessage, setLoadingMessage] = useState(''); // Progress message for compositing
 
   // Email template state (simplified - just subject and message)
   const [emailTemplate, setEmailTemplate] = useState({
@@ -146,9 +151,10 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         console.log('🔍 Looking for video with gift_id:', giftId);
 
         // Using .or() instead of .in() for better compatibility
+        // Include metadata which contains decorations (stickers)
         const { data: approvedVideo, error: approvedError } = await supabase
           .from('videos')
-          .select('id, video_url, storage_path, status, child_id')
+          .select('id, video_url, storage_path, status, child_id, metadata')
           .eq('gift_id', giftId)
           .or('status.eq.approved,status.eq.sent')
           .order('created_at', { ascending: false })
@@ -211,6 +217,23 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           setVideoId(videoData.id);
           if (videoData.storage_path) {
             setStoragePath(videoData.storage_path);
+          }
+
+          // Load decorations (stickers) from video metadata for compositing
+          if (videoData.metadata?.decorations && Array.isArray(videoData.metadata.decorations)) {
+            setDecorations(videoData.metadata.decorations);
+            console.log('🎨 Loaded decorations for compositing:', videoData.metadata.decorations.length);
+          }
+
+          // Load frame template for compositing
+          try {
+            const frameResult = await getFrameForGift(giftId, videoData.child_id, giftData?.event_id);
+            if (frameResult.success && frameResult.data) {
+              setFrameTemplate(frameResult.data);
+              console.log('🖼️ Loaded frame template for compositing:', frameResult.data.frame_shape);
+            }
+          } catch (frameError) {
+            console.warn('⚠️ Could not load frame template:', frameError.message);
           }
 
           // Set child name for mail merge
@@ -356,9 +379,40 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           throw new Error(emailResult.error || 'Failed to send emails');
         }
       } else if (sendMethod === 'share') {
-        // Generate short URL if we have the required data
+        // Check if we have a local video file to composite
+        let videoToShare = videoUrl;
         let shareUrl = videoUrl;
 
+        // If we have local video and overlays, composite them first
+        if (videoUri && (frameTemplate || decorations.length > 0)) {
+          setLoadingMessage('Preparing video with overlays...');
+          console.log('🎬 Compositing video with overlays before sharing...');
+
+          const canComposite = await isCompositingAvailable();
+          if (canComposite) {
+            try {
+              const compositedResult = await prepareVideoForSharing(
+                videoUri,
+                frameTemplate,
+                frameTemplate?.custom_text,
+                decorations
+              );
+
+              if (compositedResult.success && compositedResult.outputPath) {
+                videoToShare = compositedResult.outputPath;
+                console.log('✅ Video composited successfully:', compositedResult.outputPath);
+              }
+            } catch (compError) {
+              console.warn('⚠️ Compositing failed, using original video:', compError.message);
+            }
+          } else {
+            console.log('⚠️ FFmpeg not available - sharing video without baked-in overlays');
+          }
+        }
+
+        setLoadingMessage('Generating share link...');
+
+        // Generate short URL if we have the required data
         if (videoId && parentId && storagePath) {
           try {
             console.log('🔗 Generating short URL for sharing...');
@@ -370,6 +424,8 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             // Fall back to full URL
           }
         }
+
+        setLoadingMessage('Opening share sheet...');
 
         // Open native share sheet with shorter, cleaner message
         const shareMessage = `🎁 Thank You Video for ${giftName}!\n\nWatch here: ${shareUrl}\n\n#REELYTHANKFUL`;
@@ -384,6 +440,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           if (result.action === Share.dismissedAction) {
             // User dismissed the share sheet
             setLoading(false);
+            setLoadingMessage('');
             return;
           }
         } catch (shareError) {
@@ -923,7 +980,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         </View>
       )}
 
-      <LoadingSpinner visible={loading} message="Sending videos..." fullScreen />
+      <LoadingSpinner visible={loading} message={loadingMessage || "Sending videos..."} fullScreen />
 
       {/* Email Preview Modal */}
       <Modal
