@@ -82,7 +82,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
           .from('frame_templates')
           .select('*')
           .eq('id', videoData.metadata.frame_template_id)
-          .single();
+          .maybeSingle();
         if (frameData) setFrameTemplate(frameData);
       } else if (videoData.gift_id) {
         const frameResult = await getFrameForGift(

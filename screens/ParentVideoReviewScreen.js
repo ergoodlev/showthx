@@ -44,6 +44,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
   const [fetchedKidName, setFetchedKidName] = useState(kidName);
   const [fetchedMusicTitle, setFetchedMusicTitle] = useState(musicTitle);
   const [frameTemplate, setFrameTemplate] = useState(null);
+  const [decorations, setDecorations] = useState([]); // Stickers added by kid
   const [isPlaying, setIsPlaying] = useState(false);
   const [action, setAction] = useState(null); // 'approve' or 'request-changes'
   const [feedback, setFeedback] = useState('');
@@ -111,7 +112,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
           .from('frame_templates')
           .select('*')
           .eq('id', videoData.metadata.frame_template_id)
-          .single();
+          .maybeSingle();
 
         if (!frameMetadataError && frameFromMetadata) {
           frameData = frameFromMetadata;
@@ -167,6 +168,12 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
 
       setFetchedVideoUri(videoUrlToUse);
       setFetchedMusicTitle(videoData.metadata?.music_id || null);
+
+      // Load decorations (stickers) from metadata
+      if (videoData.metadata?.decorations && Array.isArray(videoData.metadata.decorations)) {
+        setDecorations(videoData.metadata.decorations);
+        console.log('🎨 Loaded decorations from video metadata:', videoData.metadata.decorations.length);
+      }
     } catch (error) {
       console.error('❌ Error loading video details:', error);
       Alert.alert('Error', error.message || 'Failed to load video details');
@@ -187,18 +194,53 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
     setIsPlaying(!isPlaying);
   };
 
+  // Render decorations (stickers) added by kid
+  const renderDecorations = () => {
+    if (!decorations || decorations.length === 0) return null;
+
+    return (
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
+        {decorations.map((decoration, index) => (
+          <View
+            key={`decoration-${index}-${decoration.id || index}`}
+            style={{
+              position: 'absolute',
+              left: decoration.position?.x || 0,
+              top: decoration.position?.y || 0,
+              transform: [
+                { scale: decoration.scale || 1 },
+                { rotate: `${decoration.rotation || 0}deg` },
+              ],
+            }}
+          >
+            <Text style={{ fontSize: decoration.size || 40 }}>
+              {decoration.emoji || decoration.sticker || '⭐'}
+            </Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   // Render frame overlay
   const renderFrameOverlay = () => {
-    if (!frameTemplate) return null;
+    const hasFrame = frameTemplate !== null;
+    const hasDecorations = decorations && decorations.length > 0;
 
-    const customText = frameTemplate.custom_text || '';
-    const textPosition = frameTemplate.custom_text_position || 'bottom';
-    const textColor = frameTemplate.custom_text_color || '#FFFFFF';
+    // Return null only if nothing to render
+    if (!hasFrame && !hasDecorations) return null;
+
+    const customText = frameTemplate?.custom_text || '';
+    const textPosition = frameTemplate?.custom_text_position || 'bottom';
+    const textColor = frameTemplate?.custom_text_color || '#FFFFFF';
 
     return (
       <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
         {/* Custom Frame Border */}
-        <CustomFrameOverlay frameTemplate={frameTemplate} />
+        {hasFrame && <CustomFrameOverlay frameTemplate={frameTemplate} />}
+
+        {/* Kid's Stickers/Decorations */}
+        {renderDecorations()}
 
         {/* Parent's Custom Text */}
         {customText && (
@@ -209,6 +251,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
               right: 16,
               [textPosition === 'top' ? 'top' : 'bottom']: textPosition === 'top' ? 20 : 70,
               alignItems: 'center',
+              zIndex: 100,
             }}
           >
             <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>

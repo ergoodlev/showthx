@@ -25,6 +25,7 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { supabase } from '../supabaseClient';
 import { sendVideoToGuests } from '../services/emailService';
 import { updateGift } from '../services/databaseService';
+import { createShortVideoUrl } from '../services/secureShareService';
 
 export const SendToGuestsScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -39,6 +40,9 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [fetchingGuests, setFetchingGuests] = useState(true);
   const [sendMethod, setSendMethod] = useState('email'); // 'email' or 'share'
   const [videoUrl, setVideoUrl] = useState(videoUri); // Will be replaced with database URL
+  const [videoId, setVideoId] = useState(null); // Video ID for short URL generation
+  const [storagePath, setStoragePath] = useState(null); // Storage path for short URL
+  const [parentId, setParentId] = useState(null); // Parent ID for share token
 
   // Email template state (simplified - just subject and message)
   const [emailTemplate, setEmailTemplate] = useState({
@@ -101,6 +105,11 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         }
 
         console.log('✅ Gift data loaded:', { parent_id: giftData?.parent_id, guest_id: giftData?.guest_id, event_id: giftData?.event_id });
+
+        // Store parent ID for short URL generation
+        if (giftData?.parent_id) {
+          setParentId(giftData.parent_id);
+        }
 
         if (!giftData) {
           console.warn('Gift not found');
@@ -197,6 +206,12 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             has_storage_path: !!videoData.storage_path,
             child_id: videoData.child_id,
           });
+
+          // Store video info for short URL generation
+          setVideoId(videoData.id);
+          if (videoData.storage_path) {
+            setStoragePath(videoData.storage_path);
+          }
 
           // Set child name for mail merge
           if (videoData.children) {
@@ -341,14 +356,29 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           throw new Error(emailResult.error || 'Failed to send emails');
         }
       } else if (sendMethod === 'share') {
-        // Open native share sheet
-        const shareMessage = `🎁 Thank You Video for ${giftName}!\n\nSomeone special made a thank you video just for you.\n\n📺 Watch the video: ${videoUrl}\n\n#REELYTHANKFUL - Sent via ShowThx`;
+        // Generate short URL if we have the required data
+        let shareUrl = videoUrl;
+
+        if (videoId && parentId && storagePath) {
+          try {
+            console.log('🔗 Generating short URL for sharing...');
+            const shortUrlResult = await createShortVideoUrl(videoId, parentId, storagePath);
+            shareUrl = shortUrlResult.shortUrl;
+            console.log('✅ Short URL generated:', shareUrl);
+          } catch (shortUrlError) {
+            console.warn('⚠️ Could not generate short URL, using full URL:', shortUrlError.message);
+            // Fall back to full URL
+          }
+        }
+
+        // Open native share sheet with shorter, cleaner message
+        const shareMessage = `🎁 Thank You Video for ${giftName}!\n\nWatch here: ${shareUrl}\n\n#REELYTHANKFUL`;
 
         try {
           const result = await Share.share({
             message: shareMessage,
             title: `Thank You Video for ${giftName}`,
-            url: Platform.OS === 'ios' ? videoUrl : undefined, // iOS can share URL separately
+            url: Platform.OS === 'ios' ? shareUrl : undefined, // iOS can share URL separately
           });
 
           if (result.action === Share.dismissedAction) {

@@ -22,6 +22,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { Modal } from '../components/Modal';
 import { supabase } from '../supabaseClient';
+import { ensureParentProfile } from '../services/authService';
 
 export const GuestManagementScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -43,6 +44,15 @@ export const GuestManagementScreen = ({ navigation, route }) => {
   const [selectedChildIds, setSelectedChildIds] = useState([]);
   const [pendingCsvData, setPendingCsvData] = useState(null);
 
+  // Edit guest state
+  const [showEditGuestModal, setShowEditGuestModal] = useState(false);
+  const [editingGuest, setEditingGuest] = useState(null);
+  const [editGuestEmail, setEditGuestEmail] = useState('');
+  const [editGuestPhone, setEditGuestPhone] = useState('');
+
+  // Guest filter state
+  const [guestFilter, setGuestFilter] = useState('all'); // 'all', 'gift_givers', 'rsvp_only', 'needs_info'
+
   // Load guests and children on mount
   useEffect(() => {
     loadGuests();
@@ -56,21 +66,35 @@ export const GuestManagementScreen = ({ navigation, route }) => {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // Load guests linked to gifts for this specific event
-      // This prevents showing old guests from deleted events
-      const { data, error } = await supabase
+      // Load guests linked to gifts for this specific event (gift givers)
+      const { data: giftGivers, error: giftError } = await supabase
         .from('guests')
         .select(`
           *,
-          gifts!inner(event_id)
+          gifts!inner(event_id, name)
         `)
         .eq('parent_id', user.id)
         .eq('gifts.event_id', eventId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setGuests(data || []);
-      console.log('✅ Loaded guests for event:', data?.length || 0);
+      if (giftError) throw giftError;
+
+      // Also load RSVP-only guests (those without gifts for this event)
+      const { data: rsvpOnly, error: rsvpError } = await supabase
+        .from('guests')
+        .select('*')
+        .eq('parent_id', user.id)
+        .eq('guest_type', 'rsvp_only')
+        .order('created_at', { ascending: false });
+
+      // Combine both lists, marking gift givers
+      const allGuests = [
+        ...(giftGivers || []).map(g => ({ ...g, hasGift: true, giftName: g.gifts?.[0]?.name })),
+        ...(rsvpOnly || []).filter(g => !giftGivers?.some(gg => gg.id === g.id)).map(g => ({ ...g, hasGift: false })),
+      ];
+
+      setGuests(allGuests);
+      console.log('✅ Loaded guests for event:', allGuests.length, '(gift givers:', giftGivers?.length || 0, ', RSVP only:', rsvpOnly?.length || 0, ')');
     } catch (error) {
       console.error('Error loading guests:', error);
       Alert.alert('Error', 'Failed to load guests');
@@ -118,6 +142,13 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      // Ensure parent profile exists before creating guest (safety net for new users)
+      const profileResult = await ensureParentProfile(user.id);
+      if (!profileResult.success) {
+        console.error('❌ Failed to ensure parent profile:', profileResult.error);
+        throw new Error('Unable to verify your account. Please try logging out and back in.');
+      }
 
       const { data, error } = await supabase
         .from('guests')
@@ -232,10 +263,48 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       // Gift columns (optional) - match more variations
       const giftNameIndex = findColumnIndex(['gift', 'giftname', 'present', 'item', 'description', 'gifted', 'presents', 'giftfrom']);
 
-      // Validate we can find email
-      if (emailIndex === -1) {
-        throw new Error('CSV must have an "email" column. Found columns: ' + headers.join(', '));
-      }
+      // RSVP columns (optional) - match various naming conventions
+      const rsvpIndex = findColumnIndex(['rsvp', 'coming', 'attending', 'status', 'response', 'confirmed', 'willattend', 'attend']);
+      const guestCountIndex = findColumnIndex(['guests', 'guestcount', 'numberofguests', 'partysize', 'headcount', 'numguests', 'attendees']);
+
+      console.log('📋 RSVP column mapping:', {
+        rsvp: rsvpIndex !== -1 ? rsvpIndex : 'N/A',
+        guestCount: guestCountIndex !== -1 ? guestCountIndex : 'N/A',
+      });
+
+      // Helper to parse RSVP value - returns true if attending, false if not, null if unclear
+      const parseRsvpValue = (value) => {
+        if (!value || value.trim() === '') return null;
+        const val = value.toLowerCase().trim();
+
+        // Explicit yes values
+        if (['yes', 'y', 'true', '1', 'confirmed', 'attending', 'coming', 'accept', 'accepted'].includes(val)) {
+          return true;
+        }
+        // Explicit no values
+        if (['no', 'n', 'false', '0', 'declined', 'not attending', 'not coming', 'decline', 'regrets'].includes(val)) {
+          return false;
+        }
+        // Maybe/pending - treat as attending (optimistic)
+        if (['maybe', 'pending', 'tentative', 'unsure', 'possibly'].includes(val)) {
+          return true;
+        }
+        // Check if it's a number > 0
+        const num = parseInt(val, 10);
+        if (!isNaN(num)) {
+          return num > 0;
+        }
+        return null; // Unknown value
+      };
+
+      // Helper to parse guest count
+      const parseGuestCount = (value) => {
+        if (!value || value.trim() === '') return 0;
+        const num = parseInt(value.trim(), 10);
+        return isNaN(num) ? 0 : Math.max(0, num);
+      };
+
+      // Note: We no longer require email column - guests can be RSVP-only without contact info
 
       // Check if we have name info
       const hasFullName = fullNameIndex !== -1;
@@ -248,9 +317,11 @@ export const GuestManagementScreen = ({ navigation, route }) => {
         fullName: hasFullName ? fullNameIndex : 'N/A',
         firstName: firstNameIndex !== -1 ? firstNameIndex : 'N/A',
         lastName: lastNameIndex !== -1 ? lastNameIndex : 'N/A',
-        email: emailIndex,
+        email: emailIndex !== -1 ? emailIndex : 'N/A',
         phone: phoneIndex !== -1 ? phoneIndex : 'N/A',
         giftName: giftNameIndex !== -1 ? giftNameIndex : 'N/A',
+        rsvp: rsvpIndex !== -1 ? rsvpIndex : 'N/A',
+        guestCount: guestCountIndex !== -1 ? guestCountIndex : 'N/A',
       });
 
       // Parse data rows
@@ -275,7 +346,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
           }
 
           // Get email (clean it)
-          const email = (cols[emailIndex] || '').trim().toLowerCase();
+          const email = emailIndex !== -1 ? (cols[emailIndex] || '').trim().toLowerCase() : '';
 
           // Get phone if available
           const phone = phoneIndex !== -1 ? (cols[phoneIndex] || '').trim() : null;
@@ -283,33 +354,62 @@ export const GuestManagementScreen = ({ navigation, route }) => {
           // Get gift name if available
           const giftName = giftNameIndex !== -1 ? (cols[giftNameIndex] || '').trim() : null;
 
+          // Get RSVP status
+          const rsvpRaw = rsvpIndex !== -1 ? cols[rsvpIndex] : null;
+          const rsvpStatus = parseRsvpValue(rsvpRaw);
+
+          // Get guest count (if they're bringing additional guests)
+          const guestCountRaw = guestCountIndex !== -1 ? cols[guestCountIndex] : null;
+          const guestCount = parseGuestCount(guestCountRaw);
+
+          // Determine if guest is attending
+          // If we have RSVP column and it's explicitly "no", skip this guest
+          // If RSVP is yes/maybe/null (no column), include them
+          const isAttending = rsvpStatus !== false; // Only skip if explicitly "no"
+
+          // Determine guest type
+          const hasGift = giftName && giftName.length > 0;
+          const guestType = hasGift ? 'gift_giver' : 'rsvp_only';
+
           console.log(`📦 Row ${i + 1}:`, {
             name,
             email,
-            giftNameIndex,
             giftName,
-            rawGiftValue: cols[giftNameIndex],
-            allColumns: cols
+            rsvpRaw,
+            rsvpStatus,
+            guestCount,
+            isAttending,
+            guestType,
           });
 
-          // Validate
+          // Validate - only name is required
           if (!name) {
             errors.push(`Row ${i + 1}: Missing name`);
             continue;
           }
-          if (!email) {
-            errors.push(`Row ${i + 1}: Missing email`);
+
+          // Skip guests who explicitly RSVP'd "no"
+          if (!isAttending) {
+            console.log(`⏭️ Skipping ${name} - RSVP declined`);
             continue;
           }
 
-          // Basic email validation
+          // Check if guest has contact info (email or phone)
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(email)) {
-            errors.push(`Row ${i + 1}: Invalid email "${email}"`);
-            continue;
-          }
+          const hasValidEmail = email && emailRegex.test(email);
+          const hasPhone = phone && phone.length > 0;
+          const needsContactInfo = !hasValidEmail && !hasPhone;
 
-          parsedGuests.push({ name, email, phone, giftName });
+          // Add guest even without contact info - we'll prompt user later
+          parsedGuests.push({
+            name,
+            email: hasValidEmail ? email : null,
+            phone: hasPhone ? phone : null,
+            giftName: hasGift ? giftName : null,
+            guestType, // 'gift_giver' or 'rsvp_only'
+            guestCount, // Number of additional guests they're bringing
+            needsContactInfo, // Flag for follow-up
+          });
         } catch (rowError) {
           errors.push(`Row ${i + 1}: ${rowError.message}`);
         }
@@ -398,21 +498,48 @@ export const GuestManagementScreen = ({ navigation, route }) => {
 
       const { parsedGuests, warnings, user } = pendingCsvData;
 
+      // Ensure parent profile exists before creating guests/gifts (safety net for new users)
+      const profileResult = await ensureParentProfile(user.id);
+      if (!profileResult.success) {
+        console.error('❌ Failed to ensure parent profile:', profileResult.error);
+        throw new Error('Unable to verify your account. Please try logging out and back in.');
+      }
+
       // Validate and insert gifts with assignments to selected children
-      let insertedCount = 0;
+      let giftGiversCount = 0;
+      let rsvpOnlyCount = 0;
       let skippedCount = 0;
       const createdGiftIds = [];
 
+      // Track guests needing contact info for summary
+      const guestsNeedingContactInfo = [];
+
       for (const guest of parsedGuests) {
         try {
-          // Check if guest with this email already exists for this parent
-          const { data: existingGuest } = await supabase
-            .from('guests')
-            .select('id')
-            .eq('parent_id', user.id)
-            .eq('email', guest.email)
-            .limit(1)
-            .single();
+          let existingGuest = null;
+
+          // Check for existing guest - by email if available, otherwise by name
+          if (guest.email) {
+            const { data } = await supabase
+              .from('guests')
+              .select('id')
+              .eq('parent_id', user.id)
+              .eq('email', guest.email)
+              .limit(1)
+              .maybeSingle();
+            existingGuest = data;
+          } else {
+            // No email - check by name to avoid duplicates
+            const { data } = await supabase
+              .from('guests')
+              .select('id')
+              .eq('parent_id', user.id)
+              .eq('name', guest.name)
+              .is('email', null)
+              .limit(1)
+              .maybeSingle();
+            existingGuest = data;
+          }
 
           let guestId;
 
@@ -424,23 +551,25 @@ export const GuestManagementScreen = ({ navigation, route }) => {
               .eq('guest_id', existingGuest.id)
               .eq('event_id', eventId)
               .limit(1)
-              .single();
+              .maybeSingle();
 
             if (existingGift) {
-              console.log(`⏭️  Skipping - ${guest.email} already has gift for this event`);
+              console.log(`⏭️  Skipping - ${guest.name} already has gift for this event`);
               skippedCount++;
               continue;
             }
 
             // Guest exists but no gift for this event - reuse guest record
             guestId = existingGuest.id;
-            console.log(`♻️  Reusing existing guest ${guest.email} for new event`);
+            console.log(`♻️  Reusing existing guest ${guest.name} for new event`);
           } else {
             // Create new guest record
             const guestData = {
               parent_id: user.id,
               name: guest.name,
-              email: guest.email,
+              email: guest.email || null,
+              phone: guest.phone || null,
+              guest_type: guest.guestType || 'gift_giver', // Store guest type
               created_at: new Date().toISOString(),
             };
 
@@ -451,16 +580,28 @@ export const GuestManagementScreen = ({ navigation, route }) => {
               .single();
 
             if (guestError) {
-              console.error(`Error creating guest ${guest.email}:`, guestError);
+              console.error(`Error creating guest ${guest.name}:`, guestError);
               skippedCount++;
               continue;
             }
 
             guestId = guestRecord.id;
-            console.log(`✅ Created new guest ${guest.email}`);
+            console.log(`✅ Created new guest ${guest.name} (type: ${guest.guestType})`);
+
+            // Track if this guest needs contact info
+            if (guest.needsContactInfo) {
+              guestsNeedingContactInfo.push({ id: guestId, name: guest.name });
+            }
           }
 
-          // Create gift record for this event
+          // For RSVP-only guests (no gift), just create the guest record - no gift needed
+          if (guest.guestType === 'rsvp_only') {
+            rsvpOnlyCount++;
+            console.log(`🎉 Created RSVP-only guest ${guest.name} (thanks for coming!)`);
+            continue; // Skip gift creation
+          }
+
+          // Create gift record for this event (only for gift givers)
           // Use parsed gift name if available, otherwise fall back to "Gift from {name}"
           const giftName = guest.giftName && guest.giftName.trim()
             ? guest.giftName
@@ -487,12 +628,12 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             .single();
 
           if (giftError) {
-            console.error(`Error creating gift for ${guest.email}:`, giftError);
+            console.error(`Error creating gift for ${guest.name}:`, giftError);
             skippedCount++;
             continue;
           }
 
-          insertedCount++;
+          giftGiversCount++;
           createdGiftIds.push(giftRecord.id);
           console.log(`✅ Created gift ${giftRecord.id} for ${guest.name}`);
         } catch (err) {
@@ -530,7 +671,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
         }
       }
 
-      console.log(`✅ CSV Import complete: ${insertedCount} gifts created, ${assignments.length} assignments made, ${skippedCount} skipped`);
+      console.log(`✅ CSV Import complete: ${giftGiversCount} gifts, ${rsvpOnlyCount} RSVP-only, ${skippedCount} skipped`);
 
       // Reload guests
       await loadGuests();
@@ -541,12 +682,30 @@ export const GuestManagementScreen = ({ navigation, route }) => {
         .map(c => c.name)
         .join(', ');
 
-      let message = `Added ${insertedCount} gift${insertedCount !== 1 ? 's' : ''} and assigned to: ${selectedChildNames}`;
+      let message = '';
+      if (giftGiversCount > 0) {
+        message += `🎁 ${giftGiversCount} gift${giftGiversCount !== 1 ? 's' : ''} added and assigned to: ${selectedChildNames}`;
+      }
+      if (rsvpOnlyCount > 0) {
+        if (message) message += '\n';
+        message += `🎉 ${rsvpOnlyCount} guest${rsvpOnlyCount !== 1 ? 's' : ''} coming (no gift listed)`;
+      }
+      if (!message) {
+        message = 'No new guests to import.';
+      }
       if (skippedCount > 0) {
-        message += `\n${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} skipped`;
+        message += `\n${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} or declined skipped`;
       }
       if (warnings.length > 0) {
         message += `\n${warnings.length} row${warnings.length !== 1 ? 's' : ''} had issues`;
+      }
+
+      // Show warning about guests needing contact info
+      if (guestsNeedingContactInfo.length > 0) {
+        const guestNames = guestsNeedingContactInfo.slice(0, 3).map(g => g.name).join(', ');
+        const moreCount = guestsNeedingContactInfo.length > 3 ? ` and ${guestsNeedingContactInfo.length - 3} more` : '';
+        message += `\n\n⚠️ ${guestsNeedingContactInfo.length} guest${guestsNeedingContactInfo.length !== 1 ? 's need' : ' needs'} contact info:\n${guestNames}${moreCount}`;
+        message += `\n\nTap a guest to add their email or phone.`;
       }
 
       Alert.alert('Import Complete', message);
@@ -569,11 +728,97 @@ export const GuestManagementScreen = ({ navigation, route }) => {
     }
   };
 
-  const renderGuestCard = ({ item }) => (
-    <View
+  // Open edit guest modal
+  const openEditGuest = (guest) => {
+    setEditingGuest(guest);
+    setEditGuestEmail(guest.email || '');
+    setEditGuestPhone(guest.phone || '');
+    setShowEditGuestModal(true);
+  };
+
+  // Save edited guest contact info
+  const saveEditedGuest = async () => {
+    if (!editingGuest) return;
+
+    try {
+      setLoading(true);
+
+      const updates = {};
+      if (editGuestEmail.trim()) {
+        // Validate email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(editGuestEmail.trim())) {
+          Alert.alert('Invalid Email', 'Please enter a valid email address.');
+          setLoading(false);
+          return;
+        }
+        updates.email = editGuestEmail.trim().toLowerCase();
+      }
+      if (editGuestPhone.trim()) {
+        updates.phone = editGuestPhone.trim();
+      }
+
+      if (Object.keys(updates).length === 0) {
+        Alert.alert('No Changes', 'Please enter an email or phone number.');
+        setLoading(false);
+        return;
+      }
+
+      const { error } = await supabase
+        .from('guests')
+        .update(updates)
+        .eq('id', editingGuest.id);
+
+      if (error) throw error;
+
+      // Reload guests
+      await loadGuests();
+      setShowEditGuestModal(false);
+      setEditingGuest(null);
+
+      Alert.alert('Success', 'Contact info updated!');
+    } catch (error) {
+      console.error('Error updating guest:', error);
+      Alert.alert('Error', 'Failed to update contact info.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Compute filtered guests based on filter
+  const filteredGuests = guests.filter(guest => {
+    const needsContactInfo = !guest.email && !guest.phone;
+    switch (guestFilter) {
+      case 'gift_givers':
+        return guest.hasGift === true;
+      case 'rsvp_only':
+        return guest.hasGift === false || guest.guest_type === 'rsvp_only';
+      case 'needs_info':
+        return needsContactInfo;
+      case 'all':
+      default:
+        return true;
+    }
+  });
+
+  // Filter counts for badges
+  const filterCounts = {
+    all: guests.length,
+    gift_givers: guests.filter(g => g.hasGift === true).length,
+    rsvp_only: guests.filter(g => g.hasGift === false || g.guest_type === 'rsvp_only').length,
+    needs_info: guests.filter(g => !g.email && !g.phone).length,
+  };
+
+  const renderGuestCard = ({ item }) => {
+    const needsContactInfo = !item.email && !item.phone;
+    const isRsvpOnly = !item.hasGift || item.guest_type === 'rsvp_only';
+
+    return (
+    <TouchableOpacity
+      onPress={() => openEditGuest(item)}
       style={{
-        backgroundColor: theme.neutralColors.white,
-        borderColor: theme.neutralColors.lightGray,
+        backgroundColor: needsContactInfo ? '#FEF3C7' : isRsvpOnly ? '#F0FDF4' : theme.neutralColors.white,
+        borderColor: needsContactInfo ? '#F59E0B' : isRsvpOnly ? '#22C55E' : theme.neutralColors.lightGray,
         borderWidth: 1,
         borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
         padding: theme.spacing.md,
@@ -585,16 +830,45 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       }}
     >
       <View style={{ flex: 1 }}>
-        <Text
-          style={{
-            fontSize: isKidsEdition ? 16 : 14,
-            fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-            color: theme.neutralColors.dark,
-            marginBottom: 4,
-          }}
-        >
-          {item.name}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 16 : 14,
+              fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
+              color: theme.neutralColors.dark,
+            }}
+          >
+            {item.name}
+          </Text>
+          {/* Gift/RSVP badge */}
+          {isRsvpOnly ? (
+            <View style={{ marginLeft: 8, backgroundColor: '#22C55E', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '600' }}>RSVP ONLY</Text>
+            </View>
+          ) : item.hasGift && (
+            <View style={{ marginLeft: 8, backgroundColor: '#8B5CF6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '600' }}>🎁 GIFT</Text>
+            </View>
+          )}
+          {needsContactInfo && (
+            <View style={{ marginLeft: 8, backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '600' }}>NEEDS INFO</Text>
+            </View>
+          )}
+        </View>
+        {/* Gift name if available */}
+        {item.giftName && (
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 12 : 11,
+              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_Medium',
+              color: '#8B5CF6',
+              marginBottom: 2,
+            }}
+          >
+            🎁 {item.giftName}
+          </Text>
+        )}
         <Text
           style={{
             fontSize: isKidsEdition ? 13 : 12,
@@ -602,30 +876,46 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             color: theme.neutralColors.mediumGray,
           }}
         >
-          {item.email}
+          {item.email || item.phone || 'Tap to add contact info'}
         </Text>
+        {item.email && item.phone && (
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 12 : 11,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.mediumGray,
+              marginTop: 2,
+            }}
+          >
+            {item.phone}
+          </Text>
+        )}
       </View>
 
-      <TouchableOpacity
-        onPress={() => {
-          Alert.alert('Delete Guest', `Remove ${item.name}?`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () => deleteGuest(item.id),
-            },
-          ]);
-        }}
-        style={{
-          marginLeft: theme.spacing.md,
-          padding: 8,
-        }}
-      >
-        <Ionicons name="trash-outline" size={20} color={theme.semanticColors.error} />
-      </TouchableOpacity>
-    </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Ionicons name="pencil-outline" size={18} color={theme.neutralColors.mediumGray} style={{ marginRight: 8 }} />
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            Alert.alert('Delete Guest', `Remove ${item.name}?`, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => deleteGuest(item.id),
+              },
+            ]);
+          }}
+          style={{
+            padding: 8,
+          }}
+        >
+          <Ionicons name="trash-outline" size={20} color={theme.semanticColors.error} />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
   );
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
@@ -875,14 +1165,106 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             </Text>
           </View>
 
-          {guests.length > 0 ? (
+          {/* Filter Chips */}
+          {guests.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.md }}
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {[
+                { key: 'all', label: 'All', icon: 'people' },
+                { key: 'gift_givers', label: 'Gift Givers', icon: 'gift' },
+                { key: 'rsvp_only', label: 'RSVP Only', icon: 'checkmark-circle' },
+                { key: 'needs_info', label: 'Needs Info', icon: 'alert-circle' },
+              ].map(filter => (
+                <TouchableOpacity
+                  key={filter.key}
+                  onPress={() => setGuestFilter(filter.key)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 20,
+                    backgroundColor: guestFilter === filter.key ? theme.brandColors.coral : theme.neutralColors.lightGray,
+                    marginRight: 8,
+                  }}
+                >
+                  <Ionicons
+                    name={filter.icon}
+                    size={16}
+                    color={guestFilter === filter.key ? '#FFFFFF' : theme.neutralColors.dark}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '600',
+                      color: guestFilter === filter.key ? '#FFFFFF' : theme.neutralColors.dark,
+                    }}
+                  >
+                    {filter.label}
+                  </Text>
+                  {filterCounts[filter.key] > 0 && (
+                    <View
+                      style={{
+                        marginLeft: 6,
+                        backgroundColor: guestFilter === filter.key ? 'rgba(255,255,255,0.3)' : theme.neutralColors.mediumGray,
+                        borderRadius: 10,
+                        minWidth: 20,
+                        height: 20,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        paddingHorizontal: 6,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '700',
+                          color: guestFilter === filter.key ? '#FFFFFF' : '#FFFFFF',
+                        }}
+                      >
+                        {filterCounts[filter.key]}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {filteredGuests.length > 0 ? (
             <FlatList
-              data={guests}
+              data={filteredGuests}
               renderItem={renderGuestCard}
               keyExtractor={item => item.id}
               scrollEnabled={false}
               contentContainerStyle={{ paddingBottom: theme.spacing.lg }}
             />
+          ) : guests.length > 0 ? (
+            <View
+              style={{
+                paddingVertical: theme.spacing.lg,
+                alignItems: 'center',
+                marginHorizontal: theme.spacing.md,
+              }}
+            >
+              <Ionicons name="filter-outline" size={36} color={theme.neutralColors.lightGray} />
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 14 : 12,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.neutralColors.mediumGray,
+                  marginTop: theme.spacing.sm,
+                  textAlign: 'center',
+                }}
+              >
+                No guests match this filter.
+              </Text>
+            </View>
           ) : (
             <View
               style={{
@@ -997,6 +1379,109 @@ export const GuestManagementScreen = ({ navigation, route }) => {
               No children found. Please add a child first.
             </Text>
           )}
+        </View>
+      </Modal>
+
+      {/* Edit Guest Modal */}
+      <Modal
+        visible={showEditGuestModal}
+        onClose={() => {
+          setShowEditGuestModal(false);
+          setEditingGuest(null);
+          setEditGuestEmail('');
+          setEditGuestPhone('');
+        }}
+        title={`Edit ${editingGuest?.name || 'Guest'}`}
+        size="medium"
+        actions={[
+          {
+            label: 'Cancel',
+            onPress: () => {
+              setShowEditGuestModal(false);
+              setEditingGuest(null);
+              setEditGuestEmail('');
+              setEditGuestPhone('');
+            },
+            variant: 'outline',
+          },
+          {
+            label: 'Save',
+            onPress: saveEditedGuest,
+            variant: 'primary',
+          },
+        ]}
+      >
+        <View>
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 14 : 12,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+              marginBottom: theme.spacing.md,
+            }}
+          >
+            Add contact information for {editingGuest?.name}. We need at least an email or phone number to send the thank-you video.
+          </Text>
+
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 12 : 11,
+              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+              color: theme.neutralColors.mediumGray,
+              marginBottom: 4,
+            }}
+          >
+            Email
+          </Text>
+          <TextInput
+            placeholder="guest@example.com"
+            value={editGuestEmail}
+            onChangeText={setEditGuestEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={{
+              borderWidth: 1,
+              borderColor: theme.neutralColors.lightGray,
+              borderRadius: 8,
+              paddingHorizontal: theme.spacing.sm,
+              paddingVertical: theme.spacing.sm,
+              fontSize: isKidsEdition ? 14 : 12,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+              marginBottom: theme.spacing.md,
+              backgroundColor: theme.neutralColors.white,
+            }}
+            placeholderTextColor={theme.neutralColors.mediumGray}
+          />
+
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 12 : 11,
+              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+              color: theme.neutralColors.mediumGray,
+              marginBottom: 4,
+            }}
+          >
+            Phone Number (optional)
+          </Text>
+          <TextInput
+            placeholder="555-123-4567"
+            value={editGuestPhone}
+            onChangeText={setEditGuestPhone}
+            keyboardType="phone-pad"
+            style={{
+              borderWidth: 1,
+              borderColor: theme.neutralColors.lightGray,
+              borderRadius: 8,
+              paddingHorizontal: theme.spacing.sm,
+              paddingVertical: theme.spacing.sm,
+              fontSize: isKidsEdition ? 14 : 12,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: theme.neutralColors.dark,
+              backgroundColor: theme.neutralColors.white,
+            }}
+            placeholderTextColor={theme.neutralColors.mediumGray}
+          />
         </View>
       </Modal>
 

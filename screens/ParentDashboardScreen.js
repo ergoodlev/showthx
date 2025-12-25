@@ -1227,16 +1227,43 @@ export const ParentDashboardScreen = ({ navigation }) => {
                   borderBottomColor: activeTab === tab ? theme.brandColors.coral : 'transparent',
                 }}
               >
-                <Text
-                  style={{
-                    fontSize: tabFontSize,
-                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-                    color: activeTab === tab ? theme.brandColors.coral : theme.neutralColors.mediumGray,
-                    textTransform: 'capitalize',
-                  }}
-                >
-                  {tab}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text
+                    style={{
+                      fontSize: tabFontSize,
+                      fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                      color: activeTab === tab ? theme.brandColors.coral : theme.neutralColors.mediumGray,
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {tab}
+                  </Text>
+                  {/* Pending video count badge */}
+                  {tab === TABS.VIDEOS && pendingVideos.length > 0 && (
+                    <View
+                      style={{
+                        marginLeft: 6,
+                        backgroundColor: '#EF4444',
+                        borderRadius: 10,
+                        minWidth: 20,
+                        height: 20,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        paddingHorizontal: 6,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '700',
+                          color: '#FFFFFF',
+                        }}
+                      >
+                        {pendingVideos.length}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </TouchableOpacity>
             ))}
           </View>

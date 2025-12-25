@@ -8,6 +8,7 @@ import { supabase } from '../supabaseClient';
 
 const TOKEN_LENGTH = 32; // 256 bits
 const TOKEN_EXPIRY_HOURS = 24; // Tokens valid for 24 hours by default
+const SHORT_URL_BASE = 'https://showthx.com/v'; // Short URL base for video sharing
 
 /**
  * Generate a secure random token (React Native compatible)
@@ -99,7 +100,8 @@ export async function generateShareToken(videoId, userId, options = {}) {
       expiryHours,
       maxUses,
       recipientEmail,
-      shareUrl: `gratitugram://share/${token}`, // Deep link format
+      shareUrl: `${SHORT_URL_BASE}/${token}`, // Short web URL format
+      deepLinkUrl: `showthx://share/${token}`, // Deep link for in-app use
     };
   } catch (error) {
     console.error('[SECURE_SHARE ERROR] Failed to generate share token:', error);
@@ -130,7 +132,7 @@ export async function validateShareToken(token) {
       `
       )
       .eq('token', token)
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
       console.warn('[SECURE_SHARE] Invalid or expired token');
@@ -162,10 +164,11 @@ export async function validateShareToken(token) {
       .from('videos')
       .select('id, guest_name, status')
       .eq('id', data.video_id)
-      .single();
+      .maybeSingle();
 
     if (videoError || !videoData) {
-      throw new Error('Video not found');
+      console.warn('[SECURE_SHARE] Video not found for token');
+      return null;
     }
 
     console.log(`[SECURE_SHARE] Token validated - Access granted for video: ${data.video_id}`);
@@ -286,6 +289,52 @@ export async function cleanupExpiredTokens() {
 }
 
 /**
+ * Create a short shareable URL for a video
+ * Stores the video's storage path with the token for Cloudflare Worker to resolve
+ * @param {string} videoId - Video ID
+ * @param {string} userId - Parent user ID
+ * @param {string} storagePath - Supabase storage path for the video
+ * @param {object} options - Share options (expiryHours, etc)
+ * @returns {Promise<{shortUrl: string, token: string}>}
+ */
+export async function createShortVideoUrl(videoId, userId, storagePath, options = {}) {
+  try {
+    const shareData = await generateShareToken(videoId, userId, {
+      expiryHours: options.expiryHours || 720, // 30 days default for video sharing
+      ...options,
+    });
+
+    // Store the storage path with the token for Cloudflare Worker to resolve
+    const { error } = await supabase
+      .from('video_share_tokens')
+      .update({ storage_path: storagePath })
+      .eq('token', shareData.token);
+
+    if (error) {
+      console.warn('[SECURE_SHARE] Could not store storage_path:', error.message);
+    }
+
+    console.log(`[SECURE_SHARE] Created short URL: ${shareData.shareUrl}`);
+
+    return {
+      shortUrl: shareData.shareUrl,
+      token: shareData.token,
+      expiresAt: shareData.expiresAt,
+    };
+  } catch (error) {
+    console.error('[SECURE_SHARE ERROR] Failed to create short URL:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get the short URL base for display purposes
+ */
+export function getShortUrlBase() {
+  return SHORT_URL_BASE;
+}
+
+/**
  * Send share link via email (integration with email service)
  * @param {string} token - Share token
  * @param {string} recipientEmail - Email to send to
@@ -296,7 +345,7 @@ export async function sendShareLinkViaEmail(token, recipientEmail, childName) {
   try {
     // This would integrate with your email service (SendGrid)
     // For now, just log that it would be sent
-    const shareLink = `https://gratitugram.app/share/${token}`;
+    const shareLink = `${SHORT_URL_BASE}/${token}`;
 
     console.log(`[SECURE_SHARE] Would send share link to ${recipientEmail}: ${shareLink}`);
 

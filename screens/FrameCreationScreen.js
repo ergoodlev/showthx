@@ -24,6 +24,7 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { supabase } from '../supabaseClient';
+import { ensureParentProfile } from '../services/authService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -225,6 +226,15 @@ export const FrameCreationScreen = ({ navigation, route }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         Alert.alert('Error', 'You must be logged in to create frames.');
+        return;
+      }
+
+      // Ensure parent profile exists before creating frame (safety net for new users)
+      const profileResult = await ensureParentProfile(user.id);
+      if (!profileResult.success) {
+        console.error('❌ Failed to ensure parent profile:', profileResult.error);
+        Alert.alert('Error', 'Unable to verify your account. Please try logging out and back in.');
+        setLoading(false);
         return;
       }
 

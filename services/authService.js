@@ -22,6 +22,7 @@ const KID_SESSION_KEY = 'kidSessionId';
 export const parentSignup = async (email, password, fullName, consentData = {}) => {
   try {
     // Create auth user with redirect URL for email confirmation
+    // Uses web URL that Cloudflare Worker will redirect to app
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -29,7 +30,7 @@ export const parentSignup = async (email, password, fullName, consentData = {}) 
         data: {
           full_name: fullName,
         },
-        emailRedirectTo: 'showthx://auth-callback',
+        emailRedirectTo: 'https://showthx.com/auth-callback',
       },
     });
 
@@ -149,36 +150,13 @@ export const parentLogin = async (email, password) => {
     if (error) throw error;
 
     if (data?.user?.id) {
-      // Check if parent profile exists (may not exist if signup required email confirmation)
-      const { data: existingParent, error: profileCheckError } = await supabase
-        .from('parents')
-        .select('id')
-        .eq('id', data.user.id)
-        .maybeSingle(); // Use maybeSingle() to avoid error when 0 rows
-
-      // If no parent profile exists, create one now
-      if (!existingParent && !profileCheckError) {
-        const consentTimestamp = new Date().toISOString();
-        const fullName = data.user.user_metadata?.full_name || 'Parent';
-
-        const { error: createError } = await supabase
-          .from('parents')
-          .insert({
-            id: data.user.id,
-            email: data.user.email,
-            full_name: fullName,
-            parental_consent_given: true,
-            consent_given_at: consentTimestamp,
-            terms_accepted: true,
-            terms_accepted_at: consentTimestamp,
-          });
-
-        if (createError) {
-          console.error('Error creating parent profile on login:', createError);
-          // Don't fail login, just log the error
-        } else {
-          console.log('Created missing parent profile on login');
-        }
+      // Ensure parent profile exists (handles orphaned records with email mismatch)
+      const profileResult = await ensureParentProfile(data.user.id);
+      if (!profileResult.success) {
+        console.error('Error ensuring parent profile on login:', profileResult.error);
+        // Don't fail login, just log the error
+      } else if (profileResult.created || profileResult.fixed) {
+        console.log('Parent profile created/fixed on login');
       }
 
       // Store session
@@ -276,8 +254,9 @@ export const parentLogout = async () => {
  */
 export const requestPasswordReset = async (email) => {
   try {
+    // Uses web URL that Cloudflare Worker will redirect to app
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'showthx://reset-password',
+      redirectTo: 'https://showthx.com/reset-password',
     });
     if (error) throw error;
     return { success: true };
@@ -361,6 +340,123 @@ export const signInWithApple = async () => {
       return { success: false, cancelled: true };
     }
     console.error('Apple Sign In error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Ensures parent profile exists in database
+ * Call this before any operation that requires parent_id FK
+ * This is a safety net for when the database trigger fails
+ * Handles orphaned records where email exists but id doesn't match
+ */
+export const ensureParentProfile = async (userId = null) => {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+
+    if (!user) {
+      return { success: false, error: 'No authenticated user' };
+    }
+
+    const targetId = userId || user.id;
+
+    // Step 1: Check if parent profile exists with correct id
+    const { data: existingById, error: checkError } = await supabase
+      .from('parents')
+      .select('id, email')
+      .eq('id', targetId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('Error checking parent profile by id:', checkError);
+      return { success: false, error: checkError.message };
+    }
+
+    if (existingById) {
+      return { success: true, profile: existingById };
+    }
+
+    // Step 2: Check if orphaned record exists with same email but wrong id
+    const { data: existingByEmail, error: emailCheckError } = await supabase
+      .from('parents')
+      .select('id, email')
+      .eq('email', user.email)
+      .maybeSingle();
+
+    if (emailCheckError) {
+      console.error('Error checking parent profile by email:', emailCheckError);
+    }
+
+    if (existingByEmail) {
+      // Orphaned record found - update its id to match auth.users id
+      console.log('🔧 Found orphaned parent record, fixing id mismatch...');
+      console.log(`   Old id: ${existingByEmail.id}`);
+      console.log(`   New id: ${user.id}`);
+
+      // Delete the orphaned record and create a new one with correct id
+      // (Supabase doesn't allow updating primary key directly)
+      const { error: deleteError } = await supabase
+        .from('parents')
+        .delete()
+        .eq('id', existingByEmail.id);
+
+      if (deleteError) {
+        console.error('Error deleting orphaned parent record:', deleteError);
+        return { success: false, error: 'Failed to fix orphaned account. Please contact support.' };
+      }
+
+      // Now create with correct id
+      const consentTimestamp = new Date().toISOString();
+      const { data: fixedProfile, error: recreateError } = await supabase
+        .from('parents')
+        .insert({
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || 'Parent',
+          parental_consent_given: true,
+          consent_given_at: consentTimestamp,
+          terms_accepted: true,
+          terms_accepted_at: consentTimestamp,
+        })
+        .select()
+        .single();
+
+      if (recreateError) {
+        console.error('Error recreating parent profile:', recreateError);
+        return { success: false, error: recreateError.message };
+      }
+
+      console.log('✅ Parent profile fixed successfully');
+      return { success: true, profile: fixedProfile, fixed: true };
+    }
+
+    // Step 3: No record exists - create new profile
+    console.log('📝 Parent profile missing, auto-creating...');
+    const consentTimestamp = new Date().toISOString();
+    const { data: newProfile, error: createError } = await supabase
+      .from('parents')
+      .insert({
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || 'Parent',
+        parental_consent_given: true,
+        consent_given_at: consentTimestamp,
+        terms_accepted: true,
+        terms_accepted_at: consentTimestamp,
+      })
+      .select()
+      .single();
+
+    if (createError) {
+      console.error('Error creating parent profile:', createError);
+      return { success: false, error: createError.message };
+    }
+
+    console.log('✅ Parent profile auto-created successfully');
+    return { success: true, profile: newProfile, created: true };
+  } catch (error) {
+    console.error('ensureParentProfile error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -529,6 +625,7 @@ export default {
   parentLogout,
   requestPasswordReset,
   signInWithApple,
+  ensureParentProfile,
   getOrCreateKidCode,
   validateKidPin,
   getKidSession,

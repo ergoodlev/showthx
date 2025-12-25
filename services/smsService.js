@@ -30,17 +30,11 @@ export const sendVideoViaSMS = async (phoneNumbers, giftName, videoLink) => {
       };
     }
 
-    const message = `🎁 You've received a thank you video!
+    const message = `🎁 Thank You Video for ${giftName}!
 
-Someone special has recorded a video message just for you.
+Watch here: ${videoLink}
 
-Thank you for: ${giftName}
-
-📺 Watch the video: ${videoLink}
-
-This link expires in 24 hours.
-
-#REELYTHANKFUL - Sent via ShowThx`;
+#REELYTHANKFUL`;
 
     // Open SMS composer with pre-filled message
     const { result } = await SMS.sendSMSAsync(

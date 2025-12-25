@@ -13,6 +13,12 @@ const BIOMETRIC_USER_KEY = 'biometricUserId';
 const SECURE_EMAIL_KEY = 'biometric_email';
 const SECURE_PASSWORD_KEY = 'biometric_password';
 
+// SecureStore options for keychain persistence
+// WHEN_UNLOCKED_THIS_DEVICE_ONLY - Most secure, persists across app reinstalls on same device
+const SECURE_STORE_OPTIONS = {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+};
+
 /**
  * Check if device supports biometric authentication
  */
@@ -166,11 +172,11 @@ export const enableBiometricLogin = async (userId, email = null, password = null
     await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, 'true');
     await AsyncStorage.setItem(BIOMETRIC_USER_KEY, userId);
 
-    // Securely store credentials for re-authentication
+    // Securely store credentials for re-authentication with keychain persistence
     if (email && password) {
-      await SecureStore.setItemAsync(SECURE_EMAIL_KEY, email);
-      await SecureStore.setItemAsync(SECURE_PASSWORD_KEY, password);
-      console.log('✅ Biometric login enabled with secure credential storage');
+      await SecureStore.setItemAsync(SECURE_EMAIL_KEY, email, SECURE_STORE_OPTIONS);
+      await SecureStore.setItemAsync(SECURE_PASSWORD_KEY, password, SECURE_STORE_OPTIONS);
+      console.log('✅ Biometric login enabled with secure credential storage (keychain persistent)');
     } else {
       console.log('⚠️ Biometric enabled without credentials - session restore only');
     }

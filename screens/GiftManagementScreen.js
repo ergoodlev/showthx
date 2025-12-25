@@ -28,6 +28,7 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { supabase } from '../supabaseClient';
+import { ensureParentProfile } from '../services/authService';
 
 export const GiftManagementScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -288,6 +289,13 @@ export const GiftManagementScreen = ({ navigation, route }) => {
 
       if (!user) {
         throw new Error('Not authenticated');
+      }
+
+      // Ensure parent profile exists before creating gift (safety net for new users)
+      const profileResult = await ensureParentProfile(user.id);
+      if (!profileResult.success) {
+        console.error('❌ Failed to ensure parent profile:', profileResult.error);
+        throw new Error('Unable to verify your account. Please try logging out and back in.');
       }
 
       const giftData = {

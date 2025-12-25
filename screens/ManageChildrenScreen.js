@@ -27,6 +27,7 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { supabase } from '../supabaseClient';
+import { ensureParentProfile } from '../services/authService';
 
 export const ManageChildrenScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -145,6 +146,13 @@ export const ManageChildrenScreen = ({ navigation, route }) => {
       } = await supabase.auth.getUser();
 
       if (!user) return;
+
+      // Ensure parent profile exists before creating child (safety net for new users)
+      const profileResult = await ensureParentProfile(user.id);
+      if (!profileResult.success) {
+        console.error('❌ Failed to ensure parent profile:', profileResult.error);
+        throw new Error('Unable to verify your account. Please try logging out and back in.');
+      }
 
       if (modalMode === 'create') {
         const accessCode = generateAccessCode(childName);

@@ -315,7 +315,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
           alignItems: 'center',
         }}
       >
-        <View>
+        <View style={{ flex: 1, marginRight: theme.spacing.sm }}>
           <Text
             style={{
               fontSize: headerFontSize,
@@ -323,6 +323,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
               color: theme.neutralColors.dark,
               fontWeight: '700',
             }}
+            numberOfLines={1}
           >
             Hi, {kidName}!
           </Text>
@@ -338,7 +339,16 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
             Thanks to Give
           </Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={{ padding: 8 }}>
+        <TouchableOpacity
+          onPress={handleLogout}
+          style={{
+            padding: 8,
+            minWidth: 44,
+            minHeight: 44,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
           <Ionicons name="log-out-outline" size={isKidsEdition ? 28 : 24} color={theme.semanticColors.error} />
         </TouchableOpacity>
       </View>
