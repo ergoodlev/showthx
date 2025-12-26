@@ -418,12 +418,13 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             console.log('🔗 Generating short URL for sharing...');
             // If we have storagePath, use it. Otherwise try to get it from the video record
             let pathForShortUrl = storagePath;
+            let thumbnailPath = null;
 
             if (!pathForShortUrl) {
-              // Try to get storage_path from the videos table
+              // Try to get storage_path and thumbnail_path from the videos table
               const { data: videoRecord } = await supabase
                 .from('videos')
-                .select('storage_path')
+                .select('storage_path, thumbnail_path')
                 .eq('id', videoId)
                 .maybeSingle();
 
@@ -431,10 +432,16 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
                 pathForShortUrl = videoRecord.storage_path;
                 console.log('📁 Found storage_path in video record:', pathForShortUrl);
               }
+              if (videoRecord?.thumbnail_path) {
+                thumbnailPath = videoRecord.thumbnail_path;
+                console.log('🖼️ Found thumbnail_path in video record:', thumbnailPath);
+              }
             }
 
             if (pathForShortUrl) {
-              const shortUrlResult = await createShortVideoUrl(videoId, parentId, pathForShortUrl);
+              const shortUrlResult = await createShortVideoUrl(videoId, parentId, pathForShortUrl, {
+                thumbnailPath: thumbnailPath,
+              });
               shareUrl = shortUrlResult.shortUrl;
               console.log('✅ Short URL generated:', shareUrl);
             } else {

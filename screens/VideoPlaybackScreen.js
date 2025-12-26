@@ -174,6 +174,43 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
             <CustomFrameOverlay frameTemplate={frameTemplate} />
           )}
 
+          {/* Custom Text Overlay - Rendered separately from frame */}
+          {frameTemplate?.custom_text && (
+            <View
+              style={{
+                position: 'absolute',
+                left: 16,
+                right: 16,
+                [frameTemplate.custom_text_position === 'top' ? 'top' : 'bottom']:
+                  frameTemplate.custom_text_position === 'top' ? 20 : 70,
+                alignItems: 'center',
+                zIndex: 5,
+              }}
+              pointerEvents="none"
+            >
+              <View style={{
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8
+              }}>
+                <Text
+                  style={{
+                    color: frameTemplate.custom_text_color || '#FFFFFF',
+                    fontSize: 16,
+                    fontWeight: '600',
+                    textAlign: 'center',
+                    textShadowColor: 'rgba(0,0,0,0.8)',
+                    textShadowOffset: { width: 1, height: 1 },
+                    textShadowRadius: 2,
+                  }}
+                >
+                  {frameTemplate.custom_text}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {!isPlaying && (
             <TouchableOpacity
               onPress={handlePlayPause}

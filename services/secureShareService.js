@@ -294,7 +294,7 @@ export async function cleanupExpiredTokens() {
  * @param {string} videoId - Video ID
  * @param {string} userId - Parent user ID
  * @param {string} storagePath - Supabase storage path for the video
- * @param {object} options - Share options (expiryHours, etc)
+ * @param {object} options - Share options (expiryHours, thumbnailPath, etc)
  * @returns {Promise<{shortUrl: string, token: string}>}
  */
 export async function createShortVideoUrl(videoId, userId, storagePath, options = {}) {
@@ -304,10 +304,16 @@ export async function createShortVideoUrl(videoId, userId, storagePath, options 
       ...options,
     });
 
-    // Store the storage path with the token for Cloudflare Worker to resolve
+    // Build update object with storage path and optional thumbnail path
+    const updateData = { storage_path: storagePath };
+    if (options.thumbnailPath) {
+      updateData.thumbnail_path = options.thumbnailPath;
+    }
+
+    // Store the storage path (and thumbnail) with the token for Cloudflare Worker to resolve
     const { error } = await supabase
       .from('video_share_tokens')
-      .update({ storage_path: storagePath })
+      .update(updateData)
       .eq('token', shareData.token);
 
     if (error) {

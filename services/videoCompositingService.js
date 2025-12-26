@@ -339,10 +339,14 @@ export const addStickerOverlays = async (inputPath, stickers, videoDimensions = 
     const { width, height } = videoDimensions;
 
     // Build drawtext filters for each sticker
+    // Stickers have x, y as percentages (0-100) directly on the object
     const stickerFilters = stickers.map((sticker) => {
       const emoji = sticker.emoji || sticker.sticker || '⭐';
-      const x = Math.round((sticker.position?.x || 0) * width / 100) || 50;
-      const y = Math.round((sticker.position?.y || 0) * height / 100) || 50;
+      // Handle both sticker.x/y (direct) and sticker.position.x/y (nested) formats
+      const xPercent = sticker.x ?? sticker.position?.x ?? 50;
+      const yPercent = sticker.y ?? sticker.position?.y ?? 50;
+      const x = Math.round(xPercent * width / 100);
+      const y = Math.round(yPercent * height / 100);
       const fontSize = Math.round((sticker.size || 40) * (sticker.scale || 1));
 
       // Escape emoji for FFmpeg
@@ -497,6 +501,49 @@ export const cleanupCompositedVideos = async () => {
   }
 };
 
+/**
+ * Generate a thumbnail image from video
+ * Extracts a frame from the video at specified time
+ * @param {string} videoPath - Input video path
+ * @param {number} timeSeconds - Time in seconds to extract frame (default: 0.5)
+ * @returns {Promise<{success: boolean, thumbnailPath?: string, error?: string}>}
+ */
+export const generateThumbnail = async (videoPath, timeSeconds = 0.5) => {
+  const ffmpegLoaded = await loadFFmpeg();
+  if (!ffmpegLoaded) {
+    console.log('[COMPOSITING] FFmpeg not available for thumbnail generation');
+    return { success: false, error: 'FFmpeg not available' };
+  }
+
+  try {
+    const thumbnailPath = await generateOutputPath('jpg');
+
+    // Extract single frame at specified time
+    // -ss: seek to time, -vframes 1: extract one frame, -q:v 2: high quality JPEG
+    const command = `-ss ${timeSeconds} -i "${videoPath}" -vframes 1 -q:v 2 -y "${thumbnailPath}"`;
+
+    console.log('[COMPOSITING] Generating thumbnail...');
+
+    const session = await FFmpegKit.execute(command);
+    const returnCode = await session.getReturnCode();
+
+    if (ReturnCode.isSuccess(returnCode)) {
+      // Verify thumbnail was created
+      const fileInfo = await FileSystem.getInfoAsync(thumbnailPath);
+      if (fileInfo.exists) {
+        console.log('[COMPOSITING] Thumbnail generated:', thumbnailPath);
+        return { success: true, thumbnailPath };
+      }
+    }
+
+    console.warn('[COMPOSITING] Thumbnail generation failed');
+    return { success: false, error: 'Failed to generate thumbnail' };
+  } catch (error) {
+    console.error('[COMPOSITING] Error generating thumbnail:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export default {
   isCompositingAvailable,
   fixVideoRotation,
@@ -508,4 +555,5 @@ export default {
   compositeVideo,
   prepareVideoForSharing,
   cleanupCompositedVideos,
+  generateThumbnail,
 };

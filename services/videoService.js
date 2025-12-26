@@ -161,10 +161,93 @@ export const validateVideo = async (videoUri) => {
   }
 };
 
+/**
+ * Upload thumbnail image to Supabase Storage
+ * Stored alongside the video for iMessage/social media previews
+ */
+export const uploadThumbnail = async (thumbnailUri, giftId, parentId) => {
+  try {
+    console.log('🖼️ Starting thumbnail upload...', { thumbnailUri, giftId, parentId });
+
+    // Validate inputs
+    if (!thumbnailUri || !giftId || !parentId) {
+      throw new Error('Missing required parameters for thumbnail upload');
+    }
+
+    // Read file as base64
+    const base64Data = await FileSystem.readAsStringAsync(thumbnailUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    console.log('📁 Read thumbnail, size:', Math.round(base64Data.length / 1024), 'KB (base64)');
+
+    // Create file path (same structure as video but with .jpg)
+    const timestamp = Date.now();
+    const filename = `${parentId}/${giftId}/${timestamp}_thumb.jpg`;
+
+    // Convert base64 to Uint8Array for upload
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    console.log('📤 Uploading thumbnail to Supabase Storage:', filename);
+
+    // Upload to Supabase Storage (same bucket as videos)
+    const { data, error } = await supabase.storage
+      .from(VIDEOS_BUCKET)
+      .upload(filename, bytes.buffer, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      });
+
+    if (error) {
+      console.error('❌ Supabase thumbnail upload error:', error);
+      throw error;
+    }
+
+    console.log('✅ Thumbnail upload successful:', data);
+
+    return {
+      success: true,
+      path: filename,
+    };
+  } catch (error) {
+    console.error('❌ Error uploading thumbnail:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+/**
+ * Get signed URL for thumbnail
+ */
+export const getThumbnailUrl = async (thumbnailPath) => {
+  try {
+    const { data, error } = await supabase.storage
+      .from(VIDEOS_BUCKET)
+      .createSignedUrl(thumbnailPath, 86400 * 30); // 30 days for thumbnails
+
+    if (error) {
+      throw error;
+    }
+
+    return { url: data.signedUrl, error: null };
+  } catch (error) {
+    console.error('Error getting thumbnail URL:', error);
+    return { url: null, error: error.message };
+  }
+};
+
 export default {
   uploadVideo,
   deleteVideo,
   createSignedUrl,
   getVideoUrl,
   validateVideo,
+  uploadThumbnail,
+  getThumbnailUrl,
 };

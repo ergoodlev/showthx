@@ -22,10 +22,10 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { supabase } from '../supabaseClient';
-import { uploadVideo, validateVideo } from '../services/videoService';
+import { uploadVideo, validateVideo, uploadThumbnail } from '../services/videoService';
 import { sendVideoReadyNotification } from '../services/emailService';
 import { notifyParentOfPendingVideo } from '../services/notificationService';
-import { prepareVideoForSharing, isCompositingAvailable } from '../services/videoCompositingService';
+import { prepareVideoForSharing, isCompositingAvailable, generateThumbnail } from '../services/videoCompositingService';
 
 export const VideoConfirmationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -235,6 +235,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
           p_parent_id: parentId,
           p_video_url: uploadResult.url,
           p_metadata: metadata,
+          p_storage_path: uploadResult.path, // Pass storage path to RPC for reliable saving
         });
 
       if (videoError) {
@@ -272,6 +273,37 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
         } else {
           console.log('✅ Storage path saved:', uploadResult.path);
         }
+      }
+
+      // Generate and upload thumbnail for iMessage/social previews
+      let thumbnailPath = null;
+      try {
+        setLoadingMessage('Creating preview image...');
+        console.log('🖼️ Generating thumbnail from video...');
+        const thumbResult = await generateThumbnail(videoToUpload);
+
+        if (thumbResult.success && thumbResult.thumbnailPath) {
+          console.log('📤 Uploading thumbnail...');
+          const thumbUploadResult = await uploadThumbnail(thumbResult.thumbnailPath, giftId, parentId);
+
+          if (thumbUploadResult.success) {
+            thumbnailPath = thumbUploadResult.path;
+            console.log('✅ Thumbnail uploaded:', thumbnailPath);
+
+            // Save thumbnail path to video record
+            const { error: thumbUpdateError } = await supabase
+              .from('videos')
+              .update({ thumbnail_path: thumbnailPath })
+              .eq('id', videoId);
+
+            if (thumbUpdateError) {
+              console.warn('⚠️ Could not save thumbnail_path:', thumbUpdateError.message);
+            }
+          }
+        }
+      } catch (thumbError) {
+        // Don't fail video submission if thumbnail fails
+        console.warn('⚠️ Thumbnail generation failed (non-blocking):', thumbError.message);
       }
 
       // Gift status is automatically updated by the secure function
