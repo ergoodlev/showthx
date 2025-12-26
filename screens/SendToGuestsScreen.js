@@ -413,16 +413,53 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         setLoadingMessage('Generating share link...');
 
         // Generate short URL if we have the required data
-        if (videoId && parentId && storagePath) {
+        if (videoId && parentId) {
           try {
             console.log('🔗 Generating short URL for sharing...');
-            const shortUrlResult = await createShortVideoUrl(videoId, parentId, storagePath);
-            shareUrl = shortUrlResult.shortUrl;
-            console.log('✅ Short URL generated:', shareUrl);
+            // If we have storagePath, use it. Otherwise try to get it from the video record
+            let pathForShortUrl = storagePath;
+
+            if (!pathForShortUrl) {
+              // Try to get storage_path from the videos table
+              const { data: videoRecord } = await supabase
+                .from('videos')
+                .select('storage_path')
+                .eq('id', videoId)
+                .maybeSingle();
+
+              if (videoRecord?.storage_path) {
+                pathForShortUrl = videoRecord.storage_path;
+                console.log('📁 Found storage_path in video record:', pathForShortUrl);
+              }
+            }
+
+            if (pathForShortUrl) {
+              const shortUrlResult = await createShortVideoUrl(videoId, parentId, pathForShortUrl);
+              shareUrl = shortUrlResult.shortUrl;
+              console.log('✅ Short URL generated:', shareUrl);
+            } else {
+              // Generate a fresh signed URL as fallback
+              console.log('⚠️ No storage_path found, generating fresh signed URL...');
+              const { data: videoRecord } = await supabase
+                .from('videos')
+                .select('video_url')
+                .eq('id', videoId)
+                .maybeSingle();
+
+              // Try to extract path from stored URL and regenerate
+              if (videoRecord?.video_url) {
+                // Use the short URL base with just the videoId as fallback
+                shareUrl = `https://showthx.com/v/${videoId}`;
+                console.log('⚠️ Using video ID as fallback URL:', shareUrl);
+              }
+            }
           } catch (shortUrlError) {
-            console.warn('⚠️ Could not generate short URL, using full URL:', shortUrlError.message);
-            // Fall back to full URL
+            console.warn('⚠️ Could not generate short URL:', shortUrlError.message);
+            // Don't fall back to expired URL - show error
+            throw new Error('Could not generate share link. Please try again.');
           }
+        } else {
+          throw new Error('Missing video information for sharing. Please go back and try again.');
         }
 
         setLoadingMessage('Opening share sheet...');

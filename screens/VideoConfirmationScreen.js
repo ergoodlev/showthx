@@ -260,6 +260,20 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
 
       console.log('✅ Video record created with ID:', videoId);
 
+      // Save storage_path to video record for future URL generation
+      if (uploadResult.path) {
+        const { error: updateError } = await supabase
+          .from('videos')
+          .update({ storage_path: uploadResult.path })
+          .eq('id', videoId);
+
+        if (updateError) {
+          console.warn('⚠️ Could not save storage_path:', updateError.message);
+        } else {
+          console.log('✅ Storage path saved:', uploadResult.path);
+        }
+      }
+
       // Gift status is automatically updated by the secure function
       console.log('✅ Gift status updated to pending_approval');
 
