@@ -15,6 +15,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
@@ -26,6 +27,104 @@ import { uploadVideo, validateVideo, uploadThumbnail } from '../services/videoSe
 import { sendVideoReadyNotification } from '../services/emailService';
 import { notifyParentOfPendingVideo } from '../services/notificationService';
 import { prepareVideoForSharing, isCompositingAvailable, generateThumbnail } from '../services/videoCompositingService';
+import { getFilterById } from '../services/videoFilterService';
+
+/**
+ * Filter Preview Overlay - Visual approximation of filters
+ * Same component as VideoCustomizationScreen for consistency
+ */
+const FilterPreviewOverlay = ({ filterId }) => {
+  if (!filterId) return null;
+
+  const filter = getFilterById(filterId);
+  if (!filter) return null;
+
+  // Render different overlays based on filter type
+  switch (filterId) {
+    case 'warm':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 165, 0, 0.15)' }]} />
+        </View>
+      );
+    case 'cool':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(100, 149, 237, 0.18)' }]} />
+        </View>
+      );
+    case 'vintage':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(210, 180, 140, 0.2)' }]} />
+        </View>
+      );
+    case 'sepia':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(112, 66, 20, 0.3)' }]} />
+        </View>
+      );
+    case 'bw':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(128, 128, 128, 0.6)' }]} />
+        </View>
+      );
+    case 'vignette':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <LinearGradient
+            colors={['transparent', 'transparent', 'rgba(0,0,0,0.5)']}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.4)', 'transparent']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.3 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      );
+    case 'bright':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.12)' }]} />
+        </View>
+      );
+    case 'vivid':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 0, 100, 0.05)' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 200, 255, 0.05)' }]} />
+        </View>
+      );
+    case 'pop':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.08)' }]} />
+        </View>
+      );
+    case 'dreamy':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 182, 193, 0.15)' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
+        </View>
+      );
+    default:
+      return null;
+  }
+};
+
+const filterStyles = StyleSheet.create({
+  overlay: {
+    zIndex: 5,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+});
 
 export const VideoConfirmationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -35,6 +134,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
   const giftName = route?.params?.giftName;
   const decorations = route?.params?.decorations || [];
   const frameTemplate = route?.params?.frameTemplate || null;
+  const videoFilter = route?.params?.videoFilter || null;
 
   // Render frame overlay
   const renderFrameOverlay = () => {
@@ -171,23 +271,24 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       }
       console.log('✅ Video validated, size:', Math.round(validation.size / 1024), 'KB');
 
-      // Step 1.5: Composite video with overlays (frame, text, stickers) before upload
+      // Step 1.5: Composite video with overlays (frame, text, stickers, filter) before upload
       let videoToUpload = videoUri;
-      const hasOverlays = frameTemplate || (decorations && decorations.length > 0);
+      const hasOverlays = frameTemplate || (decorations && decorations.length > 0) || videoFilter;
 
       if (hasOverlays) {
-        setLoadingMessage('Adding frame and stickers...');
+        setLoadingMessage('Adding effects...');
         console.log('🎬 Compositing video with overlays...');
+        console.log('🎬 Options:', { hasFrame: !!frameTemplate, stickerCount: decorations?.length || 0, filter: videoFilter });
         const canComposite = await isCompositingAvailable();
 
         if (canComposite) {
           try {
-            const compositedResult = await prepareVideoForSharing(
-              videoUri,
+            const compositedResult = await prepareVideoForSharing(videoUri, {
               frameTemplate,
-              frameTemplate?.custom_text,
-              decorations
-            );
+              customText: frameTemplate?.custom_text,
+              stickers: decorations,
+              videoFilter,
+            });
 
             if (compositedResult.success && compositedResult.outputPath && !compositedResult.fallback) {
               videoToUpload = compositedResult.outputPath;
@@ -217,7 +318,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       setLoadingMessage('Saving video...');
       console.log('💾 Creating database record via secure function...');
 
-      // Build metadata object with decorations and frame info
+      // Build metadata object with decorations, frame, and filter info
       const metadata = {
         decorations: decorations,
       };
@@ -226,6 +327,12 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       if (frameTemplate && frameTemplate.id) {
         metadata.frame_template_id = frameTemplate.id;
         console.log('🖼️  Saving frame template ID:', frameTemplate.id);
+      }
+
+      // Add video filter if present
+      if (videoFilter) {
+        metadata.video_filter = videoFilter;
+        console.log('🎨 Saving video filter:', videoFilter);
       }
 
       const { data: videoId, error: videoError } = await supabase
@@ -406,6 +513,9 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
             onPlaybackStatusUpdate={(status) => setIsPlaying(status.isPlaying)}
           />
 
+          {/* Filter Preview Overlay - Visual approximation of selected filter */}
+          <FilterPreviewOverlay filterId={videoFilter} />
+
           {/* Frame Overlay - Layered above video */}
           <View style={[StyleSheet.absoluteFill, { zIndex: 10 }]} pointerEvents="none">
             {renderFrameOverlay()}
@@ -520,6 +630,42 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
               >
                 {decorations.length} sticker{decorations.length !== 1 ? 's' : ''}
               </Text>
+            </View>
+          )}
+
+          {/* Filter Info */}
+          {videoFilter && (
+            <View
+              style={{
+                backgroundColor: theme.neutralColors.lightGray,
+                borderRadius: 8,
+                padding: theme.spacing.md,
+                marginBottom: theme.spacing.md,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 12 : 11,
+                  fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                  color: theme.neutralColors.mediumGray,
+                }}
+              >
+                Filter Applied
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                <Text style={{ fontSize: 20, marginRight: 8 }}>
+                  {getFilterById(videoFilter)?.icon || '🎨'}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 14 : 12,
+                    fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                    color: theme.neutralColors.dark,
+                  }}
+                >
+                  {getFilterById(videoFilter)?.name || videoFilter}
+                </Text>
+              </View>
             </View>
           )}
 

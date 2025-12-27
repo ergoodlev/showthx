@@ -475,10 +475,10 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         const shareMessage = `🎁 Thank You Video for ${giftName}!\n\nWatch here: ${shareUrl}\n\n#REELYTHANKFUL`;
 
         try {
+          // Note: URL is already in shareMessage, don't pass separately to avoid duplicate links on iOS
           const result = await Share.share({
             message: shareMessage,
             title: `Thank You Video for ${giftName}`,
-            url: Platform.OS === 'ios' ? shareUrl : undefined, // iOS can share URL separately
           });
 
           if (result.action === Share.dismissedAction) {

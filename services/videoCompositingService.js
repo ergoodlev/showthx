@@ -8,6 +8,7 @@
 
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import { getFilterCommand } from './videoFilterService';
 
 // FFmpeg Kit imports - requires development build
 let FFmpegKit = null;
@@ -377,8 +378,184 @@ export const addStickerOverlays = async (inputPath, stickers, videoDimensions = 
 };
 
 /**
+ * Apply video filter (color grading, effects)
+ * @param {string} inputPath - Input video path
+ * @param {string} filterId - Filter ID from videoFilterService
+ * @returns {Promise<{success: boolean, outputPath?: string, error?: string}>}
+ */
+export const applyVideoFilter = async (inputPath, filterId) => {
+  const ffmpegLoaded = await loadFFmpeg();
+  if (!ffmpegLoaded) {
+    return { success: true, outputPath: inputPath, fallback: true };
+  }
+
+  if (!filterId) {
+    return { success: true, outputPath: inputPath };
+  }
+
+  try {
+    const filterCommand = getFilterCommand(filterId);
+    if (!filterCommand) {
+      console.warn(`[COMPOSITING] Unknown filter: ${filterId}`);
+      return { success: true, outputPath: inputPath };
+    }
+
+    const outputPath = await generateOutputPath();
+    const command = `-i "${inputPath}" -vf "${filterCommand}" -c:v libx264 -preset fast -crf 23 -c:a copy -y "${outputPath}"`;
+
+    console.log('[COMPOSITING] Applying video filter:', filterId);
+
+    const session = await FFmpegKit.execute(command);
+    const returnCode = await session.getReturnCode();
+
+    if (ReturnCode.isSuccess(returnCode)) {
+      console.log('[COMPOSITING] Video filter applied successfully');
+      return { success: true, outputPath };
+    } else {
+      console.warn('[COMPOSITING] Video filter failed, returning original');
+      return { success: true, outputPath: inputPath, fallback: true };
+    }
+  } catch (error) {
+    console.error('[COMPOSITING] Error applying video filter:', error);
+    return { success: true, outputPath: inputPath, fallback: true };
+  }
+};
+
+/**
+ * Overlay PNG frame onto video
+ * Uses transparent PNG frame image
+ * @param {string} inputPath - Input video path
+ * @param {string} framePngPath - Path to PNG frame image
+ * @returns {Promise<{success: boolean, outputPath?: string, error?: string}>}
+ */
+export const overlayFramePNG = async (inputPath, framePngPath) => {
+  const ffmpegLoaded = await loadFFmpeg();
+  if (!ffmpegLoaded) {
+    return { success: true, outputPath: inputPath, fallback: true };
+  }
+
+  if (!framePngPath) {
+    return { success: true, outputPath: inputPath };
+  }
+
+  try {
+    // Check if PNG file exists
+    const fileInfo = await FileSystem.getInfoAsync(framePngPath);
+    if (!fileInfo.exists) {
+      console.warn('[COMPOSITING] Frame PNG not found:', framePngPath);
+      return { success: true, outputPath: inputPath };
+    }
+
+    const outputPath = await generateOutputPath();
+
+    // Scale PNG to match video size and overlay
+    // The PNG frame should have a transparent center
+    const command = `-i "${inputPath}" -i "${framePngPath}" -filter_complex "[1:v]scale=iw:ih[frame];[0:v][frame]overlay=0:0" -c:v libx264 -preset fast -crf 23 -c:a copy -y "${outputPath}"`;
+
+    console.log('[COMPOSITING] Overlaying PNG frame...');
+
+    const session = await FFmpegKit.execute(command);
+    const returnCode = await session.getReturnCode();
+
+    if (ReturnCode.isSuccess(returnCode)) {
+      console.log('[COMPOSITING] PNG frame overlay successful');
+      return { success: true, outputPath };
+    } else {
+      const logs = await session.getAllLogs();
+      console.warn('[COMPOSITING] PNG frame overlay failed:', logs?.slice(-3).map(l => l.getMessage()).join('\n'));
+      return { success: true, outputPath: inputPath, fallback: true };
+    }
+  } catch (error) {
+    console.error('[COMPOSITING] Error overlaying PNG frame:', error);
+    return { success: true, outputPath: inputPath, fallback: true };
+  }
+};
+
+/**
+ * Overlay multiple PNG stickers onto video
+ * @param {string} inputPath - Input video path
+ * @param {Array} stickers - Array of sticker objects {pngPath, x, y, width, height, scale}
+ * @param {object} videoDimensions - Video dimensions {width, height}
+ * @returns {Promise<{success: boolean, outputPath?: string, error?: string}>}
+ */
+export const overlayPNGStickers = async (inputPath, stickers, videoDimensions = { width: 1080, height: 1920 }) => {
+  const ffmpegLoaded = await loadFFmpeg();
+  if (!ffmpegLoaded) {
+    return { success: true, outputPath: inputPath, fallback: true };
+  }
+
+  if (!stickers || stickers.length === 0) {
+    return { success: true, outputPath: inputPath };
+  }
+
+  // Filter to only PNG stickers (not emoji)
+  const pngStickers = stickers.filter(s => s.pngPath);
+
+  if (pngStickers.length === 0) {
+    // Fall back to emoji stickers if no PNG stickers
+    return await addStickerOverlays(inputPath, stickers, videoDimensions);
+  }
+
+  try {
+    const outputPath = await generateOutputPath();
+    const { width, height } = videoDimensions;
+
+    // Build FFmpeg command for multiple PNG overlays
+    // Input: video + all sticker PNGs
+    const inputs = pngStickers.map(s => `-i "${s.pngPath}"`).join(' ');
+
+    // Build filter_complex for scaling and positioning each sticker
+    let filterComplex = '';
+    let currentStream = '0:v';
+
+    pngStickers.forEach((sticker, i) => {
+      const inputIndex = i + 1; // Sticker inputs start at 1
+      const outputLabel = i === pngStickers.length - 1 ? '' : `[v${i}]`;
+      const nextStream = i === pngStickers.length - 1 ? '' : `v${i}`;
+
+      // Calculate position and size
+      const xPercent = sticker.x ?? sticker.position?.x ?? 50;
+      const yPercent = sticker.y ?? sticker.position?.y ?? 50;
+      const scale = sticker.scale || 1;
+      const stickerSize = Math.round(80 * scale); // Base size 80px
+
+      const x = Math.round((xPercent * width / 100) - (stickerSize / 2));
+      const y = Math.round((yPercent * height / 100) - (stickerSize / 2));
+
+      // Scale sticker and overlay
+      filterComplex += `[${inputIndex}:v]scale=${stickerSize}:${stickerSize}[s${i}];`;
+      filterComplex += `[${currentStream}][s${i}]overlay=${x}:${y}${outputLabel};`;
+
+      currentStream = nextStream;
+    });
+
+    // Remove trailing semicolon
+    filterComplex = filterComplex.slice(0, -1);
+
+    const command = `-i "${inputPath}" ${inputs} -filter_complex "${filterComplex}" -c:v libx264 -preset fast -crf 23 -c:a copy -y "${outputPath}"`;
+
+    console.log('[COMPOSITING] Overlaying PNG stickers...');
+
+    const session = await FFmpegKit.execute(command);
+    const returnCode = await session.getReturnCode();
+
+    if (ReturnCode.isSuccess(returnCode)) {
+      console.log('[COMPOSITING] PNG stickers overlay successful');
+      return { success: true, outputPath };
+    } else {
+      console.warn('[COMPOSITING] PNG stickers overlay failed, trying emoji fallback');
+      return await addStickerOverlays(inputPath, stickers, videoDimensions);
+    }
+  } catch (error) {
+    console.error('[COMPOSITING] Error overlaying PNG stickers:', error);
+    return await addStickerOverlays(inputPath, stickers, videoDimensions);
+  }
+};
+
+/**
  * Full video compositing pipeline
- * Combines rotation fix, frame border, text overlay, and stickers
+ * Combines rotation fix, video filter, frame overlay/border, text overlay, and stickers
+ * Order: rotation → filter → stickers → frame → text
  * @param {string} videoPath - Input video path
  * @param {object} options - Compositing options
  * @returns {Promise<{success: boolean, outputPath?: string, error?: string}>}
@@ -392,62 +569,95 @@ export const compositeVideo = async (videoPath, options = {}) => {
 
   const {
     frameTemplate = null,
+    framePngPath = null, // PNG frame image path
     customText = null,
     customTextPosition = 'bottom',
     customTextColor = 'white',
     stickers = [],
+    videoFilter = null, // Filter ID from videoFilterService
     fixRotation = true,
     onProgress = null,
   } = options;
 
   try {
     let currentPath = videoPath;
+    let stepNum = 1;
 
     // Step 1: Fix rotation if needed
     if (fixRotation) {
-      console.log('[COMPOSITING] Step 1: Normalizing rotation...');
+      console.log(`[COMPOSITING] Step ${stepNum}: Normalizing rotation...`);
       if (onProgress) onProgress('Normalizing video orientation...');
 
       const rotationResult = await normalizeVideoRotation(currentPath);
       if (rotationResult.success && rotationResult.outputPath) {
         currentPath = rotationResult.outputPath;
       }
+      stepNum++;
     }
 
-    // Step 2: Add frame border if template provided
-    if (frameTemplate && frameTemplate.primary_color) {
-      console.log('[COMPOSITING] Step 2: Adding frame border...');
+    // Step 2: Apply video filter if provided (NEW)
+    if (videoFilter) {
+      console.log(`[COMPOSITING] Step ${stepNum}: Applying video filter...`);
+      if (onProgress) onProgress('Applying filter...');
+
+      const filterResult = await applyVideoFilter(currentPath, videoFilter);
+      if (filterResult.success && filterResult.outputPath && !filterResult.fallback) {
+        currentPath = filterResult.outputPath;
+      }
+      stepNum++;
+    }
+
+    // Step 3: Add stickers (PNG or emoji)
+    if (stickers && stickers.length > 0) {
+      console.log(`[COMPOSITING] Step ${stepNum}: Adding stickers...`);
+      if (onProgress) onProgress('Adding stickers...');
+
+      // Use PNG stickers if available, otherwise emoji fallback
+      const stickerResult = await overlayPNGStickers(currentPath, stickers);
+      if (stickerResult.success && stickerResult.outputPath && !stickerResult.fallback) {
+        currentPath = stickerResult.outputPath;
+      }
+      stepNum++;
+    }
+
+    // Step 4: Add frame (PNG overlay preferred, color border fallback)
+    const pngFramePath = framePngPath || frameTemplate?.frame_png_path;
+    if (pngFramePath) {
+      // Use PNG frame overlay (decorative shapes)
+      console.log(`[COMPOSITING] Step ${stepNum}: Overlaying PNG frame...`);
+      if (onProgress) onProgress('Adding decorative frame...');
+
+      const frameResult = await overlayFramePNG(currentPath, pngFramePath);
+      if (frameResult.success && frameResult.outputPath && !frameResult.fallback) {
+        currentPath = frameResult.outputPath;
+      }
+      stepNum++;
+    } else if (frameTemplate && frameTemplate.primary_color) {
+      // Fallback to simple color border
+      console.log(`[COMPOSITING] Step ${stepNum}: Adding frame border...`);
       if (onProgress) onProgress('Adding frame...');
 
       const frameResult = await addFrameBorder(currentPath, frameTemplate);
       if (frameResult.success && frameResult.outputPath && !frameResult.fallback) {
         currentPath = frameResult.outputPath;
       }
+      stepNum++;
     }
 
-    // Step 3: Add custom text if provided
-    if (customText && customText.trim() !== '') {
-      console.log('[COMPOSITING] Step 3: Adding custom text...');
+    // Step 5: Add custom text if provided
+    const textToAdd = customText || frameTemplate?.custom_text;
+    if (textToAdd && textToAdd.trim() !== '') {
+      console.log(`[COMPOSITING] Step ${stepNum}: Adding custom text...`);
       if (onProgress) onProgress('Adding text overlay...');
 
-      const textResult = await addTextOverlay(currentPath, customText, {
-        position: customTextPosition,
-        color: customTextColor,
+      const textResult = await addTextOverlay(currentPath, textToAdd, {
+        position: customTextPosition || frameTemplate?.custom_text_position || 'bottom',
+        color: customTextColor || frameTemplate?.custom_text_color || 'white',
       });
       if (textResult.success && textResult.outputPath && !textResult.fallback) {
         currentPath = textResult.outputPath;
       }
-    }
-
-    // Step 4: Add stickers if any
-    if (stickers && stickers.length > 0) {
-      console.log('[COMPOSITING] Step 4: Adding stickers...');
-      if (onProgress) onProgress('Adding stickers...');
-
-      const stickerResult = await addStickerOverlays(currentPath, stickers);
-      if (stickerResult.success && stickerResult.outputPath && !stickerResult.fallback) {
-        currentPath = stickerResult.outputPath;
-      }
+      stepNum++;
     }
 
     console.log('[COMPOSITING] Video compositing complete:', currentPath);
@@ -462,23 +672,51 @@ export const compositeVideo = async (videoPath, options = {}) => {
 
 /**
  * Prepare video for sharing
- * Quick compositing with rotation fix and basic frame
+ * Full compositing with rotation fix, filter, frame, text, and stickers
  * @param {string} videoPath - Input video path
- * @param {object} frameTemplate - Frame template (optional)
- * @param {string} customText - Custom text (optional)
- * @param {Array} stickers - Stickers array (optional)
+ * @param {object} options - Sharing options
+ * @param {object} options.frameTemplate - Frame template (optional)
+ * @param {string} options.framePngPath - PNG frame path (optional)
+ * @param {string} options.customText - Custom text (optional)
+ * @param {Array} options.stickers - Stickers array (optional)
+ * @param {string} options.videoFilter - Filter ID (optional)
  * @returns {Promise<{success: boolean, outputPath?: string, error?: string}>}
  */
-export const prepareVideoForSharing = async (videoPath, frameTemplate = null, customText = null, stickers = []) => {
+export const prepareVideoForSharing = async (videoPath, options = {}) => {
+  // Handle legacy signature: prepareVideoForSharing(path, frameTemplate, customText, stickers)
+  let opts = options;
+  if (options && typeof options === 'object' && !options.frameTemplate && !options.stickers) {
+    // Old signature - convert to new format
+    const [frameTemplate, customText, stickers] = [options, arguments[2], arguments[3]];
+    opts = { frameTemplate, customText, stickers };
+  }
+
+  const {
+    frameTemplate = null,
+    framePngPath = null,
+    customText = null,
+    stickers = [],
+    videoFilter = null,
+  } = opts;
+
   console.log('[COMPOSITING] Preparing video for sharing...');
-  console.log('[COMPOSITING] Input:', { videoPath, hasFrame: !!frameTemplate, hasText: !!customText, stickerCount: stickers?.length || 0 });
+  console.log('[COMPOSITING] Input:', {
+    videoPath,
+    hasFrame: !!frameTemplate,
+    hasPngFrame: !!framePngPath || !!frameTemplate?.frame_png_path,
+    hasText: !!customText || !!frameTemplate?.custom_text,
+    stickerCount: stickers?.length || 0,
+    filter: videoFilter,
+  });
 
   return await compositeVideo(videoPath, {
     frameTemplate,
+    framePngPath: framePngPath || frameTemplate?.frame_png_path,
     customText: customText || frameTemplate?.custom_text,
     customTextPosition: frameTemplate?.custom_text_position || 'bottom',
     customTextColor: frameTemplate?.custom_text_color || 'white',
     stickers,
+    videoFilter,
     fixRotation: true,
   });
 };
@@ -552,6 +790,9 @@ export default {
   overlayImage,
   addTextOverlay,
   addStickerOverlays,
+  applyVideoFilter,
+  overlayFramePNG,
+  overlayPNGStickers,
   compositeVideo,
   prepareVideoForSharing,
   cleanupCompositedVideos,

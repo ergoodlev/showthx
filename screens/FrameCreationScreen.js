@@ -15,6 +15,7 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +26,13 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { supabase } from '../supabaseClient';
 import { ensureParentProfile } from '../services/authService';
+import {
+  isAIFrameAvailable,
+  generateAIFrame,
+  saveAIFrameAsTemplate,
+  FRAME_STYLE_PRESETS,
+  FRAME_COLOR_SCHEMES,
+} from '../services/aiFrameService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -203,6 +211,7 @@ export const FrameCreationScreen = ({ navigation, route }) => {
   const existingFrame = route?.params?.existingFrame;
 
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Saving frame...');
   const [frameName, setFrameName] = useState(existingFrame?.name || '');
   const [selectedShape, setSelectedShape] = useState(existingFrame?.frame_shape || 'rounded-thick');
   const [customText, setCustomText] = useState(existingFrame?.custom_text || '');
@@ -211,8 +220,70 @@ export const FrameCreationScreen = ({ navigation, route }) => {
   const [textFont, setTextFont] = useState(existingFrame?.custom_text_font || 'default');
   const [frameColor, setFrameColor] = useState(existingFrame?.primary_color || '#06b6d4');
 
+  // AI Frame state
+  const [frameMode, setFrameMode] = useState('preset'); // 'preset' or 'ai'
+  const [aiPreset, setAiPreset] = useState(null);
+  const [aiCustomPrompt, setAiCustomPrompt] = useState('');
+  const [aiColorScheme, setAiColorScheme] = useState('rainbow');
+  const [generatedFrameUrl, setGeneratedFrameUrl] = useState(null);
+  const [generatedFramePath, setGeneratedFramePath] = useState(null);
+
+  const aiAvailable = isAIFrameAvailable();
+
   // Get current shape config
   const currentShape = FRAME_SHAPES.find(s => s.id === selectedShape) || FRAME_SHAPES[1];
+
+  // Generate AI frame
+  const handleGenerateAIFrame = async () => {
+    const promptToUse = aiPreset || aiCustomPrompt.trim();
+    if (!promptToUse) {
+      Alert.alert('Description Required', 'Please select a style preset or enter a custom description.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setLoadingMessage('Creating your custom frame with AI...');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to generate AI frames.');
+        return;
+      }
+
+      console.log('[FRAME] Generating AI frame:', { preset: aiPreset, prompt: aiCustomPrompt, color: aiColorScheme });
+
+      const result = await generateAIFrame(promptToUse, aiColorScheme, user.id);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to generate frame');
+      }
+
+      console.log('[FRAME] AI frame generated:', result.framePath);
+      setGeneratedFramePath(result.framePath);
+
+      // Get signed URL for preview
+      const { data: urlData } = await supabase.storage
+        .from(result.bucket || 'ai-frames')
+        .createSignedUrl(result.framePath, 3600);
+
+      if (urlData?.signedUrl) {
+        setGeneratedFrameUrl(urlData.signedUrl);
+      }
+
+      Alert.alert(
+        'Frame Generated!',
+        'Your AI frame has been created. You can now save it as a template.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('[FRAME] AI generation error:', error);
+      Alert.alert('Generation Failed', error.message || 'Failed to generate AI frame. Please try again.');
+    } finally {
+      setLoading(false);
+      setLoadingMessage('Saving frame...');
+    }
+  };
 
   const handleSave = async () => {
     if (!frameName.trim()) {
@@ -220,8 +291,15 @@ export const FrameCreationScreen = ({ navigation, route }) => {
       return;
     }
 
+    // For AI mode, require a generated frame
+    if (frameMode === 'ai' && !generatedFramePath) {
+      Alert.alert('Generate Frame First', 'Please generate an AI frame before saving.');
+      return;
+    }
+
     try {
       setLoading(true);
+      setLoadingMessage('Saving frame...');
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -241,15 +319,21 @@ export const FrameCreationScreen = ({ navigation, route }) => {
       const frameData = {
         parent_id: user.id,
         name: frameName.trim(),
-        frame_shape: selectedShape,
+        frame_shape: frameMode === 'ai' ? 'ai-generated' : selectedShape,
         custom_text: customText.trim(),
         custom_text_position: textPosition,
         custom_text_color: textColor,
         custom_text_font: textFont,
-        primary_color: frameColor,
+        primary_color: frameMode === 'ai'
+          ? (FRAME_COLOR_SCHEMES.find(c => c.id === aiColorScheme)?.hex || '#06B6D4')
+          : frameColor,
         border_width: currentShape.borderWidth || 4,
         border_radius: currentShape.borderRadius || 0,
-        frame_type: 'custom',
+        frame_type: frameMode === 'ai' ? 'ai' : 'custom',
+        // AI-specific fields
+        frame_png_path: frameMode === 'ai' ? generatedFramePath : null,
+        is_ai_generated: frameMode === 'ai',
+        ai_prompt: frameMode === 'ai' ? (aiPreset || aiCustomPrompt) : null,
       };
 
       let frameId;
@@ -439,6 +523,170 @@ export const FrameCreationScreen = ({ navigation, route }) => {
         {/* Frame Preview */}
         {renderFramePreview()}
 
+        {/* Mode Tabs: Preset vs AI */}
+        {aiAvailable && (
+          <View style={styles.section}>
+            <View style={styles.modeTabs}>
+              <TouchableOpacity
+                onPress={() => setFrameMode('preset')}
+                style={[
+                  styles.modeTab,
+                  frameMode === 'preset' && styles.modeTabActive,
+                ]}
+              >
+                <Ionicons
+                  name="shapes-outline"
+                  size={20}
+                  color={frameMode === 'preset' ? '#FFFFFF' : '#6B7280'}
+                />
+                <Text style={[
+                  styles.modeTabText,
+                  frameMode === 'preset' && styles.modeTabTextActive,
+                ]}>
+                  Preset Shapes
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setFrameMode('ai')}
+                style={[
+                  styles.modeTab,
+                  frameMode === 'ai' && styles.modeTabActive,
+                ]}
+              >
+                <Ionicons
+                  name="sparkles-outline"
+                  size={20}
+                  color={frameMode === 'ai' ? '#FFFFFF' : '#6B7280'}
+                />
+                <Text style={[
+                  styles.modeTabText,
+                  frameMode === 'ai' && styles.modeTabTextActive,
+                ]}>
+                  AI Generated
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* AI Frame Options */}
+        {frameMode === 'ai' && (
+          <>
+            {/* Style Presets */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Choose a Style</Text>
+              <Text style={styles.sectionHint}>Select a preset or enter your own description</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.shapeRow}>
+                  {FRAME_STYLE_PRESETS.map((preset) => (
+                    <TouchableOpacity
+                      key={preset.id}
+                      onPress={() => {
+                        setAiPreset(aiPreset === preset.id ? null : preset.id);
+                        if (aiPreset !== preset.id) setAiCustomPrompt('');
+                      }}
+                      style={[
+                        styles.shapeOption,
+                        aiPreset === preset.id && styles.shapeOptionSelected,
+                      ]}
+                    >
+                      <Text style={{ fontSize: 28 }}>{preset.icon}</Text>
+                      <Text
+                        style={[
+                          styles.shapeLabel,
+                          aiPreset === preset.id && styles.shapeLabelSelected,
+                        ]}
+                      >
+                        {preset.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Custom Description */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Or Describe Your Frame</Text>
+              <TextInput
+                value={aiCustomPrompt}
+                onChangeText={(text) => {
+                  setAiCustomPrompt(text);
+                  if (text) setAiPreset(null);
+                }}
+                placeholder="e.g., jungle theme with monkeys and vines"
+                style={styles.textInput}
+                placeholderTextColor="#9CA3AF"
+                multiline
+                maxLength={200}
+              />
+              <Text style={styles.charCount}>{aiCustomPrompt.length}/200</Text>
+            </View>
+
+            {/* Color Scheme */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Color Scheme</Text>
+              <View style={styles.colorRow}>
+                {FRAME_COLOR_SCHEMES.map((color) => (
+                  <TouchableOpacity
+                    key={color.id}
+                    onPress={() => setAiColorScheme(color.id)}
+                    style={[
+                      styles.colorSwatch,
+                      { backgroundColor: color.hex || '#FF69B4' },
+                      color.id === 'rainbow' && styles.rainbowSwatch,
+                      aiColorScheme === color.id && styles.colorSwatchSelected,
+                    ]}
+                  >
+                    {aiColorScheme === color.id && (
+                      <Ionicons name="checkmark" size={18} color="#FFF" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Generate Button */}
+            <View style={styles.section}>
+              <TouchableOpacity
+                onPress={handleGenerateAIFrame}
+                disabled={loading || (!aiPreset && !aiCustomPrompt.trim())}
+                style={[
+                  styles.generateButton,
+                  (!aiPreset && !aiCustomPrompt.trim()) && styles.generateButtonDisabled,
+                ]}
+              >
+                <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+                <Text style={styles.generateButtonText}>Generate Frame with AI</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Generated Frame Preview */}
+            {generatedFrameUrl && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Generated Frame</Text>
+                <View style={styles.generatedPreview}>
+                  <Image
+                    source={{ uri: generatedFrameUrl }}
+                    style={styles.generatedImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setGeneratedFrameUrl(null);
+                    setGeneratedFramePath(null);
+                  }}
+                  style={styles.regenerateButton}
+                >
+                  <Ionicons name="refresh" size={18} color="#06b6d4" />
+                  <Text style={styles.regenerateText}>Generate New</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        )}
+
         {/* Frame Name */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Frame Name</Text>
@@ -451,39 +699,41 @@ export const FrameCreationScreen = ({ navigation, route }) => {
           />
         </View>
 
-        {/* Frame Shape Selection */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Frame Shape</Text>
-          <Text style={styles.sectionHint}>Kids cannot change the shape</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.shapeRow}>
-              {FRAME_SHAPES.map((shape) => (
-                <TouchableOpacity
-                  key={shape.id}
-                  onPress={() => setSelectedShape(shape.id)}
-                  style={[
-                    styles.shapeOption,
-                    selectedShape === shape.id && styles.shapeOptionSelected,
-                  ]}
-                >
-                  <Ionicons
-                    name={shape.icon}
-                    size={28}
-                    color={selectedShape === shape.id ? '#FFFFFF' : '#6B7280'}
-                  />
-                  <Text
+        {/* Frame Shape Selection - Only for preset mode */}
+        {frameMode === 'preset' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Frame Shape</Text>
+            <Text style={styles.sectionHint}>Kids cannot change the shape</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.shapeRow}>
+                {FRAME_SHAPES.map((shape) => (
+                  <TouchableOpacity
+                    key={shape.id}
+                    onPress={() => setSelectedShape(shape.id)}
                     style={[
-                      styles.shapeLabel,
-                      selectedShape === shape.id && styles.shapeLabelSelected,
+                      styles.shapeOption,
+                      selectedShape === shape.id && styles.shapeOptionSelected,
                     ]}
                   >
-                    {shape.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
+                    <Ionicons
+                      name={shape.icon}
+                      size={28}
+                      color={selectedShape === shape.id ? '#FFFFFF' : '#6B7280'}
+                    />
+                    <Text
+                      style={[
+                        styles.shapeLabel,
+                        selectedShape === shape.id && styles.shapeLabelSelected,
+                      ]}
+                    >
+                      {shape.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
 
         {/* Custom Text */}
         <View style={styles.section}>
@@ -563,32 +813,34 @@ export const FrameCreationScreen = ({ navigation, route }) => {
           </View>
         )}
 
-        {/* Frame Border Color */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Frame Color</Text>
-          <View style={styles.colorRow}>
-            {FRAME_COLORS.map((color) => (
-              <TouchableOpacity
-                key={color.id}
-                onPress={() => setFrameColor(color.id)}
-                style={[
-                  styles.colorSwatch,
-                  { backgroundColor: color.id },
-                  frameColor === color.id && styles.colorSwatchSelected,
-                  color.id === '#FFFFFF' && styles.whiteSwatch,
-                ]}
-              >
-                {frameColor === color.id && (
-                  <Ionicons
-                    name="checkmark"
-                    size={18}
-                    color={color.id === '#FFFFFF' || color.id === '#F59E0B' ? '#000' : '#FFF'}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
+        {/* Frame Border Color - Only for preset mode */}
+        {frameMode === 'preset' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Frame Color</Text>
+            <View style={styles.colorRow}>
+              {FRAME_COLORS.map((color) => (
+                <TouchableOpacity
+                  key={color.id}
+                  onPress={() => setFrameColor(color.id)}
+                  style={[
+                    styles.colorSwatch,
+                    { backgroundColor: color.id },
+                    frameColor === color.id && styles.colorSwatchSelected,
+                    color.id === '#FFFFFF' && styles.whiteSwatch,
+                  ]}
+                >
+                  {frameColor === color.id && (
+                    <Ionicons
+                      name="checkmark"
+                      size={18}
+                      color={color.id === '#FFFFFF' || color.id === '#F59E0B' ? '#000' : '#FFF'}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Save Button */}
         <View style={styles.saveSection}>
@@ -601,7 +853,7 @@ export const FrameCreationScreen = ({ navigation, route }) => {
         </View>
       </ScrollView>
 
-      <LoadingSpinner visible={loading} message="Saving frame..." fullScreen />
+      <LoadingSpinner visible={loading} message={loadingMessage} fullScreen />
     </SafeAreaView>
   );
 };
@@ -831,6 +1083,90 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 24,
     paddingBottom: 16,
+  },
+  // AI Frame Mode Tabs
+  modeTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 4,
+  },
+  modeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  modeTabActive: {
+    backgroundColor: '#06b6d4',
+  },
+  modeTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  modeTabTextActive: {
+    color: '#FFFFFF',
+  },
+  // AI Generate Button
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 16,
+    borderRadius: 12,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  generateButtonDisabled: {
+    backgroundColor: '#D1D5DB',
+    shadowOpacity: 0,
+  },
+  generateButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  // Generated Frame Preview
+  generatedPreview: {
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    aspectRatio: 9 / 16,
+    width: '70%',
+    alignSelf: 'center',
+  },
+  generatedImage: {
+    width: '100%',
+    height: '100%',
+  },
+  regenerateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+  },
+  regenerateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#06b6d4',
+  },
+  // Rainbow color swatch
+  rainbowSwatch: {
+    backgroundColor: 'transparent',
+    borderWidth: 3,
+    borderColor: 'transparent',
+    overflow: 'hidden',
   },
 });
 

@@ -274,7 +274,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             )}
 
             {/* Kid instructions - stays visible during recording */}
-            {isKidsEdition && cameraReady && (
+            {isKidsEdition && cameraReady && !isRecording && (
               <View style={{
                 position: 'absolute',
                 top: 80,
@@ -290,6 +290,35 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                   textAlign: 'center',
                 }}>
                   Say "Thank You" for your {giftName || 'gift'}! 🎁
+                </Text>
+                <Text style={{
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: 12,
+                  textAlign: 'center',
+                  marginTop: 4,
+                }}>
+                  You can add stickers & filters after recording ✨
+                </Text>
+              </View>
+            )}
+
+            {/* Recording instruction */}
+            {isKidsEdition && cameraReady && isRecording && (
+              <View style={{
+                position: 'absolute',
+                top: 80,
+                left: 20,
+                right: 20,
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                padding: 12,
+                borderRadius: 8
+              }}>
+                <Text style={{
+                  color: '#fff',
+                  fontSize: 16,
+                  textAlign: 'center',
+                }}>
+                  Recording... Keep going! 🎬
                 </Text>
               </View>
             )}

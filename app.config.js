@@ -66,6 +66,7 @@ export default {
       FROM_EMAIL: process.env.FROM_EMAIL,
       FROM_NAME: process.env.FROM_NAME,
       APP_ENV: process.env.APP_ENV || 'development',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       eas: {
         projectId: '61a97263-4c4a-4ffb-8088-bd65957d2e06',
       },

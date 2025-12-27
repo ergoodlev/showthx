@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
@@ -25,6 +26,102 @@ import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 import { supabase } from '../supabaseClient';
 import { getFrameForGift } from '../services/frameTemplateService';
 import { getVideoUrl } from '../services/videoService';
+import { getFilterById } from '../services/videoFilterService';
+
+/**
+ * Filter Preview Overlay - Visual approximation of filters
+ */
+const FilterPreviewOverlay = ({ filterId }) => {
+  if (!filterId) return null;
+
+  const filter = getFilterById(filterId);
+  if (!filter) return null;
+
+  switch (filterId) {
+    case 'warm':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 165, 0, 0.15)' }]} />
+        </View>
+      );
+    case 'cool':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(100, 149, 237, 0.18)' }]} />
+        </View>
+      );
+    case 'vintage':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(210, 180, 140, 0.2)' }]} />
+        </View>
+      );
+    case 'sepia':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(112, 66, 20, 0.3)' }]} />
+        </View>
+      );
+    case 'bw':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(128, 128, 128, 0.6)' }]} />
+        </View>
+      );
+    case 'vignette':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <LinearGradient
+            colors={['transparent', 'transparent', 'rgba(0,0,0,0.5)']}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.4)', 'transparent']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.3 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      );
+    case 'bright':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.12)' }]} />
+        </View>
+      );
+    case 'vivid':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 0, 100, 0.05)' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 200, 255, 0.05)' }]} />
+        </View>
+      );
+    case 'pop':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.08)' }]} />
+        </View>
+      );
+    case 'dreamy':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 182, 193, 0.15)' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
+        </View>
+      );
+    default:
+      return null;
+  }
+};
+
+const filterStyles = StyleSheet.create({
+  overlay: {
+    zIndex: 5,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+});
 
 export const ParentVideoReviewScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -45,6 +142,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
   const [fetchedMusicTitle, setFetchedMusicTitle] = useState(musicTitle);
   const [frameTemplate, setFrameTemplate] = useState(null);
   const [decorations, setDecorations] = useState([]); // Stickers added by kid
+  const [videoFilter, setVideoFilter] = useState(null); // Filter applied by kid
   const [isPlaying, setIsPlaying] = useState(false);
   const [action, setAction] = useState(null); // 'approve' or 'request-changes'
   const [feedback, setFeedback] = useState('');
@@ -174,6 +272,12 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
         setDecorations(videoData.metadata.decorations);
         console.log('🎨 Loaded decorations from video metadata:', videoData.metadata.decorations.length);
       }
+
+      // Load video filter from metadata
+      if (videoData.metadata?.video_filter) {
+        setVideoFilter(videoData.metadata.video_filter);
+        console.log('🎬 Loaded video filter from metadata:', videoData.metadata.video_filter);
+      }
     } catch (error) {
       console.error('❌ Error loading video details:', error);
       Alert.alert('Error', error.message || 'Failed to load video details');
@@ -205,9 +309,11 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
             key={`decoration-${index}-${decoration.id || index}`}
             style={{
               position: 'absolute',
-              left: decoration.position?.x || 0,
-              top: decoration.position?.y || 0,
+              left: `${decoration.x ?? decoration.position?.x ?? 50}%`,
+              top: `${decoration.y ?? decoration.position?.y ?? 50}%`,
               transform: [
+                { translateX: -20 }, // Center the sticker
+                { translateY: -20 },
                 { scale: decoration.scale || 1 },
                 { rotate: `${decoration.rotation || 0}deg` },
               ],
@@ -601,6 +707,9 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
               <Text style={{ color: '#FFFFFF', fontSize: 14 }}>Loading video...</Text>
             </View>
           )}
+
+          {/* Filter Preview Overlay */}
+          <FilterPreviewOverlay filterId={videoFilter} />
 
           {/* Frame Overlay */}
           {renderFrameOverlay()}
