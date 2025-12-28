@@ -3,8 +3,13 @@
  * Composites frame overlays and stickers onto videos using FFmpeg
  * Creates "baked-in" overlays that persist when video is shared
  *
- * IMPORTANT: Requires development build (FFmpeg Kit won't work in Expo Go)
- * FFmpeg Kit package: @spreen/ffmpeg-kit-react-native (added to package.json)
+ * NOTE: FFmpeg integration is currently disabled due to React Native 0.81 compatibility.
+ * The service gracefully falls back to returning the original video.
+ * Decorative frames are displayed via React Native UI components during recording/preview.
+ *
+ * To enable full compositing in the future:
+ * 1. Wait for ffmpeg-kit-react-native to support RN 0.81
+ * 2. Or implement server-side video processing with Supabase Edge Functions
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
@@ -12,21 +17,26 @@ import { Platform } from 'react-native';
 import { getFilterCommand } from './videoFilterService';
 import { supabase } from '../supabaseClient';
 
-// FFmpeg Kit imports - requires development build
+// FFmpeg Kit imports - currently disabled
 let FFmpegKit = null;
 let FFmpegKitConfig = null;
 let ReturnCode = null;
 
-// Lazy load FFmpeg to prevent crashes in Expo Go
+// Lazy load FFmpeg - currently returns false (FFmpeg not available)
 const loadFFmpeg = async () => {
   if (FFmpegKit) return true;
 
   try {
-    const ffmpegModule = require('@spreen/ffmpeg-kit-react-native');
-    FFmpegKit = ffmpegModule.FFmpegKit;
-    FFmpegKitConfig = ffmpegModule.FFmpegKitConfig;
-    ReturnCode = ffmpegModule.ReturnCode;
-    return true;
+    // FFmpeg Kit is not currently installed due to RN 0.81 compatibility issues
+    // When a compatible version becomes available, uncomment:
+    // const ffmpegModule = require('ffmpeg-kit-react-native');
+    // FFmpegKit = ffmpegModule.FFmpegKit;
+    // FFmpegKitConfig = ffmpegModule.FFmpegKitConfig;
+    // ReturnCode = ffmpegModule.ReturnCode;
+    // return true;
+
+    console.log('[COMPOSITING] FFmpeg not installed - using fallback mode');
+    return false;
   } catch (error) {
     console.warn('[COMPOSITING] FFmpeg Kit not available:', error.message);
     return false;
