@@ -329,10 +329,17 @@ export const compositeVideoTask = task({
         });
 
         try {
-          // Generate the public URL for the composited video
-          const { data: { publicUrl } } = supabase.storage
+          // Generate a signed URL for the composited video (7 day expiration for COPPA compliance)
+          const { data: signedUrlData, error: signedUrlError } = await supabase.storage
             .from("videos")
-            .getPublicUrl(outputStoragePath);
+            .createSignedUrl(outputStoragePath, 60 * 60 * 24 * 7); // 7 days in seconds
+
+          if (signedUrlError || !signedUrlData?.signedUrl) {
+            throw new Error(`Failed to create signed URL: ${signedUrlError?.message || 'No URL returned'}`);
+          }
+
+          const videoUrl = signedUrlData.signedUrl;
+          logger.info("Generated signed URL for video", { expiresIn: "7 days" });
 
           // Call the send-video-email Edge Function
           const response = await fetch(
@@ -345,7 +352,7 @@ export const compositeVideoTask = task({
               },
               body: JSON.stringify({
                 jobId,
-                videoUrl: publicUrl,
+                videoUrl: videoUrl,
                 recipientEmail: jobData.recipient_email,
                 recipientName: jobData.recipient_name,
                 emailSubject: jobData.email_subject,
