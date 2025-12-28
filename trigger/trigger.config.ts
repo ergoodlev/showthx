@@ -1,5 +1,5 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
-import { ffmpeg } from "@trigger.dev/build/extensions/core";
+// import { ffmpeg } from "@trigger.dev/build/extensions/core"; // Temporarily disabled - causing build timeout
 
 export default defineConfig({
   project: "proj_svvzmeckyarzlgvgnpoc",
@@ -17,10 +17,9 @@ export default defineConfig({
     },
   },
   dirs: ["."],
-  build: {
-    extensions: [
-      // FFmpeg extension for video processing
-      ffmpeg(),
-    ],
-  },
+  // build: {
+  //   extensions: [
+  //     ffmpeg(),
+  //   ],
+  // },
 });
