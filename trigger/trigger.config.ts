@@ -1,11 +1,11 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
-// import { ffmpeg } from "@trigger.dev/build/extensions/core"; // Temporarily disabled - causing build timeout
+import { ffmpeg } from "@trigger.dev/build/extensions/core";
 
 export default defineConfig({
   project: "proj_svvzmeckyarzlgvgnpoc",
   runtime: "node",
   logLevel: "log",
-  maxDuration: 300, // 5 minutes for video processing
+  maxDuration: 300,
   retries: {
     enabledInDev: true,
     default: {
@@ -17,9 +17,9 @@ export default defineConfig({
     },
   },
   dirs: ["."],
-  // build: {
-  //   extensions: [
-  //     ffmpeg(),
-  //   ],
-  // },
+  build: {
+    extensions: [
+      ffmpeg(),
+    ],
+  },
 });
