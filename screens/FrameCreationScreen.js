@@ -4,7 +4,7 @@
  * Kids can later decorate with emojis/textures but cannot change text
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,11 @@ import {
   FRAME_STYLE_PRESETS,
   FRAME_COLOR_SCHEMES,
 } from '../services/aiFrameService';
+import {
+  FrameCaptureView,
+  generatePresetFramePNG,
+  needsPNGGeneration,
+} from '../services/presetFrameGenerator';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -228,6 +233,9 @@ export const FrameCreationScreen = ({ navigation, route }) => {
   const [generatedFrameUrl, setGeneratedFrameUrl] = useState(null);
   const [generatedFramePath, setGeneratedFramePath] = useState(null);
 
+  // Ref for preset frame PNG capture
+  const frameCaptureRef = useRef(null);
+
   const aiAvailable = isAIFrameAvailable();
 
   // Get current shape config
@@ -316,6 +324,38 @@ export const FrameCreationScreen = ({ navigation, route }) => {
         return;
       }
 
+      // Generate PNG for preset frames (not AI frames - they already have PNGs)
+      let framePngPath = null;
+      if (frameMode === 'ai') {
+        framePngPath = generatedFramePath;
+      } else if (needsPNGGeneration(frameMode, selectedShape)) {
+        setLoadingMessage('Generating frame image...');
+        console.log('[FRAME] Generating PNG for preset shape:', selectedShape);
+
+        // Small delay to ensure the capture view is rendered
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const pngResult = await generatePresetFramePNG(
+          frameCaptureRef,
+          user.id,
+          frameName.trim()
+        );
+
+        if (pngResult.success) {
+          framePngPath = pngResult.storagePath;
+          console.log('[FRAME] PNG generated and uploaded:', framePngPath);
+        } else {
+          console.warn('[FRAME] PNG generation failed:', pngResult.error);
+          // Continue without PNG - compositing will fall back to simple border
+          Alert.alert(
+            'Frame Image Warning',
+            'Could not generate frame image for video compositing. The frame will still be saved but may appear as a simple border in shared videos.'
+          );
+        }
+      }
+
+      setLoadingMessage('Saving frame...');
+
       const frameData = {
         parent_id: user.id,
         name: frameName.trim(),
@@ -330,8 +370,8 @@ export const FrameCreationScreen = ({ navigation, route }) => {
         border_width: currentShape.borderWidth || 4,
         border_radius: currentShape.borderRadius || 0,
         frame_type: frameMode === 'ai' ? 'ai' : 'custom',
-        // AI-specific fields
-        frame_png_path: frameMode === 'ai' ? generatedFramePath : null,
+        // PNG path for compositing (both AI and preset frames now have this!)
+        frame_png_path: framePngPath,
         is_ai_generated: frameMode === 'ai',
         ai_prompt: frameMode === 'ai' ? (aiPreset || aiCustomPrompt) : null,
       };
@@ -366,6 +406,30 @@ export const FrameCreationScreen = ({ navigation, route }) => {
             childId: childId || null,
             priority: childId ? 50 : 25,
           });
+
+          // IMPORTANT: Deactivate existing event-level assignments first
+          // This ensures the new frame becomes the active one
+          const deactivateQuery = supabase
+            .from('frame_assignments')
+            .update({ is_active: false })
+            .eq('event_id', eventId)
+            .eq('is_active', true);
+
+          // Only deactivate event-level assignments (not child-specific)
+          if (!childId) {
+            deactivateQuery.is('child_id', null).is('gift_id', null).is('guest_id', null);
+          } else {
+            // For child-specific, only deactivate that child's assignments
+            deactivateQuery.eq('child_id', childId);
+          }
+
+          const { error: deactivateError } = await deactivateQuery;
+          if (deactivateError) {
+            console.warn('⚠️ Could not deactivate old assignments:', deactivateError.message);
+            // Continue anyway - new assignment will still be created
+          } else {
+            console.log('✅ Deactivated old frame assignments for event');
+          }
 
           const { data: assignmentData, error: assignError } = await supabase
             .from('frame_assignments')
@@ -505,6 +569,17 @@ export const FrameCreationScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Off-screen frame capture view for generating PNG */}
+      <View style={styles.offScreenCapture} pointerEvents="none">
+        <FrameCaptureView
+          ref={frameCaptureRef}
+          frameShape={selectedShape}
+          primaryColor={frameColor}
+          borderWidth={currentShape.borderWidth || 16}
+          borderRadius={currentShape.borderRadius || 12}
+        />
+      </View>
+
       <AppBar
         title={existingFrame ? 'Edit Frame' : 'Create Frame'}
         onBackPress={() => navigation?.goBack()}
@@ -862,6 +937,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  // Off-screen view for capturing frame as PNG
+  offScreenCapture: {
+    position: 'absolute',
+    left: -9999,
+    top: -9999,
+    opacity: 0,
   },
   scrollView: {
     flex: 1,

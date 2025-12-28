@@ -17,6 +17,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Video } from 'expo-av';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { useEdition } from '../context/EditionContext';
@@ -24,7 +25,6 @@ import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
 import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
-import { FilterSelector } from '../components/FilterSelector';
 import {
   STICKER_CATEGORIES,
   getStickerCategories,
@@ -33,183 +33,103 @@ import {
   DECORATIONS,
   createPlacedDecoration,
 } from '../services/decorationService';
-import { getFilterById } from '../services/videoFilterService';
+import {
+  VIDEO_FILTERS,
+  getFilterCategories,
+  getFiltersForCategory,
+  getFilterById,
+} from '../services/videoFilterService';
 
-/**
- * Filter Preview Overlay - Visual approximation of filters
- * Uses colored overlays to simulate how FFmpeg filters will look
- */
+// Filter Preview Overlay - Visual approximation of filters
 const FilterPreviewOverlay = ({ filterId }) => {
   if (!filterId) return null;
 
   const filter = getFilterById(filterId);
   if (!filter) return null;
 
-  // Render different overlays based on filter type
   switch (filterId) {
     case 'warm':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 165, 0, 0.15)' }]} />
         </View>
       );
-
     case 'cool':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(100, 149, 237, 0.18)' }]} />
         </View>
       );
-
     case 'vintage':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(210, 180, 140, 0.2)' }]} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.05)' }]} />
         </View>
       );
-
     case 'sepia':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(112, 66, 20, 0.3)' }]} />
         </View>
       );
-
     case 'bw':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(128, 128, 128, 0.6)' }]} />
         </View>
       );
-
     case 'vignette':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <LinearGradient
             colors={['transparent', 'transparent', 'rgba(0,0,0,0.5)']}
             locations={[0, 0.5, 1]}
-            style={[StyleSheet.absoluteFill, { borderRadius: 12 }]}
-          />
-          {/* Top vignette */}
-          <LinearGradient
-            colors={['rgba(0,0,0,0.4)', 'transparent']}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 0.3 }}
-            style={StyleSheet.absoluteFill}
-          />
-          {/* Bottom vignette */}
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.4)']}
-            start={{ x: 0.5, y: 0.7 }}
-            end={{ x: 0.5, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
         </View>
       );
-
     case 'bright':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.12)' }]} />
         </View>
       );
-
     case 'vivid':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 0, 100, 0.05)' }]} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 200, 255, 0.05)' }]} />
         </View>
       );
-
     case 'pop':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.08)' }]} />
         </View>
       );
-
     case 'dreamy':
       return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 182, 193, 0.15)' }]} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
         </View>
       );
-
-    case 'pixel':
-      // Can't really simulate pixelation with overlays
-      return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
-          <View style={styles.pixelOverlay}>
-            <Text style={styles.pixelText}>👾</Text>
-          </View>
-        </View>
-      );
-
-    case 'blur':
-      return (
-        <View
-          style={[StyleSheet.absoluteFill, styles.filterOverlay]}
-          pointerEvents="none"
-        >
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.08)' }]} />
-        </View>
-      );
-
     default:
       return null;
   }
 };
 
-const styles = StyleSheet.create({
-  filterOverlay: {
-    zIndex: 2,
+const filterStyles = StyleSheet.create({
+  overlay: {
+    zIndex: 5,
     borderRadius: 12,
     overflow: 'hidden',
   },
-  pixelOverlay: {
-    position: 'absolute',
-    top: '40%',
-    left: '40%',
-    opacity: 0.3,
-  },
-  pixelText: {
-    fontSize: 48,
+});
+
+const styles = StyleSheet.create({
+  unusedStylePlaceholder: {
+    // Placeholder to keep styles object valid
   },
 });
 
@@ -236,9 +156,14 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
   const [isDraggingSticker, setIsDraggingSticker] = useState(false);
   const [activeTab, setActiveTab] = useState('stickers');
   const [activeStickerCategory, setActiveStickerCategory] = useState('party');
-  const [selectedFilter, setSelectedFilter] = useState(null);
+  const [selectedForDelete, setSelectedForDelete] = useState(null); // Track which sticker has delete button visible
+  const [selectedFilter, setSelectedFilter] = useState(null); // Selected video filter
+  const [activeFilterCategory, setActiveFilterCategory] = useState('color');
 
   const handleAddDecoration = (stickerId) => {
+    // Clear any delete selection when adding a new sticker
+    setSelectedForDelete(null);
+
     // Create a new sticker instance at a random position
     const randomX = 20 + Math.random() * 60;
     const randomY = 20 + Math.random() * 60;
@@ -259,10 +184,6 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
     ));
   };
 
-  const handleFilterSelect = (filterId) => {
-    setSelectedFilter(filterId);
-  };
-
   const handleProceed = () => {
     navigation?.navigate('VideoConfirmation', {
       videoUri,
@@ -270,7 +191,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
       giftName,
       decorations: placedDecorations,
       frameTemplate,
-      videoFilter: selectedFilter, // Pass selected filter
+      videoFilter: selectedFilter,
     });
   };
 
@@ -393,7 +314,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
           marginBottom: theme.spacing.sm,
         }}
       >
-        Tap to add. Drag to move. Long-press to remove.
+        Tap to add • Drag to move • Long-press to delete
       </Text>
 
       {/* Sticker Grid */}
@@ -456,47 +377,166 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
     </View>
   );
 
-  // Render filter picker
-  const renderFilterPicker = () => (
-    <View style={{ marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.lg }}>
-      <Text
-        style={{
-          fontSize: isKidsEdition ? 12 : 11,
-          fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-          color: theme.neutralColors.mediumGray,
-          marginBottom: theme.spacing.sm,
-        }}
-      >
-        Add a fun filter to your video!
-      </Text>
+  // Render filter picker with categories
+  const renderFilterPicker = () => {
+    const filterCategories = getFilterCategories();
+    const currentFilters = getFiltersForCategory(activeFilterCategory);
 
-      <FilterSelector
-        selectedFilter={selectedFilter}
-        onFilterSelect={handleFilterSelect}
-      />
+    return (
+      <View style={{ marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.lg }}>
+        {/* Category Tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: theme.spacing.md }}
+          contentContainerStyle={{ paddingRight: theme.spacing.md }}
+        >
+          {filterCategories.map(category => (
+            <TouchableOpacity
+              key={category}
+              onPress={() => setActiveFilterCategory(category)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                marginRight: 8,
+                borderRadius: 20,
+                backgroundColor: activeFilterCategory === category
+                  ? theme.brandColors.coral
+                  : theme.neutralColors.lightGray,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: activeFilterCategory === category
+                    ? '#FFFFFF'
+                    : theme.neutralColors.dark,
+                  textTransform: 'capitalize',
+                }}
+              >
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-      {selectedFilter && (
-        <View
+        {/* Instructions */}
+        <Text
           style={{
-            marginTop: theme.spacing.md,
-            padding: theme.spacing.sm,
-            backgroundColor: 'rgba(0, 166, 153, 0.1)',
-            borderRadius: 8,
+            fontSize: isKidsEdition ? 12 : 11,
+            fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+            color: theme.neutralColors.mediumGray,
+            marginBottom: theme.spacing.sm,
           }}
         >
-          <Text
+          Tap to apply filter • Tap again to remove
+        </Text>
+
+        {/* Filter Grid */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            {/* None option */}
+            <TouchableOpacity
+              onPress={() => setSelectedFilter(null)}
+              style={{
+                width: 65,
+                height: 65,
+                backgroundColor: selectedFilter === null
+                  ? theme.brandColors.teal
+                  : theme.neutralColors.lightGray,
+                borderRadius: 12,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderWidth: selectedFilter === null ? 2 : 0,
+                borderColor: theme.brandColors.teal,
+              }}
+            >
+              <Ionicons
+                name="close-circle-outline"
+                size={24}
+                color={selectedFilter === null ? '#FFFFFF' : theme.neutralColors.mediumGray}
+              />
+              <Text style={{
+                fontSize: 10,
+                color: selectedFilter === null ? '#FFFFFF' : theme.neutralColors.mediumGray,
+                marginTop: 2,
+              }}>
+                None
+              </Text>
+            </TouchableOpacity>
+
+            {currentFilters.map(filter => (
+              <TouchableOpacity
+                key={filter.id}
+                onPress={() => setSelectedFilter(selectedFilter === filter.id ? null : filter.id)}
+                style={{
+                  width: 65,
+                  height: 65,
+                  backgroundColor: selectedFilter === filter.id
+                    ? theme.brandColors.coral
+                    : theme.neutralColors.lightGray,
+                  borderRadius: 12,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderWidth: selectedFilter === filter.id ? 2 : 0,
+                  borderColor: theme.brandColors.coral,
+                }}
+              >
+                <Text style={{ fontSize: 24 }}>{filter.icon}</Text>
+                <Text style={{
+                  fontSize: 10,
+                  color: selectedFilter === filter.id ? '#FFFFFF' : theme.neutralColors.dark,
+                  marginTop: 2,
+                }}>
+                  {filter.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Selected filter info */}
+        {selectedFilter && (
+          <View
             style={{
-              fontSize: isKidsEdition ? 12 : 11,
-              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.brandColors.teal,
+              marginTop: theme.spacing.md,
+              padding: theme.spacing.sm,
+              backgroundColor: 'rgba(255, 107, 107, 0.1)',
+              borderRadius: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
             }}
           >
-            Filter applied: {getFilterById(selectedFilter)?.name || selectedFilter}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
+            <Text style={{ fontSize: 20, marginRight: 8 }}>
+              {getFilterById(selectedFilter)?.icon}
+            </Text>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: isKidsEdition ? 13 : 12,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  color: theme.brandColors.coral,
+                }}
+              >
+                {getFilterById(selectedFilter)?.name} Filter
+              </Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: theme.neutralColors.mediumGray,
+                }}
+              >
+                {getFilterById(selectedFilter)?.description}
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.neutralColors.white }}>
@@ -537,7 +577,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             isLooping
           />
 
-          {/* Filter Preview Overlay - Visual approximation of selected filter */}
+          {/* Filter Preview Overlay */}
           <FilterPreviewOverlay filterId={selectedFilter} />
 
           {/* Frame Overlay */}
@@ -553,7 +593,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                 left: 16,
                 right: 16,
                 [frameTemplate.custom_text_position === 'top' ? 'top' : 'bottom']:
-                  frameTemplate.custom_text_position === 'top' ? 20 : 70,
+                  frameTemplate.custom_text_position === 'top' ? '3%' : '8%',
                 alignItems: 'center',
                 zIndex: 5,
               }}
@@ -563,7 +603,8 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                 backgroundColor: 'rgba(0,0,0,0.5)',
                 paddingHorizontal: 16,
                 paddingVertical: 8,
-                borderRadius: 8
+                borderRadius: 8,
+                maxWidth: '90%',
               }}>
                 <Text
                   style={{
@@ -575,6 +616,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                     textShadowOffset: { width: 1, height: 1 },
                     textShadowRadius: 2,
                   }}
+                  numberOfLines={3}
                 >
                   {frameTemplate.custom_text}
                 </Text>
@@ -582,57 +624,71 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
             </View>
           )}
 
-          {/* Filter Indicator */}
-          {selectedFilter && (
-            <View
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                backgroundColor: 'rgba(0,0,0,0.6)',
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 12, marginRight: 4 }}>
-                {getFilterById(selectedFilter)?.icon || '🎨'}
-              </Text>
-              <Text style={{ fontSize: 10, color: '#FFFFFF' }}>
-                {getFilterById(selectedFilter)?.name || 'Filter'}
-              </Text>
-            </View>
-          )}
+          {/* Filter Indicator removed - native iOS filters will be added in future update */}
 
           {/* Decoration Overlays */}
           {placedDecorations.map(decoration => (
             <DraggableSticker key={decoration.id} decoration={decoration}>
-              <TouchableOpacity
-                onLongPress={() => handleRemoveDecoration(decoration.id)}
-                delayLongPress={500}
-              >
-                {decoration.lottieSource ? (
-                  <LottieView
-                    source={decoration.lottieSource}
-                    autoPlay
-                    loop
-                    style={{ width: 40, height: 40 }}
-                  />
-                ) : (
-                  <Text
+              <View style={{ position: 'relative' }}>
+                <TouchableOpacity
+                  onLongPress={() => setSelectedForDelete(decoration.id)}
+                  onPress={() => {
+                    // Tap to deselect if this sticker is selected for delete
+                    if (selectedForDelete === decoration.id) {
+                      setSelectedForDelete(null);
+                    }
+                  }}
+                  delayLongPress={500}
+                >
+                  {decoration.lottieSource ? (
+                    <LottieView
+                      source={decoration.lottieSource}
+                      autoPlay
+                      loop
+                      style={{ width: 40, height: 40 }}
+                    />
+                  ) : (
+                    <Text
+                      style={{
+                        fontSize: 40,
+                        textShadowColor: 'rgba(0,0,0,0.3)',
+                        textShadowOffset: { width: 1, height: 1 },
+                        textShadowRadius: 2,
+                      }}
+                    >
+                      {decoration.emoji}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                {/* Delete button - shows after long-press */}
+                {selectedForDelete === decoration.id && (
+                  <TouchableOpacity
                     style={{
-                      fontSize: 40,
-                      textShadowColor: 'rgba(0,0,0,0.3)',
-                      textShadowOffset: { width: 1, height: 1 },
-                      textShadowRadius: 2,
+                      position: 'absolute',
+                      top: -8,
+                      right: -8,
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      backgroundColor: '#EF4444',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 2,
+                      elevation: 4,
+                      zIndex: 100,
+                    }}
+                    onPress={() => {
+                      handleRemoveDecoration(decoration.id);
+                      setSelectedForDelete(null);
                     }}
                   >
-                    {decoration.emoji}
-                  </Text>
+                    <Ionicons name="close" size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
+              </View>
             </DraggableSticker>
           ))}
         </View>

@@ -300,7 +300,10 @@ export const getFrameForGift = async (giftId, childId, eventId, guestId = null) 
 
     // Get ALL matching assignments, then pick the highest priority in JavaScript
     // This is more reliable than relying on Postgres .single() with .order()
-    const { data: allMatches, error } = await query.order('priority', { ascending: false });
+    // Secondary sort by created_at DESC breaks ties - newest assignment wins
+    const { data: allMatches, error } = await query
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('❌ Query error:', { code: error.code, message: error.message, details: error.details });

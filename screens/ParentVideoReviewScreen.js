@@ -355,12 +355,12 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
               position: 'absolute',
               left: 16,
               right: 16,
-              [textPosition === 'top' ? 'top' : 'bottom']: textPosition === 'top' ? 20 : 70,
+              [textPosition === 'top' ? 'top' : 'bottom']: textPosition === 'top' ? '3%' : '8%',
               alignItems: 'center',
               zIndex: 100,
             }}
           >
-            <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+            <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, maxWidth: '90%' }}>
               <Text
                 style={{
                   color: textColor,
@@ -371,6 +371,7 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
                   textShadowOffset: { width: 1, height: 1 },
                   textShadowRadius: 2,
                 }}
+                numberOfLines={3}
               >
                 {customText}
               </Text>

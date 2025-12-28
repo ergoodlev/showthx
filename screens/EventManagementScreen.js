@@ -319,58 +319,41 @@ export const EventManagementScreen = ({ navigation, route }) => {
             numberOfLines={4}
           />
 
-          {/* Email Template Section */}
-          <View style={styles.emailSection}>
-            <View style={styles.emailSectionHeader}>
-              <Ionicons name="mail-outline" size={24} color="#06b6d4" />
-              <View style={styles.emailSectionText}>
-                <Text style={styles.emailSectionTitle}>Email Template</Text>
-                <Text style={styles.emailSectionDesc}>
-                  Customize the email guests receive with the video
+          {/* Email Template Section - Simplified to navigation button */}
+          {mode === 'edit' && existingEvent?.id && (
+            <View style={styles.emailSection}>
+              <View style={styles.emailSectionHeader}>
+                <Ionicons name="mail-outline" size={24} color="#06b6d4" />
+                <View style={styles.emailSectionText}>
+                  <Text style={styles.emailSectionTitle}>Email Template</Text>
+                  <Text style={styles.emailSectionDesc}>
+                    Customize the email guests receive
+                  </Text>
+                </View>
+              </View>
+
+              {/* Current subject preview */}
+              <View style={styles.emailPreviewCompact}>
+                <Text style={styles.emailPreviewLabel}>Subject:</Text>
+                <Text style={styles.emailPreviewSubjectCompact} numberOfLines={1}>
+                  {emailSubject || 'A Thank You Video from [child_name]!'}
                 </Text>
               </View>
+
+              <TouchableOpacity
+                style={styles.settingsButton}
+                onPress={() => navigation?.navigate('EmailTemplate', {
+                  eventId: existingEvent.id,
+                  eventName: name || existingEvent.name,
+                  subject: emailSubject,
+                  message: emailMessage,
+                })}
+              >
+                <Text style={styles.settingsButtonText}>Edit Email Template</Text>
+                <Ionicons name="chevron-forward" size={20} color="#06b6d4" />
+              </TouchableOpacity>
             </View>
-
-            {/* Mail merge hint */}
-            <View style={styles.mailMergeHint}>
-              <Text style={styles.mailMergeHintText}>
-                Use <Text style={styles.placeholder}>[name]</Text> for guest name, <Text style={styles.placeholder}>[child_name]</Text> for your child's name, <Text style={styles.placeholder}>[gift_name]</Text> for the gift
-              </Text>
-            </View>
-
-            <TextField
-              label="Email Subject"
-              placeholder="A Thank You Video from [child_name]!"
-              value={emailSubject}
-              onChangeText={setEmailSubject}
-              autoCorrect={true}
-              spellCheck={true}
-              autoCapitalize="sentences"
-            />
-
-            <TextField
-              label="Email Message"
-              placeholder="Hi [name]! [child_name] made a special video just for you..."
-              value={emailMessage}
-              onChangeText={setEmailMessage}
-              multiline={true}
-              numberOfLines={6}
-              autoCorrect={true}
-              spellCheck={true}
-              autoCapitalize="sentences"
-            />
-
-            {/* Preview */}
-            <View style={styles.emailPreview}>
-              <Text style={styles.emailPreviewLabel}>Preview:</Text>
-              <Text style={styles.emailPreviewSubject}>
-                Subject: {emailSubject.replace(/\[child_name\]/gi, 'Emma').replace(/\[name\]/gi, 'Sarah').replace(/\[gift_name\]/gi, 'LEGO Set')}
-              </Text>
-              <Text style={styles.emailPreviewMessage}>
-                {emailMessage.replace(/\[child_name\]/gi, 'Emma').replace(/\[name\]/gi, 'Sarah').replace(/\[gift_name\]/gi, 'LEGO Set')}
-              </Text>
-            </View>
-          </View>
+          )}
 
           {/* Frame Creation Hint - Show in create mode */}
           {mode === 'create' && (
@@ -382,28 +365,40 @@ export const EventManagementScreen = ({ navigation, route }) => {
             </View>
           )}
 
-          {/* Frame Creation Section - Only show when editing existing event */}
+          {/* Frame Management Section - Only show when editing existing event */}
           {mode === 'edit' && existingEvent?.id && (
             <View style={styles.frameSection}>
               <View style={styles.frameSectionHeader}>
                 <Ionicons name="image-outline" size={24} color="#06b6d4" />
                 <View style={styles.frameSectionText}>
-                  <Text style={styles.frameSectionTitle}>Event Frame</Text>
+                  <Text style={styles.frameSectionTitle}>Video Frames</Text>
                   <Text style={styles.frameSectionDesc}>
-                    Create a custom video frame for this event
+                    Create and manage video frames for this event
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
-                style={styles.createFrameButton}
-                onPress={() => navigation?.navigate('FrameCreation', {
-                  eventId: existingEvent.id,
-                  eventName: name || existingEvent.name,
-                })}
-              >
-                <Ionicons name="add-circle" size={20} color="#06b6d4" />
-                <Text style={styles.createFrameText}>Create Frame</Text>
-              </TouchableOpacity>
+              <View style={styles.frameButtonRow}>
+                <TouchableOpacity
+                  style={[styles.createFrameButton, styles.frameButtonHalf]}
+                  onPress={() => navigation?.navigate('FrameCreation', {
+                    eventId: existingEvent.id,
+                    eventName: name || existingEvent.name,
+                  })}
+                >
+                  <Ionicons name="add-circle" size={20} color="#06b6d4" />
+                  <Text style={styles.createFrameText}>New Frame</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.createFrameButton, styles.frameButtonHalf]}
+                  onPress={() => navigation?.navigate('FrameGallery', {
+                    eventId: existingEvent.id,
+                    eventName: name || existingEvent.name,
+                  })}
+                >
+                  <Ionicons name="albums" size={20} color="#06b6d4" />
+                  <Text style={styles.createFrameText}>Manage</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -554,6 +549,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#06b6d4',
+  },
+  frameButtonRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  frameButtonHalf: {
+    flex: 1,
+  },
+  settingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#06b6d4',
+  },
+  settingsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#06b6d4',
+  },
+  emailPreviewCompact: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emailPreviewSubjectCompact: {
+    fontSize: 13,
+    color: '#1F2937',
+    marginTop: 2,
   },
   // Email template section styles
   emailSection: {

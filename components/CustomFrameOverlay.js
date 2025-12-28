@@ -2,12 +2,14 @@
  * CustomFrameOverlay
  * Renders custom frame templates created by parents in FrameCreationScreen
  * NOW WITH SVG DECORATIVE SHAPES! ⭐☁️❤️
+ * Supports AI-generated PNG frames via frame_png_path
  */
 
-import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Dimensions, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Ellipse, Rect, Defs, RadialGradient, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import { supabase } from '../supabaseClient';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -20,6 +22,57 @@ const VB_HEIGHT = 100;
  * @param {object} frameTemplate - Frame template from database with frame_shape, primary_color, etc.
  */
 export const CustomFrameOverlay = ({ frameTemplate, style }) => {
+  const [aiFrameUrl, setAiFrameUrl] = useState(null);
+  const [aiFrameLoading, setAiFrameLoading] = useState(false);
+
+  // Load AI frame URL if frame_png_path is set
+  useEffect(() => {
+    const loadAIFrameUrl = async () => {
+      if (frameTemplate?.frame_shape === 'ai-generated' && frameTemplate?.frame_png_path) {
+        setAiFrameLoading(true);
+        try {
+          // Determine bucket - check if path starts with 'ai-frames/' (fallback to videos bucket)
+          const isVideosBucket = frameTemplate.frame_png_path.startsWith('ai-frames/');
+          const bucket = isVideosBucket ? 'videos' : 'ai-frames';
+          const path = frameTemplate.frame_png_path;
+
+          console.log('🖼️  Loading AI frame from:', { bucket, path });
+
+          const { data, error } = await supabase.storage
+            .from(bucket)
+            .createSignedUrl(path, 86400); // 24 hour URL
+
+          if (error) {
+            // Try the other bucket as fallback
+            console.log('⚠️  First bucket failed, trying fallback...');
+            const fallbackBucket = isVideosBucket ? 'ai-frames' : 'videos';
+            const fallbackPath = isVideosBucket ? path.replace('ai-frames/', '') : `ai-frames/${path}`;
+
+            const { data: fallbackData, error: fallbackError } = await supabase.storage
+              .from(fallbackBucket)
+              .createSignedUrl(fallbackPath, 86400);
+
+            if (fallbackError) {
+              console.error('❌ Failed to load AI frame:', fallbackError);
+            } else if (fallbackData?.signedUrl) {
+              console.log('✅ AI frame loaded from fallback bucket');
+              setAiFrameUrl(fallbackData.signedUrl);
+            }
+          } else if (data?.signedUrl) {
+            console.log('✅ AI frame URL loaded');
+            setAiFrameUrl(data.signedUrl);
+          }
+        } catch (err) {
+          console.error('❌ Error loading AI frame:', err);
+        } finally {
+          setAiFrameLoading(false);
+        }
+      }
+    };
+
+    loadAIFrameUrl();
+  }, [frameTemplate?.frame_png_path, frameTemplate?.frame_shape]);
+
   if (!frameTemplate || !frameTemplate.frame_shape) {
     console.log('⚠️  CustomFrameOverlay: No frameTemplate provided');
     return null;
@@ -495,6 +548,40 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
     'scalloped-fancy',
     'neon-glow',
   ].includes(frame_shape);
+
+  // Render AI-generated frame from PNG image
+  if (frame_shape === 'ai-generated') {
+    if (aiFrameUrl) {
+      return (
+        <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+          <Image
+            source={{ uri: aiFrameUrl }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+        </View>
+      );
+    }
+    // While loading or if no URL, render a subtle placeholder border
+    return (
+      <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        <View
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            right: 8,
+            bottom: 8,
+            borderWidth: 2,
+            borderColor: primary_color,
+            borderRadius: border_radius,
+            borderStyle: aiFrameLoading ? 'dashed' : 'solid',
+            opacity: aiFrameLoading ? 0.5 : 0.7,
+          }}
+        />
+      </View>
+    );
+  }
 
   // If custom shape, render it
   if (hasCustomShape) {

@@ -125,11 +125,17 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
               position: 'absolute',
               left: 16,
               right: 16,
-              [textPosition === 'top' ? 'top' : 'bottom']: textPosition === 'top' ? 20 : 70,
+              [textPosition === 'top' ? 'top' : 'bottom']: textPosition === 'top' ? '3%' : '8%',
               alignItems: 'center',
             }}
           >
-            <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+            <View style={{
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 8,
+              maxWidth: '90%',  // Prevent text from bleeding off edges
+            }}>
               <Text
                 style={{
                   color: textColor,
@@ -140,6 +146,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                   textShadowOffset: { width: 1, height: 1 },
                   textShadowRadius: 2,
                 }}
+                numberOfLines={3}
               >
                 {customText}
               </Text>
@@ -297,7 +304,7 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
                   textAlign: 'center',
                   marginTop: 4,
                 }}>
-                  You can add stickers & filters after recording ✨
+                  You can decorate after recording ✨
                 </Text>
               </View>
             )}

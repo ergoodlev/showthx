@@ -28,6 +28,7 @@ import { updateGift } from '../services/databaseService';
 import { createShortVideoUrl } from '../services/secureShareService';
 import { prepareVideoForSharing, isCompositingAvailable } from '../services/videoCompositingService';
 import { getFrameForGift } from '../services/frameTemplateService';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export const SendToGuestsScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -47,6 +48,8 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [parentId, setParentId] = useState(null); // Parent ID for share token
   const [frameTemplate, setFrameTemplate] = useState(null); // Frame overlay for compositing
   const [decorations, setDecorations] = useState([]); // Stickers for compositing
+  const [videoFilter, setVideoFilter] = useState(null); // Video filter for compositing
+  const [isRawVideo, setIsRawVideo] = useState(false); // Flag: needs compositing at send time
   const [loadingMessage, setLoadingMessage] = useState(''); // Progress message for compositing
 
   // Email template state (simplified - just subject and message)
@@ -225,6 +228,18 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
             console.log('🎨 Loaded decorations for compositing:', videoData.metadata.decorations.length);
           }
 
+          // Load video filter from metadata for compositing
+          if (videoData.metadata?.video_filter) {
+            setVideoFilter(videoData.metadata.video_filter);
+            console.log('🎨 Loaded video filter for compositing:', videoData.metadata.video_filter);
+          }
+
+          // Check if this is a raw video that needs compositing at send time
+          if (videoData.metadata?.raw_video === true) {
+            setIsRawVideo(true);
+            console.log('📹 Raw video detected - will composite at send time');
+          }
+
           // Load frame template for compositing
           try {
             const frameResult = await getFrameForGift(giftId, videoData.child_id, giftData?.event_id);
@@ -335,6 +350,120 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
     }
   };
 
+  /**
+   * Download raw video and composite with current frame/decorations/filter
+   * Then upload the composited video back to storage
+   * @returns {Promise<{success: boolean, compositedUrl?: string, error?: string}>}
+   */
+  const compositeAndUploadVideo = async () => {
+    try {
+      setLoadingMessage('Downloading video...');
+      console.log('📹 Starting delayed compositing for raw video...');
+
+      // Get signed URL for download
+      if (!storagePath) {
+        throw new Error('No storage path available for raw video');
+      }
+
+      const { data: signedUrlData, error: urlError } = await supabase.storage
+        .from('videos')
+        .createSignedUrl(storagePath, 3600); // 1 hour for processing
+
+      if (urlError || !signedUrlData?.signedUrl) {
+        throw new Error('Could not get download URL for raw video');
+      }
+
+      // Download video to local cache
+      const localPath = `${FileSystem.cacheDirectory}raw_video_${Date.now()}.mp4`;
+      const downloadResult = await FileSystem.downloadAsync(signedUrlData.signedUrl, localPath);
+
+      if (downloadResult.status !== 200) {
+        throw new Error('Failed to download raw video');
+      }
+
+      console.log('✅ Raw video downloaded to:', localPath);
+
+      // Composite the video with current frame, decorations, and filter
+      setLoadingMessage('Adding frame and decorations...');
+      console.log('🎨 Compositing with:', {
+        hasFrame: !!frameTemplate,
+        decorationCount: decorations.length,
+        filter: videoFilter,
+      });
+
+      const canComposite = await isCompositingAvailable();
+      if (!canComposite) {
+        console.warn('⚠️ FFmpeg not available - sending raw video without overlays');
+        // Clean up local file
+        await FileSystem.deleteAsync(localPath, { idempotent: true });
+        // Return with flag so caller can show warning to user
+        return { success: true, compositedUrl: videoUrl, fallback: true, reason: 'FFmpeg not available' };
+      }
+
+      const compositeResult = await prepareVideoForSharing(localPath, {
+        frameTemplate,
+        stickers: decorations,
+        videoFilter,
+      });
+
+      if (!compositeResult.success || !compositeResult.outputPath) {
+        console.warn('⚠️ Compositing failed, using raw video');
+        await FileSystem.deleteAsync(localPath, { idempotent: true });
+        return { success: true, compositedUrl: videoUrl, fallback: true, reason: compositeResult.error || 'Compositing failed' };
+      }
+
+      console.log('✅ Video composited:', compositeResult.outputPath);
+
+      // Upload composited video to storage
+      setLoadingMessage('Uploading finalized video...');
+      const compositedPath = `composited/${parentId}/${Date.now()}_composited.mp4`;
+
+      // Read composited file
+      const compositedBase64 = await FileSystem.readAsStringAsync(compositeResult.outputPath, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Convert to bytes
+      const binaryString = atob(compositedBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from('videos')
+        .upload(compositedPath, bytes.buffer, {
+          contentType: 'video/mp4',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      console.log('✅ Composited video uploaded:', compositedPath);
+
+      // Get signed URL for the composited video
+      const { data: compositedUrlData, error: compositedUrlError } = await supabase.storage
+        .from('videos')
+        .createSignedUrl(compositedPath, 86400 * 30); // 30 days
+
+      // Clean up local files
+      await FileSystem.deleteAsync(localPath, { idempotent: true });
+      await FileSystem.deleteAsync(compositeResult.outputPath, { idempotent: true });
+
+      if (compositedUrlError || !compositedUrlData?.signedUrl) {
+        throw new Error('Could not get URL for composited video');
+      }
+
+      console.log('✅ Composited video ready for sharing');
+      return { success: true, compositedUrl: compositedUrlData.signedUrl, storagePath: compositedPath };
+    } catch (error) {
+      console.error('❌ Compositing error:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   const handleSendToGuests = async () => {
     if (selectedGuests.size === 0) {
       alert('Please select at least one guest');
@@ -349,11 +478,42 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
     try {
       setLoading(true);
 
+      // DELAYED COMPOSITING: If this is a raw video, composite it now
+      let finalVideoUrl = videoUrl;
+      let finalStoragePath = storagePath;
+
+      if (isRawVideo && storagePath) {
+        console.log('📹 Raw video detected - compositing before send...');
+        setLoadingMessage('Preparing your video...');
+
+        const compositeResult = await compositeAndUploadVideo();
+
+        if (compositeResult.success && compositeResult.compositedUrl) {
+          if (compositeResult.fallback) {
+            // Compositing fell back to raw video - warn user but continue
+            console.warn('⚠️ Video will be sent without frame/stickers:', compositeResult.reason);
+            alert(`Note: Your video will be sent without the frame and stickers. ${compositeResult.reason || 'Compositing is not available.'}\n\nThe video will still be sent successfully.`);
+          } else {
+            console.log('✅ Using composited video for sending');
+          }
+          finalVideoUrl = compositeResult.compositedUrl;
+          if (compositeResult.storagePath) {
+            finalStoragePath = compositeResult.storagePath;
+          }
+        } else if (!compositeResult.success) {
+          console.error('❌ Compositing failed:', compositeResult.error);
+          // Show error to user but continue with raw video
+          alert(`Warning: Could not add frame and stickers to video. ${compositeResult.error || ''}\n\nThe raw video will be sent instead.`);
+          console.log('⚠️ Falling back to raw video URL');
+        }
+      }
+
       const selectedGuestData = guests.filter(g => selectedGuests.has(g.id));
 
       if (sendMethod === 'email') {
         // Send via email with custom template and mail merge
         // Pass guest objects with email and name for personalization
+        setLoadingMessage('Sending email...');
         const guestsWithNames = selectedGuestData.map(g => ({
           email: g.email,
           name: g.name || '',
@@ -368,7 +528,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         const emailResult = await sendVideoToGuests(
           guestsWithNames, // Pass guest objects with names
           giftName,
-          videoUrl, // Use video URL from database
+          finalVideoUrl, // Use composited video URL (or raw if compositing not needed/failed)
           '30 days',
           customizedTemplate, // Use the edited template
           childName, // Pass child name for mail merge
@@ -379,36 +539,8 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           throw new Error(emailResult.error || 'Failed to send emails');
         }
       } else if (sendMethod === 'share') {
-        // Check if we have a local video file to composite
-        let videoToShare = videoUrl;
-        let shareUrl = videoUrl;
-
-        // If we have local video and overlays, composite them first
-        if (videoUri && (frameTemplate || decorations.length > 0)) {
-          setLoadingMessage('Preparing video with overlays...');
-          console.log('🎬 Compositing video with overlays before sharing...');
-
-          const canComposite = await isCompositingAvailable();
-          if (canComposite) {
-            try {
-              const compositedResult = await prepareVideoForSharing(
-                videoUri,
-                frameTemplate,
-                frameTemplate?.custom_text,
-                decorations
-              );
-
-              if (compositedResult.success && compositedResult.outputPath) {
-                videoToShare = compositedResult.outputPath;
-                console.log('✅ Video composited successfully:', compositedResult.outputPath);
-              }
-            } catch (compError) {
-              console.warn('⚠️ Compositing failed, using original video:', compError.message);
-            }
-          } else {
-            console.log('⚠️ FFmpeg not available - sharing video without baked-in overlays');
-          }
-        }
+        // Video has already been composited if needed (see delayed compositing above)
+        let shareUrl = finalVideoUrl;
 
         setLoadingMessage('Generating share link...');
 
@@ -416,8 +548,8 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
         if (videoId && parentId) {
           try {
             console.log('🔗 Generating short URL for sharing...');
-            // If we have storagePath, use it. Otherwise try to get it from the video record
-            let pathForShortUrl = storagePath;
+            // Use finalStoragePath (composited) if available, otherwise fall back to original
+            let pathForShortUrl = finalStoragePath || storagePath;
             let thumbnailPath = null;
 
             if (!pathForShortUrl) {
@@ -471,14 +603,24 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
 
         setLoadingMessage('Opening share sheet...');
 
-        // Open native share sheet with shorter, cleaner message
-        const shareMessage = `🎁 Thank You Video for ${giftName}!\n\nWatch here: ${shareUrl}\n\n#REELYTHANKFUL`;
+        // Open native share sheet - use email template message instead of gift name (which may have private notes)
+        // Mirror the email template for consistency and privacy
+        const selectedGuestNames = selectedGuestData.map(g => g.name).join(', ') || 'you';
+        const shareSubject = (editedSubject || emailTemplate.subject)
+          .replace('[name]', selectedGuestNames)
+          .replace('[child_name]', childName || 'Your child')
+          .replace('[gift_name]', 'your gift');  // Don't expose actual gift details
+        const shareBody = (editedMessage || emailTemplate.message)
+          .replace('[name]', selectedGuestNames)
+          .replace('[child_name]', childName || 'Someone special')
+          .replace('[gift_name]', 'your gift');  // Privacy: don't expose gift field
+        const shareMessage = `${shareSubject}\n\n${shareBody}\n\nWatch here: ${shareUrl}`;
 
         try {
           // Note: URL is already in shareMessage, don't pass separately to avoid duplicate links on iOS
           const result = await Share.share({
             message: shareMessage,
-            title: `Thank You Video for ${giftName}`,
+            title: shareSubject,  // Use email template subject (privacy: don't expose gift field)
           });
 
           if (result.action === Share.dismissedAction) {

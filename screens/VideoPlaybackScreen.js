@@ -182,7 +182,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
                 left: 16,
                 right: 16,
                 [frameTemplate.custom_text_position === 'top' ? 'top' : 'bottom']:
-                  frameTemplate.custom_text_position === 'top' ? 20 : 70,
+                  frameTemplate.custom_text_position === 'top' ? '3%' : '8%',
                 alignItems: 'center',
                 zIndex: 5,
               }}
@@ -192,7 +192,8 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
                 backgroundColor: 'rgba(0,0,0,0.5)',
                 paddingHorizontal: 16,
                 paddingVertical: 8,
-                borderRadius: 8
+                borderRadius: 8,
+                maxWidth: '90%',
               }}>
                 <Text
                   style={{
@@ -204,6 +205,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
                     textShadowOffset: { width: 1, height: 1 },
                     textShadowRadius: 2,
                   }}
+                  numberOfLines={3}
                 >
                   {frameTemplate.custom_text}
                 </Text>
@@ -370,7 +372,7 @@ export const VideoPlaybackScreen = ({ navigation, route }) => {
                   fontWeight: '600',
                 }}
               >
-                Add Stickers
+                Decorate and Customize
               </Text>
             </TouchableOpacity>
           </View>

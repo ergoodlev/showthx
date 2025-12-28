@@ -65,7 +65,35 @@ export const ParentLoginScreen = ({ navigation }) => {
     loadSavedEmail();
     checkBiometricAvailability();
     checkAppleAuthAvailability();
+    attemptAutoFaceID();
   }, []);
+
+  // Auto-trigger Face ID if credentials are stored
+  const attemptAutoFaceID = async () => {
+    try {
+      const isSupported = await isBiometricSupported();
+      const isEnabled = await isBiometricLoginEnabled();
+      const storedCredentials = await getStoredCredentials();
+      const hasCredentials = storedCredentials?.email && storedCredentials?.password;
+
+      console.log('🔐 Auto Face ID check:', { isSupported, isEnabled, hasCredentials });
+
+      // Pre-fill email from stored credentials if available
+      if (hasCredentials && storedCredentials.email) {
+        setEmail(storedCredentials.email);
+        setRememberMe(true);
+      }
+
+      if (isSupported && isEnabled && hasCredentials) {
+        console.log('📱 Auto-triggering Face ID login...');
+        // Small delay to let the screen fully render
+        await new Promise(resolve => setTimeout(resolve, 500));
+        handleBiometricLogin();
+      }
+    } catch (error) {
+      console.log('⚠️ Auto Face ID check failed (non-blocking):', error.message);
+    }
+  };
 
   const checkAppleAuthAvailability = async () => {
     if (Platform.OS === 'ios') {

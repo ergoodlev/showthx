@@ -28,6 +28,8 @@ import ParentVideoReviewScreen from '../screens/ParentVideoReviewScreen';
 import SendToGuestsScreen from '../screens/SendToGuestsScreen';
 import SendSuccessScreen from '../screens/SendSuccessScreen';
 import FrameCreationScreen from '../screens/FrameCreationScreen';
+import FrameGalleryScreen from '../screens/FrameGalleryScreen';
+import EmailTemplateScreen from '../screens/EmailTemplateScreen';
 import PrivacyDashboardScreen from '../screens/PrivacyDashboardScreen';
 
 // Screen imports - Kid flows
@@ -63,6 +65,8 @@ const ParentAppStack = () => {
       <Stack.Screen name="SendToGuests" component={SendToGuestsScreen} />
       <Stack.Screen name="SendSuccess" component={SendSuccessScreen} />
       <Stack.Screen name="FrameCreation" component={FrameCreationScreen} />
+      <Stack.Screen name="FrameGallery" component={FrameGalleryScreen} />
+      <Stack.Screen name="EmailTemplate" component={EmailTemplateScreen} />
       <Stack.Screen name="PrivacyDashboard" component={PrivacyDashboardScreen} />
     </Stack.Navigator>
   );

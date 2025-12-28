@@ -156,11 +156,11 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
               position: 'absolute',
               left: 16,
               right: 16,
-              [textPosition === 'top' ? 'top' : 'bottom']: textPosition === 'top' ? 20 : 70,
+              [textPosition === 'top' ? 'top' : 'bottom']: textPosition === 'top' ? '3%' : '8%',
               alignItems: 'center',
             }}
           >
-            <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+            <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, maxWidth: '90%' }}>
               <Text
                 style={{
                   color: textColor,
@@ -171,6 +171,7 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
                   textShadowOffset: { width: 1, height: 1 },
                   textShadowRadius: 2,
                 }}
+                numberOfLines={3}
               >
                 {customText}
               </Text>
@@ -271,41 +272,18 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       }
       console.log('✅ Video validated, size:', Math.round(validation.size / 1024), 'KB');
 
-      // Step 1.5: Composite video with overlays (frame, text, stickers, filter) before upload
-      let videoToUpload = videoUri;
+      // DELAYED COMPOSITING: Upload raw video, composite at send time
+      // This allows parents to change frames before sending all videos
+      const videoToUpload = videoUri;
       const hasOverlays = frameTemplate || (decorations && decorations.length > 0) || videoFilter;
 
       if (hasOverlays) {
-        setLoadingMessage('Adding effects...');
-        console.log('🎬 Compositing video with overlays...');
+        console.log('🎬 Overlays detected - will be composited at send time');
         console.log('🎬 Options:', { hasFrame: !!frameTemplate, stickerCount: decorations?.length || 0, filter: videoFilter });
-        const canComposite = await isCompositingAvailable();
-
-        if (canComposite) {
-          try {
-            const compositedResult = await prepareVideoForSharing(videoUri, {
-              frameTemplate,
-              customText: frameTemplate?.custom_text,
-              stickers: decorations,
-              videoFilter,
-            });
-
-            if (compositedResult.success && compositedResult.outputPath && !compositedResult.fallback) {
-              videoToUpload = compositedResult.outputPath;
-              console.log('✅ Video composited with overlays:', compositedResult.outputPath);
-            } else {
-              console.log('⚠️ Using original video (compositing returned fallback)');
-            }
-          } catch (compError) {
-            console.warn('⚠️ Compositing failed, uploading original video:', compError.message);
-          }
-        } else {
-          console.log('⚠️ FFmpeg not available - uploading video without baked-in overlays');
-          console.log('⚠️ Overlays will be stored in metadata and rendered by app');
-        }
+        console.log('📝 Raw video will be uploaded, overlays stored in metadata');
       }
 
-      // Step 2: Upload video to Supabase Storage
+      // Step 2: Upload RAW video to Supabase Storage (compositing happens at send time)
       setLoadingMessage('Uploading video...');
       console.log('📤 Uploading video to storage...');
       const uploadResult = await uploadVideo(videoToUpload, giftId, parentId);
@@ -319,11 +297,13 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
       console.log('💾 Creating database record via secure function...');
 
       // Build metadata object with decorations, frame, and filter info
+      // All overlays saved here - compositing happens at send time
       const metadata = {
         decorations: decorations,
+        raw_video: true, // Flag: overlays not baked in, composite at send time
       };
 
-      // Add frame template ID if present
+      // Add frame template ID if present (but frame can be changed before sending)
       if (frameTemplate && frameTemplate.id) {
         metadata.frame_template_id = frameTemplate.id;
         console.log('🖼️  Saving frame template ID:', frameTemplate.id);
@@ -334,6 +314,8 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
         metadata.video_filter = videoFilter;
         console.log('🎨 Saving video filter:', videoFilter);
       }
+
+      console.log('📝 Full metadata saved:', JSON.stringify(metadata, null, 2));
 
       const { data: videoId, error: videoError } = await supabase
         .rpc('submit_video_from_kid', {

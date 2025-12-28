@@ -4,11 +4,13 @@
  * Creates "baked-in" overlays that persist when video is shared
  *
  * IMPORTANT: Requires development build (FFmpeg Kit won't work in Expo Go)
+ * FFmpeg Kit package: @spreen/ffmpeg-kit-react-native (added to package.json)
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { getFilterCommand } from './videoFilterService';
+import { supabase } from '../supabaseClient';
 
 // FFmpeg Kit imports - requires development build
 let FFmpegKit = null;
@@ -58,6 +60,78 @@ const generateOutputPath = async (extension = 'mp4') => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(7);
   return `${dir}composited_${timestamp}_${random}.${extension}`;
+};
+
+/**
+ * Download frame PNG from Supabase storage to local cache
+ * Handles both 'videos' bucket (preset-frames/) and 'ai-frames' bucket paths
+ * @param {string} storagePath - Supabase storage path (e.g., 'preset-frames/userId/frame.png')
+ * @returns {Promise<string|null>} Local file path or null if download failed
+ */
+const downloadFramePNG = async (storagePath) => {
+  if (!storagePath) return null;
+
+  try {
+    console.log('[COMPOSITING] Downloading frame PNG from storage:', storagePath);
+
+    // Determine bucket based on path
+    let bucket = 'videos';
+    let path = storagePath;
+
+    // Check if it's an AI frame in the ai-frames bucket
+    if (storagePath.startsWith('ai-frames/') || !storagePath.startsWith('preset-frames/')) {
+      // Try ai-frames bucket first for AI frames
+      if (!storagePath.startsWith('preset-frames/')) {
+        bucket = 'ai-frames';
+      }
+    }
+
+    // Get signed URL
+    let signedUrl = null;
+    const { data: signedUrlData, error: urlError } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, 3600); // 1 hour
+
+    if (urlError || !signedUrlData?.signedUrl) {
+      // Try fallback bucket
+      console.log('[COMPOSITING] First bucket failed, trying fallback...');
+      const fallbackBucket = bucket === 'videos' ? 'ai-frames' : 'videos';
+      const fallbackPath = bucket === 'videos' ? path : `preset-frames/${path}`;
+
+      const { data: fallbackData, error: fallbackError } = await supabase.storage
+        .from(fallbackBucket)
+        .createSignedUrl(fallbackPath, 3600);
+
+      if (fallbackError || !fallbackData?.signedUrl) {
+        console.error('[COMPOSITING] Failed to get signed URL for frame PNG:', urlError, fallbackError);
+        return null;
+      }
+
+      signedUrl = fallbackData.signedUrl;
+    } else {
+      signedUrl = signedUrlData.signedUrl;
+    }
+
+    if (!signedUrl) {
+      console.error('[COMPOSITING] No signed URL for frame PNG');
+      return null;
+    }
+
+    // Download to local cache
+    const localPath = `${FileSystem.cacheDirectory}frame_${Date.now()}.png`;
+    const downloadResult = await FileSystem.downloadAsync(signedUrl, localPath);
+
+    if (downloadResult.status !== 200) {
+      console.error('[COMPOSITING] Failed to download frame PNG, status:', downloadResult.status);
+      return null;
+    }
+
+    console.log('[COMPOSITING] Frame PNG downloaded to:', localPath);
+    return localPath;
+  } catch (error) {
+    console.error('[COMPOSITING] Error downloading frame PNG:', error);
+    return null;
+  }
 };
 
 /**
@@ -281,18 +355,19 @@ export const addTextOverlay = async (inputPath, text, options = {}) => {
       .replace(/\[/g, '\\[')
       .replace(/\]/g, '\\]');
 
-    // Position mapping
+    // Position mapping - matches UI preview positioning
+    // UI uses: top=20px from top, bottom=70px from bottom
     let positionStr = '';
     switch (position) {
       case 'top':
-        positionStr = 'x=(w-text_w)/2:y=40';
+        positionStr = 'x=(w-text_w)/2:y=20';  // Match UI: 20px from top
         break;
       case 'center':
         positionStr = 'x=(w-text_w)/2:y=(h-text_h)/2';
         break;
       case 'bottom':
       default:
-        positionStr = 'x=(w-text_w)/2:y=h-text_h-60';
+        positionStr = 'x=(w-text_w)/2:y=h-text_h-70';  // Match UI: 70px from bottom
         break;
     }
 
@@ -621,7 +696,30 @@ export const compositeVideo = async (videoPath, options = {}) => {
     }
 
     // Step 4: Add frame (PNG overlay preferred, color border fallback)
-    const pngFramePath = framePngPath || frameTemplate?.frame_png_path;
+    let pngFramePath = framePngPath || frameTemplate?.frame_png_path;
+    let downloadedFramePath = null; // Track if we downloaded from storage
+
+    if (pngFramePath) {
+      // Check if this is a storage path (not a local file)
+      // Storage paths are like: preset-frames/userId/file.png or userId/timestamp_frame.png
+      const isLocalFile = pngFramePath.startsWith('file://') || pngFramePath.startsWith('/');
+
+      if (!isLocalFile) {
+        // Download frame PNG from Supabase storage
+        console.log(`[COMPOSITING] Step ${stepNum}: Downloading frame PNG from storage...`);
+        if (onProgress) onProgress('Downloading frame...');
+
+        downloadedFramePath = await downloadFramePNG(pngFramePath);
+        if (downloadedFramePath) {
+          pngFramePath = downloadedFramePath;
+          console.log('[COMPOSITING] Frame PNG downloaded successfully');
+        } else {
+          console.warn('[COMPOSITING] Failed to download frame PNG, will try color border fallback');
+          pngFramePath = null;
+        }
+      }
+    }
+
     if (pngFramePath) {
       // Use PNG frame overlay (decorative shapes)
       console.log(`[COMPOSITING] Step ${stepNum}: Overlaying PNG frame...`);
@@ -630,6 +728,11 @@ export const compositeVideo = async (videoPath, options = {}) => {
       const frameResult = await overlayFramePNG(currentPath, pngFramePath);
       if (frameResult.success && frameResult.outputPath && !frameResult.fallback) {
         currentPath = frameResult.outputPath;
+      }
+
+      // Clean up downloaded frame if we downloaded it
+      if (downloadedFramePath) {
+        await FileSystem.deleteAsync(downloadedFramePath, { idempotent: true });
       }
       stepNum++;
     } else if (frameTemplate && frameTemplate.primary_color) {

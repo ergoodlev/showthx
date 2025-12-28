@@ -223,7 +223,7 @@ export const EventCard = ({
           </Text>
         </TouchableOpacity>
 
-        {/* Edit Settings */}
+        {/* Edit Settings - Frames, Email Template, Event Details */}
         {onEdit && (
           <TouchableOpacity
             style={{
@@ -237,7 +237,7 @@ export const EventCard = ({
             }}
             onPress={onEdit}
           >
-            <Ionicons name="settings-outline" size={16} color="#FFFFFF" />
+            <Ionicons name="color-palette-outline" size={16} color="#FFFFFF" />
             <Text
               style={{
                 color: '#FFFFFF',
@@ -246,7 +246,7 @@ export const EventCard = ({
                 marginLeft: 4,
               }}
             >
-              Settings
+              Frames & Email
             </Text>
           </TouchableOpacity>
         )}

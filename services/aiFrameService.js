@@ -14,8 +14,16 @@ const OPENAI_API_KEY = Constants.expoConfig?.extra?.OPENAI_API_KEY ||
   process.env.EXPO_PUBLIC_OPENAI_API_KEY;
 
 const AI_FRAMES_BUCKET = 'ai-frames';
+
+// Frame dimensions matching standard portrait video (9:16 aspect ratio)
+// DALL-E generates at 1024x1792, which matches 9:16 ratio
+// Videos are composited at 1080x1920 - FFmpeg will scale the frame to fit
 const FRAME_WIDTH = 1024;
-const FRAME_HEIGHT = 1792; // Portrait 9:16 aspect ratio
+const FRAME_HEIGHT = 1792; // Portrait 9:16 aspect ratio (1024 * 16/9 = 1820, but DALL-E uses 1792)
+
+// Target video dimensions for reference (used in FFmpeg compositing)
+export const VIDEO_WIDTH = 1080;
+export const VIDEO_HEIGHT = 1920;
 
 /**
  * Color schemes available for AI frames
@@ -100,18 +108,22 @@ const buildFramePrompt = (userDescription, colorScheme = 'rainbow') => {
 
 Theme: ${userDescription}
 
+CRITICAL REQUIREMENTS:
+- Image dimensions: 1024x1792 pixels (portrait, 9:16 aspect ratio for vertical phone video)
+- The CENTER 80% of the image MUST be completely EMPTY/TRANSPARENT - this is critical as video will show through
+- Frame decorations should ONLY appear on the outer 10-15% edges (top, bottom, left, right borders)
+- The frame elements should form a BORDER around a large empty rectangular center
+
 Design requirements:
-- The frame should be a BORDER/FRAME design that goes around the edges of the image
-- The CENTER of the image MUST be completely empty/transparent - this is where the video will show through
-- Portrait orientation (9:16 aspect ratio)
 - Kid-friendly, colorful, playful design with rounded shapes
-- Frame elements should only be on the outer edges, NOT blocking the center
 - ${colorText}
 - High quality, vibrant colors, no text or words
 - Style: Modern vector illustration, flat design with subtle gradients
-- The decorative elements should frame the empty center like a picture frame
+- Decorative elements: balloons, stars, hearts, confetti, or theme-appropriate items around the edges ONLY
+- The decorations should frame the empty center like an ornate picture frame
+- Corner decorations are great, but keep the center completely clear
 
-Output: A decorative frame border with a completely empty/transparent center area.`;
+Output: A tall portrait frame border (1024x1792) with decorations ONLY on the outer edges and a large empty/transparent center area where video will be overlaid.`;
 };
 
 /**
