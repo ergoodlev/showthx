@@ -44,3 +44,7 @@ config/sentry.js
 # generated native folders
 /ios
 /android
+
+# Trigger.dev build artifacts
+trigger/.trigger/
+trigger/node_modules/

@@ -3,7 +3,7 @@
  * Main parent hub with tabs: Events, Children, Videos, Settings
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -49,6 +49,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
   const [pendingVideos, setPendingVideos] = useState([]);
   const [approvedVideos, setApprovedVideos] = useState([]); // Videos approved but not sent
   const [sentVideos, setSentVideos] = useState([]); // Videos already sent (can be resent)
+  const [processingJobs, setProcessingJobs] = useState([]); // Video processing queue
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -167,12 +168,71 @@ export const ParentDashboardScreen = ({ navigation }) => {
     handleDeleteAllData();
   };
 
+  // Ref to store parent ID for realtime subscription
+  const parentIdRef = useRef(null);
+
   // Load parent data on focus
   useFocusEffect(
     useCallback(() => {
       loadDashboardData();
     }, [])
   );
+
+  // Subscribe to realtime updates for processing jobs
+  useEffect(() => {
+    let subscription = null;
+
+    const setupRealtimeSubscription = async () => {
+      // Get current user for subscription
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      parentIdRef.current = user.id;
+
+      // Subscribe to changes on video_compositing_jobs for this parent
+      subscription = supabase
+        .channel('processing-jobs-updates')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
+            schema: 'public',
+            table: 'video_compositing_jobs',
+            filter: `parent_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('📡 Realtime job update:', payload.eventType, payload.new?.status);
+
+            // Update processing jobs list based on the change
+            if (payload.eventType === 'INSERT') {
+              setProcessingJobs(prev => [payload.new, ...prev]);
+            } else if (payload.eventType === 'UPDATE') {
+              setProcessingJobs(prev =>
+                prev.map(job =>
+                  job.id === payload.new.id ? payload.new : job
+                )
+              );
+            } else if (payload.eventType === 'DELETE') {
+              setProcessingJobs(prev =>
+                prev.filter(job => job.id !== payload.old.id)
+              );
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Realtime subscription status:', status);
+        });
+    };
+
+    setupRealtimeSubscription();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
+    };
+  }, []);
 
   const loadDashboardData = async () => {
     try {
@@ -343,6 +403,22 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
       if (sentError) throw sentError;
       setSentVideos(sentList || []);
+
+      // Load video processing queue (all recent statuses)
+      const { data: jobList, error: jobsError } = await supabase
+        .from('video_compositing_jobs')
+        .select('*')
+        .eq('parent_id', user.id)
+        .in('status', ['pending', 'processing', 'completed', 'sent', 'failed'])
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (jobsError) {
+        console.warn('Failed to load processing jobs:', jobsError);
+        // Don't throw - processing jobs are optional
+      } else {
+        setProcessingJobs(jobList || []);
+      }
     } catch (err) {
       console.error('Error loading dashboard:', err);
       setError(err.message || 'Failed to load dashboard data');
@@ -532,6 +608,182 @@ export const ParentDashboardScreen = ({ navigation }) => {
     />
   );
 
+  // Render a processing job card for the video queue
+  const renderProcessingJobCard = (job) => {
+    const isPending = job.status === 'pending';
+    const isProcessing = job.status === 'processing';
+    const isCompleted = job.status === 'completed';
+    const isSent = job.status === 'sent';
+    const isFailed = job.status === 'failed';
+    const isShareMethod = job.send_method === 'share';
+
+    const getStatusColor = () => {
+      if (isFailed) return theme.semanticColors.error;
+      if (isSent) return theme.semanticColors.success;
+      if (isCompleted && isShareMethod) return theme.brandColors.teal; // Ready to share
+      if (isCompleted) return theme.brandColors.teal;
+      return theme.brandColors.coral;
+    };
+
+    const getStatusIcon = () => {
+      if (isFailed) return 'alert-circle';
+      if (isSent) return 'checkmark-done-circle';
+      if (isCompleted && isShareMethod) return 'share-social';
+      if (isCompleted) return 'checkmark-circle';
+      if (isProcessing) return 'hourglass';
+      return 'time-outline';
+    };
+
+    const getStatusText = () => {
+      if (isFailed) return 'Failed - tap to retry';
+      if (isSent) return '✓ Sent to ' + (job.recipient_name || 'recipient');
+      if (isCompleted && isShareMethod) return 'Ready! Tap to share';
+      if (isCompleted) return 'Ready - sending email...';
+      if (isProcessing) return 'Processing video...';
+      return 'Queued for processing';
+    };
+
+    const handleShareNow = async () => {
+      try {
+        // Get the composited video URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('videos')
+          .getPublicUrl(job.output_path);
+
+        // Build share message
+        const shareSubject = `A special thank you from ${job.child_name || 'your friend'}!`;
+        const shareMessage = `${job.child_name || 'Someone special'} has a thank you video for you${job.gift_name ? ` for the ${job.gift_name}` : ''}!\n\nWatch here: ${publicUrl}`;
+
+        const result = await Share.share({
+          message: shareMessage,
+          title: shareSubject,
+        });
+
+        if (result.action !== Share.dismissedAction) {
+          // User shared - update job status
+          await supabase
+            .from('video_compositing_jobs')
+            .update({ status: 'sent' })
+            .eq('id', job.id);
+          loadDashboardData();
+        }
+      } catch (err) {
+        Alert.alert('Error', 'Failed to open share sheet. Please try again.');
+      }
+    };
+
+    const handleJobPress = () => {
+      if (isFailed) {
+        Alert.alert(
+          'Processing Failed',
+          job.error_message || 'Video processing failed. Would you like to try again?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Retry',
+              onPress: async () => {
+                try {
+                  // Reset job status to pending for retry
+                  await supabase
+                    .from('video_compositing_jobs')
+                    .update({ status: 'pending', error_message: null })
+                    .eq('id', job.id);
+                  // Trigger the edge function again
+                  await supabase.functions.invoke('trigger-composite', {
+                    body: { jobId: job.id },
+                  });
+                  loadDashboardData();
+                } catch (err) {
+                  Alert.alert('Error', 'Failed to retry. Please try again.');
+                }
+              },
+            },
+          ]
+        );
+      } else if (isCompleted && isShareMethod) {
+        // Open share sheet for completed share-method jobs
+        handleShareNow();
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        key={job.id}
+        onPress={handleJobPress}
+        disabled={!isFailed && !(isCompleted && isShareMethod)}
+        style={{
+          marginHorizontal: theme.spacing.md,
+          marginVertical: theme.spacing.sm,
+          backgroundColor: theme.neutralColors.white,
+          borderColor: getStatusColor(),
+          borderWidth: 2,
+          borderRadius: isKidsEdition ? theme.borderRadius.medium : theme.borderRadius.small,
+          padding: theme.spacing.md,
+          opacity: isFailed ? 1 : 0.9,
+        }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 16 : 14,
+                fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_Bold',
+                color: theme.neutralColors.dark,
+              }}
+            >
+              {job.gift_name || 'Thank You Video'}
+            </Text>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.mediumGray,
+                marginTop: 4,
+              }}
+            >
+              {job.child_name ? `From: ${job.child_name}` : ''} → {job.recipient_name || 'Guest'}
+            </Text>
+          </View>
+          {(isPending || isProcessing) && (
+            <View style={{ marginLeft: theme.spacing.sm }}>
+              <Ionicons name="sync" size={20} color={theme.brandColors.coral} />
+            </View>
+          )}
+        </View>
+        <View
+          style={{
+            marginTop: theme.spacing.sm,
+            paddingTop: theme.spacing.sm,
+            borderTopColor: theme.neutralColors.lightGray,
+            borderTopWidth: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <Ionicons
+            name={getStatusIcon()}
+            size={16}
+            color={getStatusColor()}
+            style={{ marginRight: 6 }}
+          />
+          <Text
+            style={{
+              fontSize: isKidsEdition ? 12 : 11,
+              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+              color: getStatusColor(),
+              flex: 1,
+            }}
+          >
+            {getStatusText()}
+          </Text>
+          {isFailed && (
+            <Ionicons name="refresh" size={16} color={theme.semanticColors.error} />
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   // cardType: 'pending' | 'approved' | 'sent'
   const renderVideoCard = (item, cardType = 'pending') => {
     const isPending = cardType === 'pending';
@@ -647,6 +899,40 @@ export const ParentDashboardScreen = ({ navigation }) => {
           onDismiss={() => setError(null)}
           style={{ margin: theme.spacing.md }}
         />
+      )}
+
+      {/* Processing Queue Section */}
+      {processingJobs.length > 0 && (
+        <>
+          <View style={{ paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="cloud-upload" size={18} color={theme.brandColors.coral} style={{ marginRight: 6 }} />
+              <Text
+                style={{
+                  color: theme.brandColors.coral,
+                  fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
+                  fontSize: isKidsEdition ? 16 : 14,
+                  fontWeight: '600',
+                }}
+              >
+                {processingJobs.filter(j => j.status === 'pending' || j.status === 'processing').length > 0
+                  ? `Processing ${processingJobs.filter(j => j.status === 'pending' || j.status === 'processing').length} video${processingJobs.filter(j => j.status === 'pending' || j.status === 'processing').length !== 1 ? 's' : ''}...`
+                  : 'Video Queue'}
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: theme.neutralColors.mediumGray,
+                marginTop: 4,
+              }}
+            >
+              Videos are processed in the background and sent automatically
+            </Text>
+          </View>
+          {processingJobs.map(job => renderProcessingJobCard(job))}
+        </>
       )}
 
       {/* Pending Review Section */}

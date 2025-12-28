@@ -30,6 +30,7 @@ export const FrameGalleryScreen = ({ navigation, route }) => {
   const eventName = route?.params?.eventName || 'Event';
 
   const [frames, setFrames] = useState([]);
+  const [activeFrameId, setActiveFrameId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -47,21 +48,48 @@ export const FrameGalleryScreen = ({ navigation, route }) => {
       setLoading(true);
       console.log('Loading frames for event:', eventId);
 
-      // Get all frame templates for this event
-      const { data: templates, error: templatesError } = await supabase
-        .from('frame_templates')
-        .select('*')
-        .eq('event_id', eventId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
-      if (templatesError) {
-        console.error('Error loading frames:', templatesError);
-        throw templatesError;
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Not authenticated');
       }
 
-      console.log('Loaded frames:', templates?.length || 0);
-      setFrames(templates || []);
+      // Get ALL frame templates for this event created by this user (not just active ones)
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('frame_assignments')
+        .select('*, frame_templates(*)')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+
+      // Filter to only show frames created by this user
+      const userAssignments = assignments?.filter(
+        a => a.frame_templates?.parent_id === user.id
+      ) || [];
+
+      if (assignmentsError) {
+        console.error('Error loading frames:', assignmentsError);
+        throw assignmentsError;
+      }
+
+      // Extract frame templates and track which is active
+      const templatesWithStatus = userAssignments
+        .map(assignment => ({
+          ...assignment.frame_templates,
+          assignmentId: assignment.id,
+          isActive: assignment.is_active,
+        }))
+        .filter(template => template && template.id);
+
+      // Find the active frame
+      const activeAssignment = userAssignments.find(a => a.is_active);
+      if (activeAssignment) {
+        setActiveFrameId(activeAssignment.frame_templates?.id);
+      } else {
+        setActiveFrameId(null);
+      }
+
+      console.log('Loaded frames:', templatesWithStatus.length);
+      setFrames(templatesWithStatus);
     } catch (error) {
       console.error('Error loading frames:', error);
       Alert.alert('Error', 'Failed to load frames');
@@ -76,6 +104,35 @@ export const FrameGalleryScreen = ({ navigation, route }) => {
     loadFrames();
   };
 
+  const handleSetActive = async (frame) => {
+    try {
+      // Deactivate all other assignments for this event
+      await supabase
+        .from('frame_assignments')
+        .update({ is_active: false })
+        .eq('event_id', eventId);
+
+      // Activate the selected frame's assignment
+      await supabase
+        .from('frame_assignments')
+        .update({ is_active: true })
+        .eq('id', frame.assignmentId);
+
+      setActiveFrameId(frame.id);
+
+      // Update local state
+      setFrames(frames.map(f => ({
+        ...f,
+        isActive: f.id === frame.id,
+      })));
+
+      Alert.alert('Active Frame Set', `"${frame.name || 'Frame'}" is now the active frame for this event.`);
+    } catch (error) {
+      console.error('Error setting active frame:', error);
+      Alert.alert('Error', 'Failed to set active frame');
+    }
+  };
+
   const handleDeleteFrame = (frame) => {
     Alert.alert(
       'Delete Frame?',
@@ -87,19 +144,31 @@ export const FrameGalleryScreen = ({ navigation, route }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase
-                .from('frame_templates')
-                .update({ is_active: false })
-                .eq('id', frame.id);
+              console.log('Deleting frame assignment:', frame.assignmentId);
 
-              if (error) throw error;
+              // Delete the frame assignment (not the template itself)
+              const { error: assignmentError } = await supabase
+                .from('frame_assignments')
+                .delete()
+                .eq('id', frame.assignmentId);
+
+              if (assignmentError) {
+                console.error('Error deleting assignment:', assignmentError);
+                throw assignmentError;
+              }
 
               // Remove from local state
               setFrames(frames.filter(f => f.id !== frame.id));
-              Alert.alert('Deleted', 'Frame has been removed');
+
+              // If this was the active frame, clear activeFrameId
+              if (frame.id === activeFrameId) {
+                setActiveFrameId(null);
+              }
+
+              Alert.alert('Deleted', 'Frame has been removed from this event');
             } catch (error) {
               console.error('Error deleting frame:', error);
-              Alert.alert('Error', 'Failed to delete frame');
+              Alert.alert('Error', `Failed to delete frame: ${error.message}`);
             }
           },
         },
@@ -124,8 +193,18 @@ export const FrameGalleryScreen = ({ navigation, route }) => {
   };
 
   const renderFrameCard = (frame) => {
+    const isActive = frame.id === activeFrameId;
+
     return (
-      <View key={frame.id} style={styles.frameCard}>
+      <View key={frame.id} style={[styles.frameCard, isActive && styles.frameCardActive]}>
+        {/* Active badge */}
+        {isActive && (
+          <View style={styles.activeBadge}>
+            <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+            <Text style={styles.activeBadgeText}>Active</Text>
+          </View>
+        )}
+
         {/* Frame preview */}
         <View style={styles.framePreview}>
           <View style={styles.framePreviewInner}>
@@ -147,6 +226,28 @@ export const FrameGalleryScreen = ({ navigation, route }) => {
             <View style={[styles.colorDot, { backgroundColor: frame.primary_color || '#06b6d4' }]} />
             <Text style={styles.frameShape}>{frame.frame_shape || 'classic'}</Text>
           </View>
+
+          {/* Set as Active button - larger, more prominent, only show if not active */}
+          {!isActive && (
+            <TouchableOpacity
+              style={styles.setActiveButton}
+              onPress={() => {
+                console.log('Set as Active pressed for frame:', frame.name);
+                handleSetActive(frame);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.setActiveText}>Set as Active</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Show "Currently Active" label for active frame */}
+          {isActive && (
+            <View style={styles.currentlyActiveLabel}>
+              <Text style={styles.currentlyActiveText}>Currently Active</Text>
+            </View>
+          )}
         </View>
 
         {/* Actions */}
@@ -294,6 +395,59 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     marginBottom: 12,
+    position: 'relative',
+  },
+  frameCardActive: {
+    borderColor: '#06b6d4',
+    borderWidth: 2,
+    backgroundColor: '#F0FDFA',
+  },
+  activeBadge: {
+    position: 'absolute',
+    top: -8,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#06b6d4',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    gap: 4,
+    zIndex: 10,
+  },
+  activeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  setActiveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#06b6d4',
+    borderRadius: 8,
+    gap: 6,
+  },
+  setActiveText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  currentlyActiveLabel: {
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  currentlyActiveText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#059669',
   },
   framePreview: {
     width: 70,

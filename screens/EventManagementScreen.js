@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   Text,
   Modal,
+  Switch,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +48,11 @@ export const EventManagementScreen = ({ navigation, route }) => {
   );
   const [emailMessage, setEmailMessage] = useState(
     existingEvent?.email_template_message || 'Hi [name]! [child_name] made a special thank you video just for you. Click below to watch it!'
+  );
+
+  // Frame choice toggle
+  const [allowKidsFrameChoice, setAllowKidsFrameChoice] = useState(
+    existingEvent?.allow_kids_frame_choice ?? false
   );
 
   // UI state
@@ -158,6 +164,8 @@ export const EventManagementScreen = ({ navigation, route }) => {
         // Email template fields (simplified)
         email_template_subject: emailSubject,
         email_template_message: emailMessage,
+        // Frame choice toggle
+        allow_kids_frame_choice: allowKidsFrameChoice,
       };
 
       console.log('📝 DEBUG: Event data:', eventData);
@@ -377,6 +385,24 @@ export const EventManagementScreen = ({ navigation, route }) => {
                   </Text>
                 </View>
               </View>
+
+              {/* Let kids choose frame toggle */}
+              <View style={styles.frameToggleRow}>
+                <View style={styles.frameToggleText}>
+                  <Text style={styles.frameToggleLabel}>Let kids choose frame</Text>
+                  <Text style={styles.frameToggleDesc}>
+                    Kids can pick from your frames when recording
+                  </Text>
+                </View>
+                <Switch
+                  value={allowKidsFrameChoice}
+                  onValueChange={setAllowKidsFrameChoice}
+                  trackColor={{ false: '#D1D5DB', true: '#5EEAD4' }}
+                  thumbColor={allowKidsFrameChoice ? '#06b6d4' : '#F4F4F5'}
+                  ios_backgroundColor="#D1D5DB"
+                />
+              </View>
+
               <View style={styles.frameButtonRow}>
                 <TouchableOpacity
                   style={[styles.createFrameButton, styles.frameButtonHalf]}
@@ -556,6 +582,31 @@ const styles = StyleSheet.create({
   },
   frameButtonHalf: {
     flex: 1,
+  },
+  frameToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  frameToggleText: {
+    flex: 1,
+    marginRight: 12,
+  },
+  frameToggleLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  frameToggleDesc: {
+    fontSize: 12,
+    color: '#6B7280',
   },
   settingsButton: {
     flexDirection: 'row',

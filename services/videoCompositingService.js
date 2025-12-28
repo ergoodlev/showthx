@@ -895,8 +895,408 @@ export const generateThumbnail = async (videoPath, timeSeconds = 0.5) => {
   }
 };
 
+/**
+ * Poll for server-side compositing job completion
+ * @param {string} jobId - Job ID to poll
+ * @param {object} options - Polling options
+ * @param {number} options.timeout - Timeout in ms (default: 300000 = 5 minutes)
+ * @param {number} options.interval - Poll interval in ms (default: 2000 = 2 seconds)
+ * @param {function} options.onProgress - Progress callback
+ * @returns {Promise<{success: boolean, outputPath?: string, error?: string}>}
+ */
+const pollForCompletion = async (jobId, options = {}) => {
+  const {
+    timeout = 300000, // 5 minutes
+    interval = 2000,  // 2 seconds
+    onProgress = null,
+  } = options;
+
+  const startTime = Date.now();
+  let lastStatus = 'pending';
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      const { data, error } = await supabase
+        .from('video_compositing_jobs')
+        .select('status, output_path, error_message')
+        .eq('id', jobId)
+        .single();
+
+      if (error) {
+        console.error('[COMPOSITING] Error polling job status:', error);
+        // Continue polling despite errors
+        await new Promise(r => setTimeout(r, interval));
+        continue;
+      }
+
+      if (data.status !== lastStatus) {
+        lastStatus = data.status;
+        console.log(`[COMPOSITING] Job ${jobId} status: ${data.status}`);
+
+        if (onProgress) {
+          switch (data.status) {
+            case 'processing':
+              onProgress('Processing video on server...');
+              break;
+            case 'completed':
+              onProgress('Processing complete!');
+              break;
+            case 'failed':
+              onProgress('Processing failed');
+              break;
+          }
+        }
+      }
+
+      if (data.status === 'completed') {
+        console.log('[COMPOSITING] Job completed, output:', data.output_path);
+        return { success: true, outputPath: data.output_path };
+      }
+
+      if (data.status === 'failed') {
+        console.error('[COMPOSITING] Job failed:', data.error_message);
+        return { success: false, error: data.error_message || 'Video processing failed' };
+      }
+
+      // Wait before next poll
+      await new Promise(r => setTimeout(r, interval));
+    } catch (pollError) {
+      console.error('[COMPOSITING] Poll error:', pollError);
+      await new Promise(r => setTimeout(r, interval));
+    }
+  }
+
+  // Timeout reached
+  console.error('[COMPOSITING] Job timed out after', timeout, 'ms');
+  return { success: false, error: 'Video processing timed out. Please try again.' };
+};
+
+/**
+ * Server-side video compositing using Trigger.dev
+ * Creates a job in the database and calls Edge Function to trigger Trigger.dev
+ *
+ * @param {object} options - Compositing options
+ * @param {string} options.videoStoragePath - Path to video in Supabase storage (required)
+ * @param {object} options.frameTemplate - Frame template object (optional)
+ * @param {string} options.framePngPath - Path to frame PNG in storage (optional)
+ * @param {string} options.customText - Custom text overlay (optional)
+ * @param {string} options.customTextPosition - Text position: 'top', 'center', 'bottom' (optional)
+ * @param {string} options.customTextColor - Text color in hex (optional)
+ * @param {Array} options.stickers - Array of sticker objects (optional)
+ * @param {string} options.filterId - Video filter ID (optional)
+ * @param {string} options.parentId - Parent user ID for tracking (optional)
+ * @param {string} options.videoId - Video record ID (optional)
+ * @param {string} options.giftId - Gift ID (optional)
+ * @param {function} options.onProgress - Progress callback (optional)
+ * @returns {Promise<{success: boolean, outputPath?: string, jobId?: string, error?: string}>}
+ */
+export const compositeVideoServerSide = async (options) => {
+  const {
+    videoStoragePath,
+    frameTemplate = null,
+    framePngPath = null,
+    customText = null,
+    customTextPosition = 'bottom',
+    customTextColor = '#FFFFFF',
+    stickers = [],
+    filterId = null,
+    parentId = null,
+    videoId = null,
+    giftId = null,
+    onProgress = null,
+  } = options;
+
+  if (!videoStoragePath) {
+    console.error('[COMPOSITING] videoStoragePath is required for server-side compositing');
+    return { success: false, error: 'Video storage path is required' };
+  }
+
+  console.log('[COMPOSITING] Starting server-side compositing...');
+  console.log('[COMPOSITING] Options:', {
+    videoStoragePath,
+    hasFrame: !!frameTemplate,
+    framePngPath: framePngPath || frameTemplate?.frame_png_path,
+    hasText: !!customText || !!frameTemplate?.custom_text,
+    stickerCount: stickers?.length || 0,
+    filterId,
+  });
+
+  if (onProgress) {
+    onProgress('Creating processing job...');
+  }
+
+  try {
+    // Determine the frame PNG path
+    const effectiveFramePngPath = framePngPath || frameTemplate?.frame_png_path || null;
+
+    // Determine custom text from options or template
+    const effectiveCustomText = customText || frameTemplate?.custom_text || null;
+    const effectiveTextPosition = customTextPosition || frameTemplate?.custom_text_position || 'bottom';
+    const effectiveTextColor = customTextColor || frameTemplate?.custom_text_color || '#FFFFFF';
+
+    // Create job in database
+    const { data: job, error: insertError } = await supabase
+      .from('video_compositing_jobs')
+      .insert({
+        video_path: videoStoragePath,
+        frame_png_path: effectiveFramePngPath,
+        custom_text: effectiveCustomText,
+        custom_text_position: effectiveTextPosition,
+        custom_text_color: effectiveTextColor,
+        stickers: stickers && stickers.length > 0 ? stickers : null,
+        filter_id: filterId,
+        parent_id: parentId,
+        video_id: videoId,
+        gift_id: giftId,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[COMPOSITING] Failed to create job:', insertError);
+      return { success: false, error: `Failed to create processing job: ${insertError.message}` };
+    }
+
+    console.log('[COMPOSITING] Job created:', job.id);
+
+    if (onProgress) {
+      onProgress('Triggering video processor...');
+    }
+
+    // Call Edge Function directly to trigger Trigger.dev
+    // (pg_net can't resolve Supabase hostnames from within the database)
+    const { data: triggerData, error: triggerError } = await supabase.functions.invoke(
+      'trigger-composite',
+      {
+        body: {
+          type: 'INSERT',
+          table: 'video_compositing_jobs',
+          record: job,
+        },
+      }
+    );
+
+    if (triggerError) {
+      console.error('[COMPOSITING] Failed to trigger Edge Function:', triggerError);
+      // Update job status to failed
+      await supabase
+        .from('video_compositing_jobs')
+        .update({ status: 'failed', error_message: triggerError.message })
+        .eq('id', job.id);
+      return { success: false, error: `Failed to trigger processor: ${triggerError.message}`, jobId: job.id };
+    }
+
+    console.log('[COMPOSITING] Edge Function triggered:', triggerData);
+
+    if (onProgress) {
+      onProgress('Waiting for server to start processing...');
+    }
+
+    // Poll for completion
+    const result = await pollForCompletion(job.id, {
+      timeout: 300000, // 5 minutes
+      interval: 2000,  // 2 seconds
+      onProgress,
+    });
+
+    if (result.success) {
+      return {
+        success: true,
+        outputPath: result.outputPath,
+        jobId: job.id,
+      };
+    } else {
+      return {
+        success: false,
+        error: result.error,
+        jobId: job.id,
+      };
+    }
+  } catch (error) {
+    console.error('[COMPOSITING] Server-side compositing error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Get the public URL for a composited video from storage
+ * @param {string} storagePath - Path in Supabase storage (e.g., 'composited/jobId.mp4')
+ * @returns {Promise<{success: boolean, url?: string, error?: string}>}
+ */
+export const getCompositedVideoUrl = async (storagePath) => {
+  if (!storagePath) {
+    return { success: false, error: 'Storage path is required' };
+  }
+
+  try {
+    // Get signed URL valid for 1 hour
+    const { data, error } = await supabase.storage
+      .from('videos')
+      .createSignedUrl(storagePath, 3600);
+
+    if (error) {
+      console.error('[COMPOSITING] Failed to get signed URL:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, url: data.signedUrl };
+  } catch (error) {
+    console.error('[COMPOSITING] Error getting composited video URL:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Check if server-side compositing is available
+ * Tests database connection and returns true if jobs table exists
+ * @returns {Promise<boolean>}
+ */
+export const isServerCompositingAvailable = async () => {
+  try {
+    // Simple query to check if the table exists and is accessible
+    const { error } = await supabase
+      .from('video_compositing_jobs')
+      .select('id')
+      .limit(1);
+
+    if (error) {
+      console.log('[COMPOSITING] Server compositing not available:', error.message);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.log('[COMPOSITING] Server compositing check failed:', error.message);
+    return false;
+  }
+};
+
+/**
+ * Queue a video for server-side compositing and auto-send
+ * This function returns immediately after creating the job - it doesn't wait for completion
+ * The Trigger.dev task will handle compositing and auto-sending the email
+ *
+ * @param {object} options - Compositing and recipient options
+ * @returns {Promise<{success: boolean, jobId?: string, error?: string}>}
+ */
+export const queueVideoForSending = async (options) => {
+  const {
+    videoStoragePath,
+    frameTemplate,
+    framePngPath,
+    customText,
+    customTextPosition,
+    customTextColor,
+    stickers = [],
+    filterId,
+    parentId,
+    videoId,
+    giftId,
+    // Recipient info for auto-send
+    recipientEmail,
+    recipientName,
+    sendMethod = 'email',
+    emailSubject,
+    emailBody,
+    childName,
+    giftName,
+    eventName,
+  } = options;
+
+  console.log('[QUEUE] Creating video processing job with recipient info...', {
+    videoStoragePath,
+    recipientEmail,
+    recipientName,
+    sendMethod,
+  });
+
+  try {
+    // Determine the frame PNG path
+    const effectiveFramePngPath = framePngPath || frameTemplate?.frame_png_path || null;
+
+    // Determine custom text from options or template
+    const effectiveCustomText = customText || frameTemplate?.custom_text || null;
+    const effectiveTextPosition = customTextPosition || frameTemplate?.custom_text_position || 'bottom';
+    const effectiveTextColor = customTextColor || frameTemplate?.custom_text_color || '#FFFFFF';
+
+    // Create job in database with recipient info
+    const { data: job, error: insertError } = await supabase
+      .from('video_compositing_jobs')
+      .insert({
+        video_path: videoStoragePath,
+        frame_png_path: effectiveFramePngPath,
+        custom_text: effectiveCustomText,
+        custom_text_position: effectiveTextPosition,
+        custom_text_color: effectiveTextColor,
+        stickers: stickers && stickers.length > 0 ? stickers : null,
+        filter_id: filterId,
+        parent_id: parentId,
+        video_id: videoId,
+        gift_id: giftId,
+        status: 'pending',
+        // Recipient info for auto-send
+        recipient_email: recipientEmail,
+        recipient_name: recipientName,
+        send_method: sendMethod,
+        email_subject: emailSubject,
+        email_body: emailBody,
+        child_name: childName,
+        gift_name: giftName,
+        event_name: eventName,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[QUEUE] Failed to create job:', insertError);
+      return { success: false, error: `Failed to create processing job: ${insertError.message}` };
+    }
+
+    console.log('[QUEUE] Job created:', job.id);
+
+    // Call Edge Function to trigger Trigger.dev (non-blocking)
+    const { data: triggerData, error: triggerError } = await supabase.functions.invoke(
+      'trigger-composite',
+      {
+        body: {
+          type: 'INSERT',
+          table: 'video_compositing_jobs',
+          record: job,
+        },
+      }
+    );
+
+    if (triggerError) {
+      console.error('[QUEUE] Failed to trigger Edge Function:', triggerError);
+      // Update job status to failed
+      await supabase
+        .from('video_compositing_jobs')
+        .update({ status: 'failed', error_message: triggerError.message })
+        .eq('id', job.id);
+      return { success: false, error: `Failed to trigger processor: ${triggerError.message}`, jobId: job.id };
+    }
+
+    console.log('[QUEUE] Edge Function triggered, job queued successfully:', job.id);
+
+    // Return immediately - don't wait for completion
+    return {
+      success: true,
+      jobId: job.id,
+      message: 'Video queued for processing',
+    };
+  } catch (error) {
+    console.error('[QUEUE] Error creating job:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export default {
   isCompositingAvailable,
+  isServerCompositingAvailable,
+  compositeVideoServerSide,
+  queueVideoForSending,
+  getCompositedVideoUrl,
   fixVideoRotation,
   normalizeVideoRotation,
   addFrameBorder,

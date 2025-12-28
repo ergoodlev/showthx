@@ -13,6 +13,8 @@ import {
   TouchableOpacity,
   Text,
   Alert,
+  Modal,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,7 +26,8 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { supabase } from '../supabaseClient';
 import { logoutAndReturnToAuth } from '../services/navigationService';
-import { getFrameForGift } from '../services/frameTemplateService';
+import { getFrameForGift, getFramesForEvent } from '../services/frameTemplateService';
+import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 
 export const KidPendingGiftsScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
@@ -39,6 +42,12 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
   const [gifts, setGifts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Frame picker state
+  const [framePickerVisible, setFramePickerVisible] = useState(false);
+  const [availableFrames, setAvailableFrames] = useState([]);
+  const [pendingGift, setPendingGift] = useState(null);
+  const [loadingFrames, setLoadingFrames] = useState(false);
 
   // Log permission state changes
   useEffect(() => {
@@ -75,7 +84,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
       setKidId(storedKidId);
       setKidName(storedKidName || 'Friend');
 
-      // Load assigned gifts (with gift details)
+      // Load assigned gifts (with gift details including event's allow_kids_frame_choice setting)
       console.log('🎁 Loading gifts for child:', storedKidId);
 
       const { data: giftsData, error: giftsError } = await supabase
@@ -88,7 +97,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
             name,
             giver_name,
             event_id,
-            event:events(name)
+            event:events(name, allow_kids_frame_choice)
           )
         `
         )
@@ -130,6 +139,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
             giver_name: assignment.gift.giver_name,
             event_name: assignment.gift.event?.name,
             event_id: assignment.gift.event_id, // CRITICAL: Include event_id for frame lookup
+            allow_kids_frame_choice: assignment.gift.event?.allow_kids_frame_choice || false,
             status: video?.status || 'pending',
             has_video: !!video,
             video_id: video?.id,
@@ -252,7 +262,55 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
       console.log('   status:', permission.status);
     }
 
-    // Load frame template for this gift (event-level assignment)
+    // Check if kids can choose frames for this event
+    if (gift.allow_kids_frame_choice) {
+      console.log('🖼️  Kids can choose frames - loading available frames for event:', gift.event_id);
+      setLoadingFrames(true);
+      setPendingGift(gift);
+
+      try {
+        const framesResult = await getFramesForEvent(gift.event_id);
+        if (framesResult.success && framesResult.data?.length > 0) {
+          // Extract unique frame templates
+          const frames = framesResult.data
+            .map(a => a.frame_templates)
+            .filter(f => f && f.id);
+
+          // Deduplicate by frame ID
+          const uniqueFrames = [];
+          const seenIds = new Set();
+          frames.forEach(f => {
+            if (!seenIds.has(f.id)) {
+              seenIds.add(f.id);
+              uniqueFrames.push(f);
+            }
+          });
+
+          console.log(`✅ Found ${uniqueFrames.length} unique frames for kid to choose from`);
+
+          if (uniqueFrames.length > 1) {
+            // Show frame picker
+            setAvailableFrames(uniqueFrames);
+            setFramePickerVisible(true);
+            setLoadingFrames(false);
+            return; // Wait for user to pick a frame
+          } else if (uniqueFrames.length === 1) {
+            // Only one frame, use it directly
+            console.log('ℹ️  Only one frame available, using it directly');
+            setLoadingFrames(false);
+            navigateToRecording(gift, uniqueFrames[0]);
+            return;
+          }
+        }
+        console.log('ℹ️  No frames available for this event');
+        setLoadingFrames(false);
+      } catch (err) {
+        console.error('❌ Error loading frames:', err);
+        setLoadingFrames(false);
+      }
+    }
+
+    // Default: Load frame template for this gift (event-level assignment)
     console.log('🖼️  Loading frame template for gift:', gift.id);
     const frameResult = await getFrameForGift(
       gift.id,        // giftId
@@ -268,6 +326,11 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
       console.log('ℹ️  No frame template assigned for this gift');
     }
 
+    navigateToRecording(gift, frameTemplate);
+  };
+
+  // Navigate to video recording screen
+  const navigateToRecording = async (gift, frameTemplate) => {
     // CRITICAL: Wait a bit after permission is granted before navigating
     // This gives the system time to fully set up camera access
     console.log('⏳ Waiting 500ms before navigating to camera view...');
@@ -282,6 +345,16 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
       giverName: gift.giver_name,
       frameTemplate,  // Pass frame template with custom_text for this event
     });
+  };
+
+  // Handle frame selection from picker
+  const handleFrameSelection = (frame) => {
+    console.log('🖼️  Kid selected frame:', frame?.name || 'No frame');
+    setFramePickerVisible(false);
+    if (pendingGift) {
+      navigateToRecording(pendingGift, frame);
+      setPendingGift(null);
+    }
   };
 
   const handleLogout = () => {
@@ -716,8 +789,215 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
           contentContainerStyle={{ paddingTop: theme.spacing.md, paddingBottom: theme.spacing.lg }}
         />
       )}
+
+      {/* Frame Picker Modal */}
+      <Modal
+        visible={framePickerVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setFramePickerVisible(false);
+          setPendingGift(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, isKidsEdition && styles.kidsModalTitle]}>
+                Pick a Frame!
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setFramePickerVisible(false);
+                  setPendingGift(null);
+                }}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalSubtitle, isKidsEdition && styles.kidsModalSubtitle]}>
+              Choose a fun frame for your thank you video
+            </Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.framesScrollContent}
+            >
+              {/* No frame option */}
+              <TouchableOpacity
+                style={styles.frameOption}
+                onPress={() => handleFrameSelection(null)}
+              >
+                <View style={[styles.framePreviewBox, styles.noFrameBox]}>
+                  <Ionicons name="videocam-outline" size={40} color="#9CA3AF" />
+                  <Text style={styles.noFrameText}>No Frame</Text>
+                </View>
+                <Text style={styles.frameOptionLabel}>Plain</Text>
+              </TouchableOpacity>
+
+              {/* Frame options */}
+              {availableFrames.map((frame) => {
+                // Construct proper storage URL for AI frame images
+                const frameImageUrl = frame.frame_png_path
+                  ? `https://lufpjgmvkccrmefdykki.supabase.co/storage/v1/object/public/ai-frames/${frame.frame_png_path}`
+                  : null;
+
+                return (
+                  <TouchableOpacity
+                    key={frame.id}
+                    style={styles.frameOption}
+                    onPress={() => handleFrameSelection(frame)}
+                  >
+                    <View style={styles.framePreviewBox}>
+                      {frameImageUrl ? (
+                        <Image
+                          source={{ uri: frameImageUrl }}
+                          style={styles.framePreviewImage}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <View style={styles.framePreviewInner}>
+                          <CustomFrameOverlay frameTemplate={frame} />
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.frameOptionLabel} numberOfLines={1}>
+                      {frame.name || 'Frame'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={() => handleFrameSelection(null)}
+            >
+              <Text style={styles.skipButtonText}>Skip Frame Selection</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Loading frames overlay */}
+      {loadingFrames && (
+        <View style={styles.loadingOverlay}>
+          <LoadingSpinner visible message="Loading frames..." />
+        </View>
+      )}
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  kidsModalTitle: {
+    fontSize: 26,
+    fontFamily: 'Nunito_Bold',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  kidsModalSubtitle: {
+    fontSize: 16,
+    fontFamily: 'Nunito_Regular',
+  },
+  framesScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  frameOption: {
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  framePreviewBox: {
+    width: 100,
+    height: 140,
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noFrameBox: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+  },
+  noFrameText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  framePreviewInner: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  framePreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  frameOptionLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
+    marginTop: 8,
+    maxWidth: 100,
+    textAlign: 'center',
+  },
+  skipButton: {
+    marginHorizontal: 20,
+    marginTop: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textDecorationLine: 'underline',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
 
 export default KidPendingGiftsScreen;

@@ -19,8 +19,8 @@ export const FRAME_HEIGHT = 1920;
 const VB_WIDTH = 108;  // 1080 / 10
 const VB_HEIGHT = 192; // 1920 / 10
 
-// Storage bucket for preset frames
-const PRESET_FRAMES_BUCKET = 'videos';
+// Storage bucket for preset frames (ai-frames bucket allows PNG uploads)
+const PRESET_FRAMES_BUCKET = 'ai-frames';
 const PRESET_FRAMES_FOLDER = 'preset-frames';
 
 /**
@@ -414,8 +414,12 @@ export const uploadFramePNG = async (localPath, parentId, frameName) => {
 
     console.log('[PRESET_FRAME] Frame PNG uploaded:', storagePath);
 
-    // Clean up local file
-    await FileSystem.deleteAsync(localPath, { idempotent: true });
+    // Clean up local file (non-critical, don't fail if cleanup fails)
+    try {
+      await FileSystem.deleteAsync(localPath, { idempotent: true });
+    } catch (cleanupError) {
+      console.warn('[PRESET_FRAME] Failed to clean up temp file (non-critical):', cleanupError.message);
+    }
 
     return {
       success: true,

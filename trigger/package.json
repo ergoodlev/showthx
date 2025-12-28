@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "@trigger.dev/build": "4.3.1",
+    "@trigger.dev/sdk": "4.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  },
+  "name": "showthx-trigger-tasks",
+  "private": true,
+  "scripts": {
+    "deploy": "npx trigger.dev@latest deploy",
+    "dev": "npx trigger.dev@latest dev"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}

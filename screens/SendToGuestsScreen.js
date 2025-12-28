@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Share,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEdition } from '../context/EditionContext';
@@ -26,7 +27,14 @@ import { supabase } from '../supabaseClient';
 import { sendVideoToGuests } from '../services/emailService';
 import { updateGift } from '../services/databaseService';
 import { createShortVideoUrl } from '../services/secureShareService';
-import { prepareVideoForSharing, isCompositingAvailable } from '../services/videoCompositingService';
+import {
+  prepareVideoForSharing,
+  isCompositingAvailable,
+  compositeVideoServerSide,
+  isServerCompositingAvailable,
+  getCompositedVideoUrl,
+  queueVideoForSending,
+} from '../services/videoCompositingService';
 import { getFrameForGift } from '../services/frameTemplateService';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -351,113 +359,88 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   };
 
   /**
-   * Download raw video and composite with current frame/decorations/filter
-   * Then upload the composited video back to storage
-   * @returns {Promise<{success: boolean, compositedUrl?: string, error?: string}>}
+   * Composite video with frame/decorations/filter using server-side processing
+   * Uses Trigger.dev for FFmpeg compositing in the cloud
+   * @returns {Promise<{success: boolean, compositedUrl?: string, storagePath?: string, error?: string}>}
    */
   const compositeAndUploadVideo = async () => {
     try {
-      setLoadingMessage('Downloading video...');
-      console.log('📹 Starting delayed compositing for raw video...');
+      console.log('📹 Starting server-side video compositing...');
 
-      // Get signed URL for download
       if (!storagePath) {
         throw new Error('No storage path available for raw video');
       }
 
-      const { data: signedUrlData, error: urlError } = await supabase.storage
-        .from('videos')
-        .createSignedUrl(storagePath, 3600); // 1 hour for processing
-
-      if (urlError || !signedUrlData?.signedUrl) {
-        throw new Error('Could not get download URL for raw video');
+      // Check if server-side compositing is available
+      const serverAvailable = await isServerCompositingAvailable();
+      if (!serverAvailable) {
+        console.warn('⚠️ Server-side compositing not available');
+        return {
+          success: true,
+          compositedUrl: videoUrl,
+          fallback: true,
+          reason: 'Server-side compositing not configured',
+        };
       }
 
-      // Download video to local cache
-      const localPath = `${FileSystem.cacheDirectory}raw_video_${Date.now()}.mp4`;
-      const downloadResult = await FileSystem.downloadAsync(signedUrlData.signedUrl, localPath);
-
-      if (downloadResult.status !== 200) {
-        throw new Error('Failed to download raw video');
-      }
-
-      console.log('✅ Raw video downloaded to:', localPath);
-
-      // Composite the video with current frame, decorations, and filter
-      setLoadingMessage('Adding frame and decorations...');
-      console.log('🎨 Compositing with:', {
+      console.log('🎨 Compositing options:', {
+        videoStoragePath: storagePath,
         hasFrame: !!frameTemplate,
+        framePngPath: frameTemplate?.frame_png_path,
+        hasText: !!frameTemplate?.custom_text,
         decorationCount: decorations.length,
         filter: videoFilter,
       });
 
-      const canComposite = await isCompositingAvailable();
-      if (!canComposite) {
-        console.warn('⚠️ FFmpeg not available - sending raw video without overlays');
-        // Clean up local file
-        await FileSystem.deleteAsync(localPath, { idempotent: true });
-        // Return with flag so caller can show warning to user
-        return { success: true, compositedUrl: videoUrl, fallback: true, reason: 'FFmpeg not available' };
-      }
-
-      const compositeResult = await prepareVideoForSharing(localPath, {
+      // Use server-side compositing
+      const compositeResult = await compositeVideoServerSide({
+        videoStoragePath: storagePath,
         frameTemplate,
+        framePngPath: frameTemplate?.frame_png_path,
+        customText: frameTemplate?.custom_text,
+        customTextPosition: frameTemplate?.custom_text_position,
+        customTextColor: frameTemplate?.custom_text_color,
         stickers: decorations,
-        videoFilter,
+        filterId: videoFilter,
+        parentId,
+        videoId,
+        giftId,
+        onProgress: (message) => {
+          setLoadingMessage(message);
+        },
       });
 
-      if (!compositeResult.success || !compositeResult.outputPath) {
-        console.warn('⚠️ Compositing failed, using raw video');
-        await FileSystem.deleteAsync(localPath, { idempotent: true });
-        return { success: true, compositedUrl: videoUrl, fallback: true, reason: compositeResult.error || 'Compositing failed' };
+      if (!compositeResult.success) {
+        console.error('❌ Server-side compositing failed:', compositeResult.error);
+        // Fall back to raw video with warning
+        return {
+          success: true,
+          compositedUrl: videoUrl,
+          fallback: true,
+          reason: compositeResult.error || 'Server compositing failed',
+        };
       }
 
-      console.log('✅ Video composited:', compositeResult.outputPath);
-
-      // Upload composited video to storage
-      setLoadingMessage('Uploading finalized video...');
-      const compositedPath = `composited/${parentId}/${Date.now()}_composited.mp4`;
-
-      // Read composited file
-      const compositedBase64 = await FileSystem.readAsStringAsync(compositeResult.outputPath, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      // Convert to bytes
-      const binaryString = atob(compositedBase64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      const { error: uploadError } = await supabase.storage
-        .from('videos')
-        .upload(compositedPath, bytes.buffer, {
-          contentType: 'video/mp4',
-          upsert: false,
-        });
-
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-
-      console.log('✅ Composited video uploaded:', compositedPath);
+      console.log('✅ Server-side compositing complete:', compositeResult.outputPath);
 
       // Get signed URL for the composited video
-      const { data: compositedUrlData, error: compositedUrlError } = await supabase.storage
-        .from('videos')
-        .createSignedUrl(compositedPath, 86400 * 30); // 30 days
-
-      // Clean up local files
-      await FileSystem.deleteAsync(localPath, { idempotent: true });
-      await FileSystem.deleteAsync(compositeResult.outputPath, { idempotent: true });
-
-      if (compositedUrlError || !compositedUrlData?.signedUrl) {
-        throw new Error('Could not get URL for composited video');
+      const urlResult = await getCompositedVideoUrl(compositeResult.outputPath);
+      if (!urlResult.success) {
+        console.error('❌ Failed to get composited video URL:', urlResult.error);
+        return {
+          success: true,
+          compositedUrl: videoUrl,
+          fallback: true,
+          reason: 'Could not get composited video URL',
+        };
       }
 
       console.log('✅ Composited video ready for sharing');
-      return { success: true, compositedUrl: compositedUrlData.signedUrl, storagePath: compositedPath };
+      return {
+        success: true,
+        compositedUrl: urlResult.url,
+        storagePath: compositeResult.outputPath,
+      };
     } catch (error) {
       console.error('❌ Compositing error:', error);
       return { success: false, error: error.message };
@@ -478,70 +461,154 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
     try {
       setLoading(true);
 
-      // DELAYED COMPOSITING: If this is a raw video, composite it now
+      // VIDEO QUEUE: No longer wait for compositing here
+      // The queueVideoForSending function handles everything asynchronously
       let finalVideoUrl = videoUrl;
       let finalStoragePath = storagePath;
-
-      if (isRawVideo && storagePath) {
-        console.log('📹 Raw video detected - compositing before send...');
-        setLoadingMessage('Preparing your video...');
-
-        const compositeResult = await compositeAndUploadVideo();
-
-        if (compositeResult.success && compositeResult.compositedUrl) {
-          if (compositeResult.fallback) {
-            // Compositing fell back to raw video - warn user but continue
-            console.warn('⚠️ Video will be sent without frame/stickers:', compositeResult.reason);
-            alert(`Note: Your video will be sent without the frame and stickers. ${compositeResult.reason || 'Compositing is not available.'}\n\nThe video will still be sent successfully.`);
-          } else {
-            console.log('✅ Using composited video for sending');
-          }
-          finalVideoUrl = compositeResult.compositedUrl;
-          if (compositeResult.storagePath) {
-            finalStoragePath = compositeResult.storagePath;
-          }
-        } else if (!compositeResult.success) {
-          console.error('❌ Compositing failed:', compositeResult.error);
-          // Show error to user but continue with raw video
-          alert(`Warning: Could not add frame and stickers to video. ${compositeResult.error || ''}\n\nThe raw video will be sent instead.`);
-          console.log('⚠️ Falling back to raw video URL');
-        }
-      }
 
       const selectedGuestData = guests.filter(g => selectedGuests.has(g.id));
 
       if (sendMethod === 'email') {
-        // Send via email with custom template and mail merge
-        // Pass guest objects with email and name for personalization
-        setLoadingMessage('Sending email...');
-        const guestsWithNames = selectedGuestData.map(g => ({
-          email: g.email,
-          name: g.name || '',
-        }));
+        // VIDEO QUEUE: Queue video for processing and auto-send
+        // Don't wait for compositing - return immediately
+        setLoadingMessage('Queueing video...');
+
+        // Get the first selected guest for the queue (we'll handle multiple recipients in the email)
+        const firstGuest = selectedGuestData[0];
+        const allEmails = selectedGuestData.map(g => g.email).join(',');
+        const allNames = selectedGuestData.map(g => g.name || 'Guest').join(', ');
 
         // Use edited values (which may have been customized by user for this send)
-        const customizedTemplate = {
-          subject: editedSubject || emailTemplate.subject,
-          message: editedMessage || emailTemplate.message,
-        };
+        const customizedSubject = editedSubject || emailTemplate.subject;
+        const customizedMessage = editedMessage || emailTemplate.message;
 
-        const emailResult = await sendVideoToGuests(
-          guestsWithNames, // Pass guest objects with names
-          giftName,
-          finalVideoUrl, // Use composited video URL (or raw if compositing not needed/failed)
-          '30 days',
-          customizedTemplate, // Use the edited template
-          childName, // Pass child name for mail merge
-          parentName // Pass parent name for mail merge
-        );
+        if (isRawVideo && storagePath) {
+          // Queue for compositing + auto-send
+          console.log('📹 Queueing video for processing and auto-send...');
 
-        if (!emailResult.success) {
-          throw new Error(emailResult.error || 'Failed to send emails');
+          const queueResult = await queueVideoForSending({
+            videoStoragePath: storagePath,
+            frameTemplate,
+            framePngPath: frameTemplate?.frame_png_path,
+            customText: frameTemplate?.custom_text,
+            customTextPosition: frameTemplate?.custom_text_position,
+            customTextColor: frameTemplate?.custom_text_color,
+            stickers: decorations,
+            filterId: videoFilter,
+            parentId,
+            videoId,
+            giftId,
+            // Recipient info for auto-send
+            recipientEmail: allEmails,
+            recipientName: allNames,
+            sendMethod: 'email',
+            emailSubject: customizedSubject,
+            emailBody: customizedMessage,
+            childName,
+            giftName,
+            eventName: eventName || '',
+          });
+
+          if (!queueResult.success) {
+            throw new Error(queueResult.error || 'Failed to queue video');
+          }
+
+          console.log('✅ Video queued for processing:', queueResult.jobId);
+
+          // Show success and navigate back
+          setLoading(false);
+          Alert.alert(
+            'Video Queued!',
+            `Your video is being processed and will be sent to ${allNames} automatically when ready.\n\nYou can track progress on your dashboard.`,
+            [
+              {
+                text: 'Go to Dashboard',
+                onPress: () => navigation.navigate('ParentDashboard', { initialTab: 'videos' }),
+              },
+            ]
+          );
+          return; // Exit early - don't continue to the success handling below
+        } else {
+          // Video already composited - send immediately (old flow)
+          setLoadingMessage('Sending email...');
+          const guestsWithNames = selectedGuestData.map(g => ({
+            email: g.email,
+            name: g.name || '',
+          }));
+
+          const customizedTemplate = {
+            subject: customizedSubject,
+            message: customizedMessage,
+          };
+
+          const emailResult = await sendVideoToGuests(
+            guestsWithNames,
+            giftName,
+            finalVideoUrl,
+            '30 days',
+            customizedTemplate,
+            childName,
+            parentName
+          );
+
+          if (!emailResult.success) {
+            throw new Error(emailResult.error || 'Failed to send emails');
+          }
         }
       } else if (sendMethod === 'share') {
-        // Video has already been composited if needed (see delayed compositing above)
-        let shareUrl = finalVideoUrl;
+        // OPTION A: Queue video for compositing, then user can share when ready
+        // This avoids making the user wait during processing
 
+        if (isRawVideo && storagePath) {
+          // Queue for compositing - user will share later from dashboard
+          console.log('📹 Queueing video for share processing...');
+          setLoadingMessage('Queueing video...');
+
+          const selectedGuestNames = selectedGuestData.map(g => g.name).join(', ') || 'Guest';
+
+          const queueResult = await queueVideoForSending({
+            videoStoragePath: storagePath,
+            frameTemplate,
+            framePngPath: frameTemplate?.frame_png_path,
+            customText: frameTemplate?.custom_text,
+            customTextPosition: frameTemplate?.custom_text_position,
+            customTextColor: frameTemplate?.custom_text_color,
+            stickers: decorations,
+            filterId: videoFilter,
+            parentId,
+            videoId,
+            giftId,
+            // For share method, we store recipient info but don't auto-send
+            recipientName: selectedGuestNames,
+            sendMethod: 'share',  // This tells us to NOT auto-send email
+            childName,
+            giftName,
+            eventName: eventName || '',
+          });
+
+          if (!queueResult.success) {
+            throw new Error(queueResult.error || 'Failed to queue video');
+          }
+
+          console.log('✅ Video queued for share processing:', queueResult.jobId);
+
+          // Show success and navigate back
+          setLoading(false);
+          Alert.alert(
+            'Video Queued!',
+            `Your video is being processed. We'll let you know when it's ready to share with ${selectedGuestNames}!\n\nYou can track progress and share from your dashboard.`,
+            [
+              {
+                text: 'Go to Dashboard',
+                onPress: () => navigation.navigate('ParentDashboard', { initialTab: 'videos' }),
+              },
+            ]
+          );
+          return; // Exit early
+        }
+
+        // Video already composited - share immediately (old flow)
+        let shareUrl = finalVideoUrl;
         setLoadingMessage('Generating share link...');
 
         // Generate short URL if we have the required data

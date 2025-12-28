@@ -485,7 +485,78 @@ export const FrameCreationScreen = ({ navigation, route }) => {
 
   // Render frame preview with actual SVG frame overlay
   const renderFramePreview = () => {
-    // Create mock frameTemplate object for preview
+    // For AI mode: show AI preview if generated, otherwise show placeholder
+    if (frameMode === 'ai') {
+      return (
+        <View style={styles.previewContainer}>
+          <View
+            style={{
+              backgroundColor: '#000000',
+              aspectRatio: 9 / 16,
+              width: '70%',
+              alignSelf: 'center',
+              borderRadius: 12,
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
+            {generatedFrameUrl ? (
+              // Show generated AI frame
+              <Image
+                source={{ uri: generatedFrameUrl }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="contain"
+              />
+            ) : (
+              // Placeholder - no frame yet
+              <LinearGradient
+                colors={['#1e293b', '#0f172a']}
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="sparkles-outline" size={48} color="#8B5CF6" />
+                <Text style={styles.previewPlaceholder}>Generate an AI frame below</Text>
+              </LinearGradient>
+            )}
+
+            {/* Custom text overlay - show on AI frame too */}
+            {customText && generatedFrameUrl && (
+              <View
+                style={[
+                  styles.textOverlay,
+                  textPosition === 'top' ? styles.textTop : styles.textBottom,
+                  { zIndex: 15 },
+                ]}
+                pointerEvents="none"
+              >
+                <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+                  <Text
+                    style={[
+                      styles.customTextPreview,
+                      { color: textColor },
+                      textFont === 'playful' && styles.fontPlayful,
+                      textFont === 'elegant' && styles.fontElegant,
+                      textFont === 'bold' && styles.fontBold,
+                    ]}
+                  >
+                    {customText}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.previewHint}>
+            {generatedFrameUrl ? 'Your AI-generated frame' : 'Select a style and generate your frame'}
+          </Text>
+        </View>
+      );
+    }
+
+    // For preset mode: show the CustomFrameOverlay preview
     const mockFrameTemplate = {
       id: 'preview',
       name: frameName || 'Preview',
@@ -736,17 +807,9 @@ export const FrameCreationScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Generated Frame Preview */}
+            {/* Generate New button - shows after frame is generated */}
             {generatedFrameUrl && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Generated Frame</Text>
-                <View style={styles.generatedPreview}>
-                  <Image
-                    source={{ uri: generatedFrameUrl }}
-                    style={styles.generatedImage}
-                    resizeMode="contain"
-                  />
-                </View>
+              <View style={[styles.section, { alignItems: 'center' }]}>
                 <TouchableOpacity
                   onPress={() => {
                     setGeneratedFrameUrl(null);
@@ -755,7 +818,7 @@ export const FrameCreationScreen = ({ navigation, route }) => {
                   style={styles.regenerateButton}
                 >
                   <Ionicons name="refresh" size={18} color="#06b6d4" />
-                  <Text style={styles.regenerateText}>Generate New</Text>
+                  <Text style={styles.regenerateText}>Generate Different Frame</Text>
                 </TouchableOpacity>
               </View>
             )}
