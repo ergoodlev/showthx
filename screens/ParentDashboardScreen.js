@@ -371,7 +371,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
         .order('created_at', { ascending: false });
 
       if (approvedError) throw approvedError;
-      setApprovedVideos(approvedList || []);
+      // Note: We'll filter out videos with active jobs after loading jobList below
 
       // Load sent videos (can be resent)
       const { data: sentList, error: sentError } = await supabase
@@ -404,20 +404,29 @@ export const ParentDashboardScreen = ({ navigation }) => {
       if (sentError) throw sentError;
       setSentVideos(sentList || []);
 
-      // Load video processing queue (all recent statuses)
+      // Load video processing queue (only show active jobs, not sent ones)
       const { data: jobList, error: jobsError } = await supabase
         .from('video_compositing_jobs')
         .select('*')
         .eq('parent_id', user.id)
-        .in('status', ['pending', 'processing', 'completed', 'sent', 'failed'])
+        .in('status', ['pending', 'processing', 'completed', 'failed'])
         .order('created_at', { ascending: false })
         .limit(20);
 
       if (jobsError) {
         console.warn('Failed to load processing jobs:', jobsError);
         // Don't throw - processing jobs are optional
+        setProcessingJobs([]);
+        // If no jobs, show all approved videos
+        setApprovedVideos(approvedList || []);
       } else {
         setProcessingJobs(jobList || []);
+
+        // Filter out approved videos that have an active compositing job
+        // This prevents showing the same video in both Video Queue and Ready to Send
+        const jobVideoIds = new Set((jobList || []).map(job => job.video_id).filter(Boolean));
+        const filteredApproved = (approvedList || []).filter(video => !jobVideoIds.has(video.id));
+        setApprovedVideos(filteredApproved);
       }
     } catch (err) {
       console.error('Error loading dashboard:', err);
@@ -613,13 +622,11 @@ export const ParentDashboardScreen = ({ navigation }) => {
     const isPending = job.status === 'pending';
     const isProcessing = job.status === 'processing';
     const isCompleted = job.status === 'completed';
-    const isSent = job.status === 'sent';
     const isFailed = job.status === 'failed';
     const isShareMethod = job.send_method === 'share';
 
     const getStatusColor = () => {
       if (isFailed) return theme.semanticColors.error;
-      if (isSent) return theme.semanticColors.success;
       if (isCompleted && isShareMethod) return theme.brandColors.teal; // Ready to share
       if (isCompleted) return theme.brandColors.teal;
       return theme.brandColors.coral;
@@ -627,7 +634,6 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
     const getStatusIcon = () => {
       if (isFailed) return 'alert-circle';
-      if (isSent) return 'checkmark-done-circle';
       if (isCompleted && isShareMethod) return 'share-social';
       if (isCompleted) return 'checkmark-circle';
       if (isProcessing) return 'hourglass';
@@ -636,8 +642,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
     const getStatusText = () => {
       if (isFailed) return 'Failed - tap to retry';
-      if (isSent) return '✓ Sent to ' + (job.recipient_name || 'recipient');
-      if (isCompleted && isShareMethod) return 'Ready! Tap to share';
+      if (isCompleted && isShareMethod) return 'Ready! Tap for options';
       if (isCompleted) return 'Ready - sending email...';
       if (isProcessing) return 'Processing video...';
       return 'Queued for processing';
@@ -701,8 +706,42 @@ export const ParentDashboardScreen = ({ navigation }) => {
           ]
         );
       } else if (isCompleted && isShareMethod) {
-        // Open share sheet for completed share-method jobs
-        handleShareNow();
+        // Show options for completed share-method jobs
+        Alert.alert(
+          'Share Video',
+          'What would you like to do with this video?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Share Now',
+              onPress: handleShareNow,
+            },
+            {
+              text: 'Mark as Done',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  const { error } = await supabase
+                    .from('video_compositing_jobs')
+                    .update({ status: 'sent' })
+                    .eq('id', job.id);
+
+                  if (error) {
+                    console.error('Error marking job as done:', error);
+                    Alert.alert('Error', 'Failed to mark as done. Please try again.');
+                    return;
+                  }
+
+                  // Refresh the dashboard data
+                  await loadDashboardData();
+                } catch (err) {
+                  console.error('Error marking job as done:', err);
+                  Alert.alert('Error', 'Failed to mark as done. Please try again.');
+                }
+              },
+            },
+          ]
+        );
       }
     };
 

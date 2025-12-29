@@ -60,14 +60,17 @@ serve(async (req: Request) => {
     const emails = recipientEmail.split(",").map(e => e.trim()).filter(Boolean);
     const names = (recipientName || "").split(",").map(n => n.trim());
 
-    // Build personalized subject and body
-    const subject = emailSubject || `A special thank you from ${childName}!`;
+    // Build personalized subject - replace placeholders
+    const rawSubject = emailSubject || `A special thank you from ${childName}!`;
+    const subject = rawSubject
+      .replace(/\[child_name\]/gi, childName)
+      .replace(/\[name\]/gi, names[0] || recipientName || "Friend");
 
-    // Default email body with video link
+    // Default email body with video link (no gift name)
     const defaultBody = `
 Hi ${names[0] || recipientName || "there"},
 
-${childName} has a special thank you message for you${giftName ? ` for the ${giftName}` : ""}!
+${childName} has a special thank you message for you!
 
 Click below to watch your personalized video:
 ${videoUrl}
@@ -89,6 +92,9 @@ ${childName} (via ShowThx)
           .replace(/\[video_url\]/gi, videoUrl)
       : defaultBody;
 
+    // Logo URL - stored in Supabase storage assets bucket (public)
+    const logoUrl = "https://lufpjgmvkccrmefdykki.supabase.co/storage/v1/object/public/assets/splash-icon.png";
+
     // Build HTML email with video thumbnail and play button
     const htmlBody = `
 <!DOCTYPE html>
@@ -101,9 +107,10 @@ ${childName} (via ShowThx)
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
     <tr>
-      <td style="padding: 40px 30px; text-align: center; background: linear-gradient(135deg, #FF6B6B 0%, #FFE66D 100%);">
-        <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-          🎉 You've got a Thank You! 🎉
+      <td style="padding: 30px 30px 20px; text-align: center; background: linear-gradient(135deg, #FF6B6B 0%, #FFE66D 100%);">
+        <img src="${logoUrl}" alt="ShowThx" style="height: 50px; margin-bottom: 15px;" />
+        <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          You've got a Thank You!
         </h1>
       </td>
     </tr>
@@ -113,7 +120,7 @@ ${childName} (via ShowThx)
           Hi ${names[0] || recipientName || "there"},
         </p>
         <p style="margin: 0 0 20px; font-size: 16px; color: #555555; line-height: 1.6;">
-          ${childName} has recorded a special thank you video${giftName ? ` for the <strong>${giftName}</strong>` : ""}!
+          ${childName} has recorded a special thank you video for you!
         </p>
 
         <!-- Video Preview Box -->
@@ -130,9 +137,8 @@ ${childName} (via ShowThx)
           </tr>
         </table>
 
-        <p style="margin: 0 0 10px; font-size: 14px; color: #888888; text-align: center;">
-          Click the button above or copy this link:<br>
-          <a href="${videoUrl}" style="color: #667eea; word-break: break-all;">${videoUrl}</a>
+        <p style="margin: 0; font-size: 13px; color: #aaaaaa; text-align: center;">
+          Having trouble? <a href="${videoUrl}" style="color: #667eea;">Click here</a> to watch
         </p>
       </td>
     </tr>

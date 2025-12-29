@@ -15,7 +15,6 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Share,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +25,6 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { supabase } from '../supabaseClient';
 import { sendVideoToGuests } from '../services/emailService';
 import { updateGift } from '../services/databaseService';
-import { createShortVideoUrl } from '../services/secureShareService';
 import {
   prepareVideoForSharing,
   isCompositingAvailable,
@@ -49,7 +47,6 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
   const [guests, setGuests] = useState([]);
   const [selectedGuests, setSelectedGuests] = useState(new Set());
   const [fetchingGuests, setFetchingGuests] = useState(true);
-  const [sendMethod, setSendMethod] = useState('email'); // 'email' or 'share'
   const [videoUrl, setVideoUrl] = useState(videoUri); // Will be replaced with database URL
   const [videoId, setVideoId] = useState(null); // Video ID for short URL generation
   const [storagePath, setStoragePath] = useState(null); // Storage path for short URL
@@ -464,241 +461,92 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
       // VIDEO QUEUE: No longer wait for compositing here
       // The queueVideoForSending function handles everything asynchronously
       let finalVideoUrl = videoUrl;
-      let finalStoragePath = storagePath;
 
       const selectedGuestData = guests.filter(g => selectedGuests.has(g.id));
 
-      if (sendMethod === 'email') {
-        // VIDEO QUEUE: Queue video for processing and auto-send
-        // Don't wait for compositing - return immediately
-        setLoadingMessage('Queueing video...');
+      // VIDEO QUEUE: Queue video for processing and auto-send
+      // Don't wait for compositing - return immediately
+      setLoadingMessage('Queueing video...');
 
-        // Get the first selected guest for the queue (we'll handle multiple recipients in the email)
-        const firstGuest = selectedGuestData[0];
-        const allEmails = selectedGuestData.map(g => g.email).join(',');
-        const allNames = selectedGuestData.map(g => g.name || 'Guest').join(', ');
+      // Get the first selected guest for the queue (we'll handle multiple recipients in the email)
+      const allEmails = selectedGuestData.map(g => g.email).join(',');
+      const allNames = selectedGuestData.map(g => g.name || 'Guest').join(', ');
 
-        // Use edited values (which may have been customized by user for this send)
-        const customizedSubject = editedSubject || emailTemplate.subject;
-        const customizedMessage = editedMessage || emailTemplate.message;
+      // Use edited values (which may have been customized by user for this send)
+      const customizedSubject = editedSubject || emailTemplate.subject;
+      const customizedMessage = editedMessage || emailTemplate.message;
 
-        if (isRawVideo && storagePath) {
-          // Queue for compositing + auto-send
-          console.log('📹 Queueing video for processing and auto-send...');
+      if (isRawVideo && storagePath) {
+        // Queue for compositing + auto-send
+        console.log('📹 Queueing video for processing and auto-send...');
 
-          const queueResult = await queueVideoForSending({
-            videoStoragePath: storagePath,
-            frameTemplate,
-            framePngPath: frameTemplate?.frame_png_path,
-            customText: frameTemplate?.custom_text,
-            customTextPosition: frameTemplate?.custom_text_position,
-            customTextColor: frameTemplate?.custom_text_color,
-            stickers: decorations,
-            filterId: videoFilter,
-            parentId,
-            videoId,
-            giftId,
-            // Recipient info for auto-send
-            recipientEmail: allEmails,
-            recipientName: allNames,
-            sendMethod: 'email',
-            emailSubject: customizedSubject,
-            emailBody: customizedMessage,
-            childName,
-            giftName,
-            eventName: eventName || '',
-          });
+        const queueResult = await queueVideoForSending({
+          videoStoragePath: storagePath,
+          frameTemplate,
+          framePngPath: frameTemplate?.frame_png_path,
+          customText: frameTemplate?.custom_text,
+          customTextPosition: frameTemplate?.custom_text_position,
+          customTextColor: frameTemplate?.custom_text_color,
+          stickers: decorations,
+          filterId: videoFilter,
+          parentId,
+          videoId,
+          giftId,
+          // Recipient info for auto-send
+          recipientEmail: allEmails,
+          recipientName: allNames,
+          sendMethod: 'email',
+          emailSubject: customizedSubject,
+          emailBody: customizedMessage,
+          childName,
+          giftName,
+          eventName: eventName || '',
+        });
 
-          if (!queueResult.success) {
-            throw new Error(queueResult.error || 'Failed to queue video');
-          }
-
-          console.log('✅ Video queued for processing:', queueResult.jobId);
-
-          // Show success and navigate back
-          setLoading(false);
-          Alert.alert(
-            'Video Queued!',
-            `Your video is being processed and will be sent to ${allNames} automatically when ready.\n\nYou can track progress on your dashboard.`,
-            [
-              {
-                text: 'Go to Dashboard',
-                onPress: () => navigation.navigate('ParentDashboard', { initialTab: 'videos' }),
-              },
-            ]
-          );
-          return; // Exit early - don't continue to the success handling below
-        } else {
-          // Video already composited - send immediately (old flow)
-          setLoadingMessage('Sending email...');
-          const guestsWithNames = selectedGuestData.map(g => ({
-            email: g.email,
-            name: g.name || '',
-          }));
-
-          const customizedTemplate = {
-            subject: customizedSubject,
-            message: customizedMessage,
-          };
-
-          const emailResult = await sendVideoToGuests(
-            guestsWithNames,
-            giftName,
-            finalVideoUrl,
-            '30 days',
-            customizedTemplate,
-            childName,
-            parentName
-          );
-
-          if (!emailResult.success) {
-            throw new Error(emailResult.error || 'Failed to send emails');
-          }
-        }
-      } else if (sendMethod === 'share') {
-        // OPTION A: Queue video for compositing, then user can share when ready
-        // This avoids making the user wait during processing
-
-        if (isRawVideo && storagePath) {
-          // Queue for compositing - user will share later from dashboard
-          console.log('📹 Queueing video for share processing...');
-          setLoadingMessage('Queueing video...');
-
-          const selectedGuestNames = selectedGuestData.map(g => g.name).join(', ') || 'Guest';
-
-          const queueResult = await queueVideoForSending({
-            videoStoragePath: storagePath,
-            frameTemplate,
-            framePngPath: frameTemplate?.frame_png_path,
-            customText: frameTemplate?.custom_text,
-            customTextPosition: frameTemplate?.custom_text_position,
-            customTextColor: frameTemplate?.custom_text_color,
-            stickers: decorations,
-            filterId: videoFilter,
-            parentId,
-            videoId,
-            giftId,
-            // For share method, we store recipient info but don't auto-send
-            recipientName: selectedGuestNames,
-            sendMethod: 'share',  // This tells us to NOT auto-send email
-            childName,
-            giftName,
-            eventName: eventName || '',
-          });
-
-          if (!queueResult.success) {
-            throw new Error(queueResult.error || 'Failed to queue video');
-          }
-
-          console.log('✅ Video queued for share processing:', queueResult.jobId);
-
-          // Show success and navigate back
-          setLoading(false);
-          Alert.alert(
-            'Video Queued!',
-            `Your video is being processed. We'll let you know when it's ready to share with ${selectedGuestNames}!\n\nYou can track progress and share from your dashboard.`,
-            [
-              {
-                text: 'Go to Dashboard',
-                onPress: () => navigation.navigate('ParentDashboard', { initialTab: 'videos' }),
-              },
-            ]
-          );
-          return; // Exit early
+        if (!queueResult.success) {
+          throw new Error(queueResult.error || 'Failed to queue video');
         }
 
-        // Video already composited - share immediately (old flow)
-        let shareUrl = finalVideoUrl;
-        setLoadingMessage('Generating share link...');
+        console.log('✅ Video queued for processing:', queueResult.jobId);
 
-        // Generate short URL if we have the required data
-        if (videoId && parentId) {
-          try {
-            console.log('🔗 Generating short URL for sharing...');
-            // Use finalStoragePath (composited) if available, otherwise fall back to original
-            let pathForShortUrl = finalStoragePath || storagePath;
-            let thumbnailPath = null;
+        // Show success and navigate back
+        setLoading(false);
+        Alert.alert(
+          'Video Queued!',
+          `Your video is being processed and will be sent to ${allNames} automatically when ready.\n\nYou can track progress on your dashboard.`,
+          [
+            {
+              text: 'Go to Dashboard',
+              onPress: () => navigation.navigate('ParentDashboard', { initialTab: 'videos' }),
+            },
+          ]
+        );
+        return; // Exit early - don't continue to the success handling below
+      } else {
+        // Video already composited - send immediately (old flow)
+        setLoadingMessage('Sending email...');
+        const guestsWithNames = selectedGuestData.map(g => ({
+          email: g.email,
+          name: g.name || '',
+        }));
 
-            if (!pathForShortUrl) {
-              // Try to get storage_path and thumbnail_path from the videos table
-              const { data: videoRecord } = await supabase
-                .from('videos')
-                .select('storage_path, thumbnail_path')
-                .eq('id', videoId)
-                .maybeSingle();
+        const customizedTemplate = {
+          subject: customizedSubject,
+          message: customizedMessage,
+        };
 
-              if (videoRecord?.storage_path) {
-                pathForShortUrl = videoRecord.storage_path;
-                console.log('📁 Found storage_path in video record:', pathForShortUrl);
-              }
-              if (videoRecord?.thumbnail_path) {
-                thumbnailPath = videoRecord.thumbnail_path;
-                console.log('🖼️ Found thumbnail_path in video record:', thumbnailPath);
-              }
-            }
+        const emailResult = await sendVideoToGuests(
+          guestsWithNames,
+          giftName,
+          finalVideoUrl,
+          '30 days',
+          customizedTemplate,
+          childName,
+          parentName
+        );
 
-            if (pathForShortUrl) {
-              const shortUrlResult = await createShortVideoUrl(videoId, parentId, pathForShortUrl, {
-                thumbnailPath: thumbnailPath,
-              });
-              shareUrl = shortUrlResult.shortUrl;
-              console.log('✅ Short URL generated:', shareUrl);
-            } else {
-              // Generate a fresh signed URL as fallback
-              console.log('⚠️ No storage_path found, generating fresh signed URL...');
-              const { data: videoRecord } = await supabase
-                .from('videos')
-                .select('video_url')
-                .eq('id', videoId)
-                .maybeSingle();
-
-              // Try to extract path from stored URL and regenerate
-              if (videoRecord?.video_url) {
-                // Use the short URL base with just the videoId as fallback
-                shareUrl = `https://showthx.com/v/${videoId}`;
-                console.log('⚠️ Using video ID as fallback URL:', shareUrl);
-              }
-            }
-          } catch (shortUrlError) {
-            console.warn('⚠️ Could not generate short URL:', shortUrlError.message);
-            // Don't fall back to expired URL - show error
-            throw new Error('Could not generate share link. Please try again.');
-          }
-        } else {
-          throw new Error('Missing video information for sharing. Please go back and try again.');
-        }
-
-        setLoadingMessage('Opening share sheet...');
-
-        // Open native share sheet - use email template message instead of gift name (which may have private notes)
-        // Mirror the email template for consistency and privacy
-        const selectedGuestNames = selectedGuestData.map(g => g.name).join(', ') || 'you';
-        const shareSubject = (editedSubject || emailTemplate.subject)
-          .replace('[name]', selectedGuestNames)
-          .replace('[child_name]', childName || 'Your child')
-          .replace('[gift_name]', 'your gift');  // Don't expose actual gift details
-        const shareBody = (editedMessage || emailTemplate.message)
-          .replace('[name]', selectedGuestNames)
-          .replace('[child_name]', childName || 'Someone special')
-          .replace('[gift_name]', 'your gift');  // Privacy: don't expose gift field
-        const shareMessage = `${shareSubject}\n\n${shareBody}\n\nWatch here: ${shareUrl}`;
-
-        try {
-          // Note: URL is already in shareMessage, don't pass separately to avoid duplicate links on iOS
-          const result = await Share.share({
-            message: shareMessage,
-            title: shareSubject,  // Use email template subject (privacy: don't expose gift field)
-          });
-
-          if (result.action === Share.dismissedAction) {
-            // User dismissed the share sheet
-            setLoading(false);
-            setLoadingMessage('');
-            return;
-          }
-        } catch (shareError) {
-          console.error('Share error:', shareError);
-          throw new Error('Failed to open share sheet');
+        if (!emailResult.success) {
+          throw new Error(emailResult.error || 'Failed to send emails');
         }
       }
 
@@ -845,100 +693,24 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
           </Text>
         </View>
 
-        {/* Send Method Selector */}
+        {/* Email Editor Section */}
         <View
           style={{
             marginHorizontal: theme.spacing.md,
             marginBottom: theme.spacing.lg,
           }}
         >
-          <Text
+          {/* Email customization */}
+          <View
             style={{
-              fontSize: isKidsEdition ? 14 : 12,
-              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.neutralColors.dark,
-              marginBottom: theme.spacing.sm,
+              padding: theme.spacing.md,
+              borderWidth: 1,
+              borderColor: theme.brandColors.teal,
+              borderRadius: 12,
+              backgroundColor: '#f0fdfa',
             }}
           >
-            Send via
-          </Text>
-          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-            <TouchableOpacity
-              onPress={() => setSendMethod('email')}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: theme.spacing.md,
-                borderRadius: 8,
-                backgroundColor: sendMethod === 'email' ? theme.brandColors.coral : theme.neutralColors.lightGray,
-                borderWidth: 2,
-                borderColor: sendMethod === 'email' ? theme.brandColors.coral : 'transparent',
-              }}
-            >
-              <Ionicons
-                name="mail"
-                size={20}
-                color={sendMethod === 'email' ? '#FFFFFF' : theme.neutralColors.mediumGray}
-              />
-              <Text
-                style={{
-                  fontSize: isKidsEdition ? 14 : 12,
-                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                  color: sendMethod === 'email' ? '#FFFFFF' : theme.neutralColors.dark,
-                }}
-              >
-                Email
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setSendMethod('share')}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: theme.spacing.md,
-                borderRadius: 8,
-                backgroundColor: sendMethod === 'share' ? theme.brandColors.teal : theme.neutralColors.lightGray,
-                borderWidth: 2,
-                borderColor: sendMethod === 'share' ? theme.brandColors.teal : 'transparent',
-              }}
-            >
-              <Ionicons
-                name="share-outline"
-                size={20}
-                color={sendMethod === 'share' ? '#FFFFFF' : theme.neutralColors.mediumGray}
-              />
-              <Text
-                style={{
-                  fontSize: isKidsEdition ? 14 : 12,
-                  fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
-                  color: sendMethod === 'share' ? '#FFFFFF' : theme.neutralColors.dark,
-                }}
-              >
-                Share another way
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Email Editor Section */}
-          {sendMethod === 'email' && (
-            <View
-              style={{
-                marginTop: theme.spacing.md,
-                padding: theme.spacing.md,
-                borderWidth: 1,
-                borderColor: theme.brandColors.teal,
-                borderRadius: 12,
-                backgroundColor: '#f0fdfa',
-              }}
-            >
-              {/* From info */}
+            {/* From info */}
               <Text
                 style={{
                   fontSize: 11,
@@ -1079,8 +851,7 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
               >
                 Edits here are for this send only. To change the default, edit the event.
               </Text>
-            </View>
-          )}
+          </View>
         </View>
 
         {/* Select All Option */}

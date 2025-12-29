@@ -45,6 +45,29 @@ const FILTER_COMMANDS: Record<string, string> = {
   warm: "colortemperature=4500,eq=saturation=1.1",
 };
 
+// Emoji to PNG filename mapping (stored in Supabase stickers bucket)
+const EMOJI_TO_PNG: Record<string, string> = {
+  "🌈": "1f308.png",
+  "🌟": "1f31f.png",
+  "🎁": "1f381.png",
+  "🎂": "1f382.png",
+  "🎈": "1f388.png",
+  "🎊": "1f38a.png",
+  "💖": "1f496.png",
+  "💝": "1f49d.png",
+  "😊": "1f60a.png",
+  "😍": "1f60d.png",
+  "😻": "1f63b.png",
+  "♥️": "2665.png",
+  "♥": "2665.png",  // Without variation selector
+  "✨": "2728.png",
+  "⭐": "2b50.png",
+  // Additional common emojis that might be used
+  "🎉": "1f389.png",  // party popper (if added later)
+  "❤️": "2764.png",   // red heart (if added later)
+  "❤": "2764.png",    // red heart without variation selector
+};
+
 export const compositeVideoTask = task({
   id: "composite-video",
   machine: {
@@ -186,6 +209,54 @@ export const compositeVideoTask = task({
         }
       }
 
+      // 2b. Download sticker PNGs if any stickers are provided
+      const stickerLocalPaths: Array<{ path: string; x: number; y: number; scale: number }> = [];
+      if (stickers && stickers.length > 0) {
+        logger.info("Downloading sticker PNGs...", { count: stickers.length });
+
+        for (let i = 0; i < stickers.length; i++) {
+          const sticker = stickers[i];
+          const pngFilename = EMOJI_TO_PNG[sticker.emoji];
+
+          if (!pngFilename) {
+            logger.warn("No PNG mapping for emoji, skipping", { emoji: sticker.emoji });
+            continue;
+          }
+
+          try {
+            const { data: stickerData, error: stickerError } = await supabase.storage
+              .from("stickers")
+              .download(pngFilename);
+
+            if (stickerError || !stickerData) {
+              logger.warn("Failed to download sticker PNG, skipping", {
+                emoji: sticker.emoji,
+                filename: pngFilename,
+                error: stickerError?.message
+              });
+              continue;
+            }
+
+            const stickerLocalPath = path.join(tempDir, `sticker_${i}.png`);
+            const stickerBuffer = Buffer.from(await stickerData.arrayBuffer());
+            await fs.promises.writeFile(stickerLocalPath, stickerBuffer);
+
+            stickerLocalPaths.push({
+              path: stickerLocalPath,
+              x: sticker.x,
+              y: sticker.y,
+              scale: sticker.scale || 1,
+            });
+
+            logger.info("Sticker downloaded", { emoji: sticker.emoji, filename: pngFilename, size: stickerBuffer.length });
+          } catch (err) {
+            logger.warn("Error downloading sticker", { emoji: sticker.emoji, error: String(err) });
+          }
+        }
+
+        logger.info("Sticker downloads complete", { downloaded: stickerLocalPaths.length, requested: stickers.length });
+      }
+
       // 3. Build FFmpeg command
       const outputPath = path.join(tempDir, "output.mp4");
       const ffmpegFilters: string[] = [];
@@ -201,6 +272,11 @@ export const compositeVideoTask = task({
       // Add frame overlay if available
       if (frameLocalPath) {
         ffmpegCmd += ` -i "${frameLocalPath}"`;
+      }
+
+      // Add sticker PNG inputs
+      for (const stickerInfo of stickerLocalPaths) {
+        ffmpegCmd += ` -i "${stickerInfo.path}"`;
       }
 
       // Build filter complex
@@ -254,18 +330,27 @@ export const compositeVideoTask = task({
         currentStream = "[texted]";
       }
 
-      // Add sticker overlays (as emoji text)
-      stickers.forEach((sticker, i) => {
-        const { emoji, x, y, scale = 1 } = sticker;
+      // Add sticker PNG overlays (using downloaded PNGs instead of drawtext)
+      // Calculate input stream index: 0=video, 1=frame (if exists), then stickers
+      let stickerInputIndex = frameLocalPath ? 2 : 1;
+
+      stickerLocalPaths.forEach((stickerInfo, i) => {
+        const { x, y, scale } = stickerInfo;
+        // Convert percentage position to pixels (1080x1920 video)
         const pixelX = Math.round((x / 100) * 1080);
         const pixelY = Math.round((y / 100) * 1920);
-        const fontSize = Math.round(40 * scale);
-        const escapedEmoji = emoji.replace(/'/g, "'\\''");
+        // Scale the 72x72 PNG based on user's scale factor (default 1.0 = 72px, scale 2.0 = 144px)
+        const stickerSize = Math.round(72 * scale);
+        const inputIdx = stickerInputIndex + i;
 
+        // Scale the sticker PNG and overlay it at the specified position
         filterComplexParts.push(
-          `${currentStream}drawtext=text='${escapedEmoji}':fontsize=${fontSize}:x=${pixelX}:y=${pixelY}[sticker${i}]`
+          `[${inputIdx}:v]scale=${stickerSize}:${stickerSize}[sticker${i}]`
         );
-        currentStream = `[sticker${i}]`;
+        filterComplexParts.push(
+          `${currentStream}[sticker${i}]overlay=${pixelX}:${pixelY}[stickered${i}]`
+        );
+        currentStream = `[stickered${i}]`;
       });
 
       // Build final command
@@ -316,7 +401,7 @@ export const compositeVideoTask = task({
       logger.info("Checking for recipient info to auto-send...");
       const { data: jobData, error: jobFetchError } = await supabase
         .from("video_compositing_jobs")
-        .select("recipient_email, recipient_name, send_method, email_subject, email_body, child_name, gift_name, event_name")
+        .select("video_id, recipient_email, recipient_name, send_method, email_subject, email_body, child_name, gift_name, event_name")
         .eq("id", jobId)
         .single();
 
@@ -371,6 +456,15 @@ export const compositeVideoTask = task({
               .from("video_compositing_jobs")
               .update({ status: "sent" })
               .eq("id", jobId);
+
+            // Also update the videos table status if we have a video_id
+            if (jobData.video_id) {
+              await supabase
+                .from("videos")
+                .update({ status: "sent" })
+                .eq("id", jobData.video_id);
+              logger.info("Updated video status to sent", { videoId: jobData.video_id });
+            }
           } else {
             const errorText = await response.text();
             logger.error("Failed to send email", { status: response.status, error: errorText });

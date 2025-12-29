@@ -205,10 +205,17 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
 
     const panResponder = useRef(
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onStartShouldSetPanResponderCapture: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponderCapture: () => true,
+        // Don't capture on start - allow long press to work
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        // Only capture when user actually moves (drags)
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          // Only capture if there's actual movement (threshold of 5px)
+          return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+        },
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+          return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+        },
         onPanResponderGrant: () => {
           setIsDraggingSticker(true);
           pan.setOffset({
