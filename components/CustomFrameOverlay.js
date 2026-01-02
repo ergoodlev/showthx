@@ -31,35 +31,32 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
       if (frameTemplate?.frame_shape === 'ai-generated' && frameTemplate?.frame_png_path) {
         setAiFrameLoading(true);
         try {
-          // Determine bucket - check if path starts with 'ai-frames/' (fallback to videos bucket)
-          const isVideosBucket = frameTemplate.frame_png_path.startsWith('ai-frames/');
-          const bucket = isVideosBucket ? 'videos' : 'ai-frames';
-          const path = frameTemplate.frame_png_path;
+          const framePath = frameTemplate.frame_png_path;
 
-          console.log('🖼️  Loading AI frame from:', { bucket, path });
+          // AI frames are always stored in 'ai-frames' bucket
+          // Paths are like: {userId}/{timestamp}_frame.png
+          console.log('🖼️  Loading AI frame from ai-frames bucket:', { path: framePath });
 
           const { data, error } = await supabase.storage
-            .from(bucket)
-            .createSignedUrl(path, 86400); // 24 hour URL
+            .from('ai-frames')
+            .createSignedUrl(framePath, 86400); // 24 hour URL
 
           if (error) {
-            // Try the other bucket as fallback
-            console.log('⚠️  First bucket failed, trying fallback...');
-            const fallbackBucket = isVideosBucket ? 'ai-frames' : 'videos';
-            const fallbackPath = isVideosBucket ? path.replace('ai-frames/', '') : `ai-frames/${path}`;
-
+            console.error('❌ Failed to load AI frame from ai-frames bucket:', error);
+            // Try videos bucket as fallback (legacy storage location)
+            console.log('⚠️  Trying videos bucket as fallback...');
             const { data: fallbackData, error: fallbackError } = await supabase.storage
-              .from(fallbackBucket)
-              .createSignedUrl(fallbackPath, 86400);
+              .from('videos')
+              .createSignedUrl(`ai-frames/${framePath}`, 86400);
 
             if (fallbackError) {
-              console.error('❌ Failed to load AI frame:', fallbackError);
+              console.error('❌ Failed to load AI frame from videos bucket:', fallbackError);
             } else if (fallbackData?.signedUrl) {
-              console.log('✅ AI frame loaded from fallback bucket');
+              console.log('✅ AI frame loaded from videos bucket (fallback)');
               setAiFrameUrl(fallbackData.signedUrl);
             }
           } else if (data?.signedUrl) {
-            console.log('✅ AI frame URL loaded');
+            console.log('✅ AI frame URL loaded successfully');
             setAiFrameUrl(data.signedUrl);
           }
         } catch (err) {
@@ -549,22 +546,41 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
     'neon-glow',
   ].includes(frame_shape);
 
-  // Render AI-generated frame from PNG image
+  // Render AI-generated frame preview
+  // NOTE: DALL-E generates PNGs without transparency, so we can't overlay the full PNG
+  // during preview. Instead, we show a decorative border to indicate an AI frame is applied.
+  // The actual AI frame will be composited server-side with transparency processing.
   if (frame_shape === 'ai-generated') {
-    if (aiFrameUrl) {
-      return (
-        <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
-          <Image
-            source={{ uri: aiFrameUrl }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-          />
-        </View>
-      );
-    }
-    // While loading or if no URL, render a subtle placeholder border
+    // Show a preview border with AI frame indicator
+    // The actual AI frame will be applied during server-side video compositing
     return (
       <View style={[StyleSheet.absoluteFill, style]} pointerEvents="none">
+        {/* Preview thumbnail in corner to show AI frame is applied */}
+        {aiFrameUrl && (
+          <View style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            width: 60,
+            height: 106,
+            borderRadius: 8,
+            overflow: 'hidden',
+            borderWidth: 2,
+            borderColor: 'rgba(255,255,255,0.8)',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 5,
+          }}>
+            <Image
+              source={{ uri: aiFrameUrl }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          </View>
+        )}
+        {/* Decorative border to indicate AI frame is active */}
         <View
           style={{
             position: 'absolute',
@@ -572,13 +588,33 @@ export const CustomFrameOverlay = ({ frameTemplate, style }) => {
             left: 8,
             right: 8,
             bottom: 8,
-            borderWidth: 2,
+            borderWidth: 3,
             borderColor: primary_color,
             borderRadius: border_radius,
-            borderStyle: aiFrameLoading ? 'dashed' : 'solid',
-            opacity: aiFrameLoading ? 0.5 : 0.7,
+            opacity: 0.8,
           }}
         />
+        {/* Corner accents */}
+        <View style={{ position: 'absolute', top: 4, left: 4, width: 20, height: 20, borderTopWidth: 4, borderLeftWidth: 4, borderColor: primary_color, borderTopLeftRadius: 8 }} />
+        <View style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderTopWidth: 4, borderRightWidth: 4, borderColor: primary_color, borderTopRightRadius: 8 }} />
+        <View style={{ position: 'absolute', bottom: 4, left: 4, width: 20, height: 20, borderBottomWidth: 4, borderLeftWidth: 4, borderColor: primary_color, borderBottomLeftRadius: 8 }} />
+        <View style={{ position: 'absolute', bottom: 4, right: 4, width: 20, height: 20, borderBottomWidth: 4, borderRightWidth: 4, borderColor: primary_color, borderBottomRightRadius: 8 }} />
+        {/* Loading indicator */}
+        {aiFrameLoading && (
+          <View style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 4,
+          }}>
+            <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2 }}>
+              <View style={{ width: 20, height: 4, backgroundColor: primary_color, borderRadius: 2 }} />
+            </View>
+          </View>
+        )}
       </View>
     );
   }

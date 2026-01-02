@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -208,7 +209,16 @@ export const FrameGalleryScreen = ({ navigation, route }) => {
         {/* Frame preview */}
         <View style={styles.framePreview}>
           <View style={styles.framePreviewInner}>
-            <CustomFrameOverlay frameTemplate={frame} />
+            {/* For AI frames, show the actual PNG directly (not CustomFrameOverlay which shows corner accents) */}
+            {frame.frame_shape === 'ai-generated' && frame.frame_png_path ? (
+              <Image
+                source={{ uri: `https://lufpjgmvkccrmefdykki.supabase.co/storage/v1/object/public/ai-frames/${frame.frame_png_path}` }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+              />
+            ) : (
+              <CustomFrameOverlay frameTemplate={frame} />
+            )}
           </View>
         </View>
 

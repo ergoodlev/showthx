@@ -1,0 +1,227 @@
+[
+  {
+    "id": "balloon",
+    "pngFile": "fluent-balloon.png",
+    "fluentFolder": "Balloon"
+  },
+  {
+    "id": "confetti",
+    "pngFile": "fluent-confetti.png",
+    "fluentFolder": "Confetti ball"
+  },
+  {
+    "id": "gift",
+    "pngFile": "fluent-gift.png",
+    "fluentFolder": "Wrapped gift"
+  },
+  {
+    "id": "cake",
+    "pngFile": "fluent-cake.png",
+    "fluentFolder": "Birthday cake"
+  },
+  {
+    "id": "party-popper",
+    "pngFile": "fluent-party-popper.png",
+    "fluentFolder": "Party popper"
+  },
+  {
+    "id": "pinata",
+    "pngFile": "fluent-pinata.png",
+    "fluentFolder": "Pinata"
+  },
+  {
+    "id": "cupcake",
+    "pngFile": "fluent-cupcake.png",
+    "fluentFolder": "Cupcake"
+  },
+  {
+    "id": "candy",
+    "pngFile": "fluent-candy.png",
+    "fluentFolder": "Candy"
+  },
+  {
+    "id": "lollipop",
+    "pngFile": "fluent-lollipop.png",
+    "fluentFolder": "Lollipop"
+  },
+  {
+    "id": "ribbon",
+    "pngFile": "fluent-ribbon.png",
+    "fluentFolder": "Ribbon"
+  },
+  {
+    "id": "smile",
+    "pngFile": "fluent-smile.png",
+    "fluentFolder": "Smiling face with smiling eyes"
+  },
+  {
+    "id": "heart-eyes",
+    "pngFile": "fluent-heart-eyes.png",
+    "fluentFolder": "Smiling face with heart-eyes"
+  },
+  {
+    "id": "star-eyes",
+    "pngFile": "fluent-star-eyes.png",
+    "fluentFolder": "Star-struck"
+  },
+  {
+    "id": "grin",
+    "pngFile": "fluent-grin.png",
+    "fluentFolder": "Grinning face"
+  },
+  {
+    "id": "hug",
+    "pngFile": "fluent-hug.png",
+    "fluentFolder": "Smiling face with open hands"
+  },
+  {
+    "id": "joy",
+    "pngFile": "fluent-joy.png",
+    "fluentFolder": "Face with tears of joy"
+  },
+  {
+    "id": "blush",
+    "pngFile": "fluent-blush.png",
+    "fluentFolder": "Smiling face"
+  },
+  {
+    "id": "wink",
+    "pngFile": "fluent-wink.png",
+    "fluentFolder": "Winking face"
+  },
+  {
+    "id": "red-heart",
+    "pngFile": "fluent-red-heart.png",
+    "fluentFolder": "Red heart"
+  },
+  {
+    "id": "sparkling-heart",
+    "pngFile": "fluent-sparkling-heart.png",
+    "fluentFolder": "Sparkling heart"
+  },
+  {
+    "id": "heart-ribbon",
+    "pngFile": "fluent-heart-ribbon.png",
+    "fluentFolder": "Heart with ribbon"
+  },
+  {
+    "id": "growing-heart",
+    "pngFile": "fluent-growing-heart.png",
+    "fluentFolder": "Growing heart"
+  },
+  {
+    "id": "two-hearts",
+    "pngFile": "fluent-two-hearts.png",
+    "fluentFolder": "Two hearts"
+  },
+  {
+    "id": "heart-decoration",
+    "pngFile": "fluent-heart-decoration.png",
+    "fluentFolder": "Heart decoration"
+  },
+  {
+    "id": "pink-heart",
+    "pngFile": "fluent-pink-heart.png",
+    "fluentFolder": "Pink heart"
+  },
+  {
+    "id": "orange-heart",
+    "pngFile": "fluent-orange-heart.png",
+    "fluentFolder": "Orange heart"
+  },
+  {
+    "id": "glowing-star",
+    "pngFile": "fluent-glowing-star.png",
+    "fluentFolder": "Glowing star"
+  },
+  {
+    "id": "star",
+    "pngFile": "fluent-star.png",
+    "fluentFolder": "Star"
+  },
+  {
+    "id": "sparkles",
+    "pngFile": "fluent-sparkles.png",
+    "fluentFolder": "Sparkles"
+  },
+  {
+    "id": "dizzy",
+    "pngFile": "fluent-dizzy.png",
+    "fluentFolder": "Dizzy"
+  },
+  {
+    "id": "collision",
+    "pngFile": "fluent-collision.png",
+    "fluentFolder": "Collision"
+  },
+  {
+    "id": "fire",
+    "pngFile": "fluent-fire.png",
+    "fluentFolder": "Fire"
+  },
+  {
+    "id": "rainbow",
+    "pngFile": "fluent-rainbow.png",
+    "fluentFolder": "Rainbow"
+  },
+  {
+    "id": "sun",
+    "pngFile": "fluent-sun.png",
+    "fluentFolder": "Sun with face"
+  },
+  {
+    "id": "sunflower",
+    "pngFile": "fluent-sunflower.png",
+    "fluentFolder": "Sunflower"
+  },
+  {
+    "id": "tulip",
+    "pngFile": "fluent-tulip.png",
+    "fluentFolder": "Tulip"
+  },
+  {
+    "id": "four-leaf-clover",
+    "pngFile": "fluent-four-leaf-clover.png",
+    "fluentFolder": "Four leaf clover"
+  },
+  {
+    "id": "butterfly",
+    "pngFile": "fluent-butterfly.png",
+    "fluentFolder": "Butterfly"
+  },
+  {
+    "id": "unicorn",
+    "pngFile": "fluent-unicorn.png",
+    "fluentFolder": "Unicorn"
+  },
+  {
+    "id": "crown",
+    "pngFile": "fluent-crown.png",
+    "fluentFolder": "Crown"
+  },
+  {
+    "id": "cat-heart",
+    "pngFile": "fluent-cat-heart.png",
+    "fluentFolder": "Smiling cat with heart-eyes"
+  },
+  {
+    "id": "dog",
+    "pngFile": "fluent-dog.png",
+    "fluentFolder": "Dog face"
+  },
+  {
+    "id": "bear",
+    "pngFile": "fluent-bear.png",
+    "fluentFolder": "Bear"
+  },
+  {
+    "id": "bunny",
+    "pngFile": "fluent-bunny.png",
+    "fluentFolder": "Rabbit face"
+  },
+  {
+    "id": "panda",
+    "pngFile": "fluent-panda.png",
+    "fluentFolder": "Panda"
+  }
+]

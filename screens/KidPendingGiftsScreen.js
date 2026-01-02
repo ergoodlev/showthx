@@ -15,23 +15,32 @@ import {
   Alert,
   Modal,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCameraPermissions } from 'expo-camera';
 import { useEdition } from '../context/EditionContext';
+import { useDataSync } from '../context/DataSyncContext';
 import { GiftCard } from '../components/GiftCard';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { supabase } from '../supabaseClient';
 import { logoutAndReturnToAuth } from '../services/navigationService';
+import { parseGiftsWithAI, batchUpdateGiftCategories } from '../services/giftCategoryService';
 import { getFrameForGift, getFramesForEvent } from '../services/frameTemplateService';
 import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
 
 export const KidPendingGiftsScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
   const isKidsEdition = edition === 'kids';
+
+  // Get synchronized data from context
+  const {
+    kidGifts: contextGifts,
+    refreshKidGifts,
+  } = useDataSync();
 
   // Camera permission
   const [permission, requestPermission] = useCameraPermissions();
@@ -41,7 +50,15 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
   const [kidId, setKidId] = useState('');
   const [gifts, setGifts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+
+  // Sync context data to local state when it changes (enables realtime updates)
+  useEffect(() => {
+    if (contextGifts && contextGifts.length >= 0) {
+      setGifts(contextGifts);
+    }
+  }, [contextGifts]);
 
   // Frame picker state
   const [framePickerVisible, setFramePickerVisible] = useState(false);
@@ -66,6 +83,17 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
       loadKidData();
     }, [])
   );
+
+  // Pull-to-refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    // Refresh both local data and context (for cross-screen sync)
+    await Promise.all([
+      loadKidData(),
+      refreshKidGifts(),
+    ]);
+    setRefreshing(false);
+  }, [refreshKidGifts]);
 
   const loadKidData = async () => {
     try {
@@ -96,6 +124,9 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
             id,
             name,
             giver_name,
+            gift_emoji,
+            parsed_gift_name,
+            gift_category,
             event_id,
             event:events(name, allow_kids_frame_choice)
           )
@@ -137,6 +168,9 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
             id: assignment.gift.id,
             name: assignment.gift.name,
             giver_name: assignment.gift.giver_name,
+            gift_emoji: assignment.gift.gift_emoji || '🎁',
+            parsed_gift_name: assignment.gift.parsed_gift_name,
+            gift_category: assignment.gift.gift_category,
             event_name: assignment.gift.event?.name,
             event_id: assignment.gift.event_id, // CRITICAL: Include event_id for frame lookup
             allow_kids_frame_choice: assignment.gift.event?.allow_kids_frame_choice || false,
@@ -182,6 +216,32 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
       const totalBeforeFilter = giftsData?.length || 0;
       const totalAfterFilter = transformedGifts?.length || 0;
       console.log(`📊 Kid gifts: ${totalBeforeFilter} total assignments, ${totalAfterFilter} after filtering`);
+
+      // Auto-parse any gifts missing parsed_gift_name
+      const unparsedGifts = transformedGifts?.filter(g => !g.parsed_gift_name) || [];
+      if (unparsedGifts.length > 0) {
+        console.log(`🎯 Found ${unparsedGifts.length} unparsed gifts, parsing now...`);
+        try {
+          const giftsToProcess = unparsedGifts.map(g => ({ id: g.id, name: g.name }));
+          const parsedResults = await parseGiftsWithAI(giftsToProcess);
+          if (parsedResults?.length > 0) {
+            await batchUpdateGiftCategories(parsedResults);
+            // Update local state with parsed values
+            const parsedMap = new Map(parsedResults.map(p => [p.id, p]));
+            transformedGifts.forEach(g => {
+              const parsed = parsedMap.get(g.id);
+              if (parsed) {
+                g.gift_emoji = parsed.emoji;
+                g.parsed_gift_name = parsed.parsedName;
+                g.gift_category = parsed.category;
+              }
+            });
+            console.log(`✅ Parsed ${parsedResults.length} gifts`);
+          }
+        } catch (parseError) {
+          console.warn('⚠️ Auto-parsing failed:', parseError);
+        }
+      }
 
       setGifts(transformedGifts || []);
     } catch (err) {
@@ -270,43 +330,35 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
 
       try {
         const framesResult = await getFramesForEvent(gift.event_id);
-        if (framesResult.success && framesResult.data?.length > 0) {
-          // Extract unique frame templates
-          const frames = framesResult.data
-            .map(a => a.frame_templates)
-            .filter(f => f && f.id);
+        // Extract unique frame templates
+        const frames = (framesResult.success && framesResult.data?.length > 0)
+          ? framesResult.data
+              .map(a => a.frame_templates)
+              .filter(f => f && f.id)
+          : [];
 
-          // Deduplicate by frame ID
-          const uniqueFrames = [];
-          const seenIds = new Set();
-          frames.forEach(f => {
-            if (!seenIds.has(f.id)) {
-              seenIds.add(f.id);
-              uniqueFrames.push(f);
-            }
-          });
-
-          console.log(`✅ Found ${uniqueFrames.length} unique frames for kid to choose from`);
-
-          if (uniqueFrames.length > 1) {
-            // Show frame picker
-            setAvailableFrames(uniqueFrames);
-            setFramePickerVisible(true);
-            setLoadingFrames(false);
-            return; // Wait for user to pick a frame
-          } else if (uniqueFrames.length === 1) {
-            // Only one frame, use it directly
-            console.log('ℹ️  Only one frame available, using it directly');
-            setLoadingFrames(false);
-            navigateToRecording(gift, uniqueFrames[0]);
-            return;
+        // Deduplicate by frame ID
+        const uniqueFrames = [];
+        const seenIds = new Set();
+        frames.forEach(f => {
+          if (!seenIds.has(f.id)) {
+            seenIds.add(f.id);
+            uniqueFrames.push(f);
           }
-        }
-        console.log('ℹ️  No frames available for this event');
+        });
+
+        console.log(`✅ Found ${uniqueFrames.length} unique frames for kid to choose from`);
+
+        // Always show frame picker when allow_kids_frame_choice is enabled
+        // This lets kids choose from available frames or skip (no frame)
+        setAvailableFrames(uniqueFrames);
+        setFramePickerVisible(true);
         setLoadingFrames(false);
+        return; // Wait for user to pick a frame or skip
       } catch (err) {
         console.error('❌ Error loading frames:', err);
         setLoadingFrames(false);
+        // Fall through to default flow on error
       }
     }
 
@@ -341,8 +393,10 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
     // Camera view will have full permission and hardware access ready
     navigation?.navigate('VideoRecording', {
       giftId: gift.id,
-      giftName: gift.name,
+      giftName: gift.parsed_gift_name || gift.name,
       giverName: gift.giver_name,
+      giftEmoji: gift.gift_emoji || '🎁',
+      giftCategory: gift.gift_category,
       frameTemplate,  // Pass frame template with custom_text for this event
     });
   };
@@ -433,6 +487,14 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
         <FlatList
           data={gifts}
           keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.brandColors.teal}
+              colors={[theme.brandColors.teal]}
+            />
+          }
           renderItem={({ item }) => {
             const giftStatus = getGiftStatus(item);
             return (
@@ -463,7 +525,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                     elevation: 2,
                   }}
                 >
-                  {/* Gift Name - Large and Bold */}
+                  {/* Gift Name with Emoji - Large and Bold */}
                   <Text
                     style={{
                       fontSize: isKidsEdition ? 22 : 18,
@@ -473,7 +535,7 @@ export const KidPendingGiftsScreen = ({ navigation }) => {
                       marginBottom: 4,
                     }}
                   >
-                    {item.name.toUpperCase()}
+                    {item.gift_emoji || '🎁'} {(item.parsed_gift_name || item.name).toUpperCase()}
                   </Text>
 
                   {/* From */}

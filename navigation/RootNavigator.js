@@ -68,6 +68,7 @@ const ParentAppStack = () => {
       <Stack.Screen name="FrameGallery" component={FrameGalleryScreen} />
       <Stack.Screen name="EmailTemplate" component={EmailTemplateScreen} />
       <Stack.Screen name="PrivacyDashboard" component={PrivacyDashboardScreen} />
+      <Stack.Screen name="VideoPlayback" component={VideoPlaybackScreen} />
     </Stack.Navigator>
   );
 };

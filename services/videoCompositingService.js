@@ -366,22 +366,26 @@ export const addTextOverlay = async (inputPath, text, options = {}) => {
       .replace(/\]/g, '\\]');
 
     // Position mapping - matches UI preview positioning
-    // UI uses: top=20px from top, bottom=70px from bottom
+    // UI uses: top='3%', bottom='8%' of container height
+    // For 1920px video: top = 58px, bottom = 154px from edge
     let positionStr = '';
     switch (position) {
       case 'top':
-        positionStr = 'x=(w-text_w)/2:y=20';  // Match UI: 20px from top
+        positionStr = 'x=(w-text_w)/2:y=58';  // 3% of 1920 = 58px from top
         break;
       case 'center':
         positionStr = 'x=(w-text_w)/2:y=(h-text_h)/2';
         break;
       case 'bottom':
       default:
-        positionStr = 'x=(w-text_w)/2:y=h-text_h-70';  // Match UI: 70px from bottom
+        positionStr = 'x=(w-text_w)/2:y=h-text_h-154';  // 8% of 1920 = 154px from bottom
         break;
     }
 
-    const drawTextFilter = `drawtext=text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:${positionStr}:box=1:boxcolor=${backgroundColor}:boxborderw=10:shadowcolor=black:shadowx=2:shadowy=2`;
+    // App preview uses fontSize: 14px in ~180px wide container
+    // For 1080px video: proportional = 14 * (1080/180) = 84px, using 72px
+    const scaledFontSize = 72;
+    const drawTextFilter = `drawtext=text='${escapedText}':fontsize=${scaledFontSize}:fontcolor=${color}:${positionStr}:box=1:boxcolor=${backgroundColor}:boxborderw=20:shadowcolor=black:shadowx=2:shadowy=2`;
 
     const command = `-i "${inputPath}" -vf "${drawTextFilter}" -c:v libx264 -preset fast -crf 23 -c:a copy -y "${outputPath}"`;
 
@@ -1029,6 +1033,11 @@ export const compositeVideoServerSide = async (options) => {
     // Determine the frame PNG path
     const effectiveFramePngPath = framePngPath || frameTemplate?.frame_png_path || null;
 
+    // Determine frame style properties for non-AI frames
+    const effectiveFrameShape = frameTemplate?.frame_shape || null;
+    const effectivePrimaryColor = frameTemplate?.primary_color || '#06B6D4';
+    const effectiveBorderWidth = frameTemplate?.border_width || 20;
+
     // Determine custom text from options or template
     const effectiveCustomText = customText || frameTemplate?.custom_text || null;
     const effectiveTextPosition = customTextPosition || frameTemplate?.custom_text_position || 'bottom';
@@ -1040,6 +1049,9 @@ export const compositeVideoServerSide = async (options) => {
       .insert({
         video_path: videoStoragePath,
         frame_png_path: effectiveFramePngPath,
+        frame_shape: effectiveFrameShape,
+        primary_color: effectivePrimaryColor,
+        border_width: effectiveBorderWidth,
         custom_text: effectiveCustomText,
         custom_text_position: effectiveTextPosition,
         custom_text_color: effectiveTextColor,
@@ -1209,11 +1221,18 @@ export const queueVideoForSending = async (options) => {
     recipientEmail,
     recipientName,
     sendMethod,
+    frameShape: frameTemplate?.frame_shape,
+    primaryColor: frameTemplate?.primary_color,
   });
 
   try {
     // Determine the frame PNG path
     const effectiveFramePngPath = framePngPath || frameTemplate?.frame_png_path || null;
+
+    // Determine frame style properties for FFmpeg frame rendering
+    const effectiveFrameShape = frameTemplate?.frame_shape || null;
+    const effectivePrimaryColor = frameTemplate?.primary_color || '#06B6D4';
+    const effectiveBorderWidth = frameTemplate?.border_width || 20;
 
     // Determine custom text from options or template
     const effectiveCustomText = customText || frameTemplate?.custom_text || null;
@@ -1226,6 +1245,9 @@ export const queueVideoForSending = async (options) => {
       .insert({
         video_path: videoStoragePath,
         frame_png_path: effectiveFramePngPath,
+        frame_shape: effectiveFrameShape,
+        primary_color: effectivePrimaryColor,
+        border_width: effectiveBorderWidth,
         custom_text: effectiveCustomText,
         custom_text_position: effectiveTextPosition,
         custom_text_color: effectiveTextColor,

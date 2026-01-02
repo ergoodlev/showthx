@@ -28,6 +28,7 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { supabase } from '../supabaseClient';
+import { parseGiftsWithAI, batchUpdateGiftCategories } from '../services/giftCategoryService';
 import { ensureParentProfile } from '../services/authService';
 
 export const GiftManagementScreen = ({ navigation, route }) => {
@@ -318,6 +319,17 @@ export const GiftManagementScreen = ({ navigation, route }) => {
 
         if (createError) throw createError;
         giftId = data.id;
+
+        // Parse the gift with AI to get category/emoji
+        try {
+          const parsedGifts = await parseGiftsWithAI([{ id: giftId, name: giftName }]);
+          if (parsedGifts?.length > 0) {
+            await batchUpdateGiftCategories(parsedGifts);
+            console.log('✅ Gift parsed with category:', parsedGifts[0].category);
+          }
+        } catch (parseError) {
+          console.warn('⚠️ Gift parsing failed (gift still created):', parseError);
+        }
       } else {
         const { error: updateError } = await supabase
           .from('gifts')

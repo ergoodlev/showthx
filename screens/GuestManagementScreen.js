@@ -23,6 +23,7 @@ import { ThankCastButton } from '../components/ThankCastButton';
 import { Modal } from '../components/Modal';
 import { supabase } from '../supabaseClient';
 import { ensureParentProfile } from '../services/authService';
+import { parseGiftsWithAI, batchUpdateGiftCategories } from '../services/giftCategoryService';
 
 export const GuestManagementScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -327,6 +328,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       // Parse data rows
       const parsedGuests = [];
       const errors = [];
+      const skipReasons = []; // Track why guests were skipped for debugging
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -379,7 +381,9 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             rsvpStatus,
             guestCount,
             isAttending,
+            hasGift,
             guestType,
+            willBeSkipped: !isAttending && !hasGift,
           });
 
           // Validate - only name is required
@@ -388,9 +392,11 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             continue;
           }
 
-          // Skip guests who explicitly RSVP'd "no"
-          if (!isAttending) {
-            console.log(`⏭️ Skipping ${name} - RSVP declined`);
+          // Only skip guests who BOTH didn't attend AND didn't give a gift
+          // Gift-givers should be included even if they didn't come to the party
+          if (!isAttending && !hasGift) {
+            skipReasons.push({ row: i + 1, name, reason: 'RSVP=no AND no gift' });
+            console.log(`⏭️ Skipping ${name} - didn't attend and no gift`);
             continue;
           }
 
@@ -409,6 +415,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             guestType, // 'gift_giver' or 'rsvp_only'
             guestCount, // Number of additional guests they're bringing
             needsContactInfo, // Flag for follow-up
+            isAttending, // Track attendance separately from gift status
           });
         } catch (rowError) {
           errors.push(`Row ${i + 1}: ${rowError.message}`);
@@ -424,7 +431,12 @@ export const GuestManagementScreen = ({ navigation, route }) => {
         console.log(`⚠️ ${errors.length} rows had issues:`, errors.slice(0, 5));
       }
 
-      return { guests: parsedGuests, warnings: errors };
+      // Log skip summary for debugging
+      if (skipReasons.length > 0) {
+        console.log(`⏭️ Skipped ${skipReasons.length} guests:`, skipReasons);
+      }
+
+      return { guests: parsedGuests, warnings: errors, skipped: skipReasons };
     } catch (error) {
       throw new Error(`CSV parsing error: ${error.message}`);
     }
@@ -458,8 +470,8 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       const csvText = await response.text();
 
       // Parse CSV
-      const { guests: parsedGuests, warnings } = parseCSV(csvText);
-      console.log(`📋 Parsed ${parsedGuests.length} guests from CSV (${warnings.length} warnings)`);
+      const { guests: parsedGuests, warnings, skipped } = parseCSV(csvText);
+      console.log(`📋 Parsed ${parsedGuests.length} guests from CSV (${warnings.length} warnings, ${skipped?.length || 0} skipped)`);
 
       // Check if parent has any children
       if (children.length === 0) {
@@ -473,7 +485,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       }
 
       // Store parsed data and show child selection modal
-      setPendingCsvData({ parsedGuests, warnings, user });
+      setPendingCsvData({ parsedGuests, warnings, skipped, user });
       setSelectedChildIds([]); // Reset selection
       setLoading(false);
       setShowChildSelectionModal(true);
@@ -496,7 +508,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
       setLoading(true);
       setShowChildSelectionModal(false);
 
-      const { parsedGuests, warnings, user } = pendingCsvData;
+      const { parsedGuests, warnings, skipped, user } = pendingCsvData;
 
       // Ensure parent profile exists before creating guests/gifts (safety net for new users)
       const profileResult = await ensureParentProfile(user.id);
@@ -580,7 +592,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
               .single();
 
             if (guestError) {
-              console.error(`Error creating guest ${guest.name}:`, guestError);
+              console.error(`❌ DB Error creating guest ${guest.name}:`, guestError.message, guestError.details, guestError.code);
               skippedCount++;
               continue;
             }
@@ -628,7 +640,7 @@ export const GuestManagementScreen = ({ navigation, route }) => {
             .single();
 
           if (giftError) {
-            console.error(`Error creating gift for ${guest.name}:`, giftError);
+            console.error(`❌ DB Error creating gift for ${guest.name}:`, giftError.message, giftError.details, giftError.code);
             skippedCount++;
             continue;
           }
@@ -673,6 +685,30 @@ export const GuestManagementScreen = ({ navigation, route }) => {
 
       console.log(`✅ CSV Import complete: ${giftGiversCount} gifts, ${rsvpOnlyCount} RSVP-only, ${skippedCount} skipped`);
 
+      // Parse gift categories with AI (if we have gifts to parse)
+      if (createdGiftIds.length > 0) {
+        console.log(`🎯 Parsing ${createdGiftIds.length} gifts with AI for categories/emojis...`);
+        try {
+          // Get the raw gift names we just created
+          const { data: giftsToProcess, error: fetchError } = await supabase
+            .from('gifts')
+            .select('id, name')
+            .in('id', createdGiftIds);
+
+          if (!fetchError && giftsToProcess?.length > 0) {
+            // Call AI parsing
+            const parsedGifts = await parseGiftsWithAI(giftsToProcess);
+
+            // Update gifts with parsed categories
+            await batchUpdateGiftCategories(parsedGifts);
+            console.log(`✅ Parsed and updated ${parsedGifts.length} gifts with categories/emojis`);
+          }
+        } catch (parseError) {
+          // Don't fail the import if parsing fails - gifts are still created
+          console.warn('⚠️ Gift category parsing failed (gifts still created):', parseError);
+        }
+      }
+
       // Reload guests
       await loadGuests();
 
@@ -694,7 +730,13 @@ export const GuestManagementScreen = ({ navigation, route }) => {
         message = 'No new guests to import.';
       }
       if (skippedCount > 0) {
-        message += `\n${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} or declined skipped`;
+        message += `\n${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} or DB error${skippedCount !== 1 ? 's' : ''} skipped`;
+      }
+      // Show guests skipped during CSV parsing (RSVP=no AND no gift)
+      if (skipped && skipped.length > 0) {
+        const skippedNames = skipped.slice(0, 3).map(s => s.name).join(', ');
+        const moreSkipped = skipped.length > 3 ? ` +${skipped.length - 3} more` : '';
+        message += `\n⏭️ ${skipped.length} skipped (declined, no gift): ${skippedNames}${moreSkipped}`;
       }
       if (warnings.length > 0) {
         message += `\n${warnings.length} row${warnings.length !== 1 ? 's' : ''} had issues`;
@@ -806,11 +848,12 @@ export const GuestManagementScreen = ({ navigation, route }) => {
     all: guests.length,
     gift_givers: guests.filter(g => g.hasGift === true).length,
     rsvp_only: guests.filter(g => g.hasGift === false || g.guest_type === 'rsvp_only').length,
-    needs_info: guests.filter(g => !g.email && !g.phone).length,
+    needs_info: guests.filter(g => (!g.email || g.email.trim() === '') && (!g.phone || g.phone.trim() === '')).length,
   };
 
   const renderGuestCard = ({ item }) => {
-    const needsContactInfo = !item.email && !item.phone;
+    // Handle both null/undefined AND empty strings for contact info
+    const needsContactInfo = (!item.email || item.email.trim() === '') && (!item.phone || item.phone.trim() === '');
     const isRsvpOnly = !item.hasGift || item.guest_type === 'rsvp_only';
 
     return (
@@ -840,19 +883,23 @@ export const GuestManagementScreen = ({ navigation, route }) => {
           >
             {item.name}
           </Text>
-          {/* Gift/RSVP badge */}
-          {isRsvpOnly ? (
-            <View style={{ marginLeft: 8, backgroundColor: '#22C55E', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-              <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '600' }}>RSVP ONLY</Text>
-            </View>
-          ) : item.hasGift && (
+          {/* Status badges - MUTUALLY EXCLUSIVE */}
+          {/* Gift giver - they gave a gift */}
+          {item.hasGift && (
             <View style={{ marginLeft: 8, backgroundColor: '#8B5CF6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
               <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '600' }}>🎁 GIFT</Text>
             </View>
           )}
+          {/* RSVP only - came to party but no gift */}
+          {!item.hasGift && item.guest_type === 'rsvp_only' && (
+            <View style={{ marginLeft: 8, backgroundColor: '#22C55E', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '600' }}>✓ CAME</Text>
+            </View>
+          )}
+          {/* Missing contact info - make it prominent */}
           {needsContactInfo && (
-            <View style={{ marginLeft: 8, backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-              <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '600' }}>NEEDS INFO</Text>
+            <View style={{ marginLeft: 8, backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ fontSize: 10, color: '#FFFFFF', fontWeight: '600' }}>⚠️ NO EMAIL</Text>
             </View>
           )}
         </View>

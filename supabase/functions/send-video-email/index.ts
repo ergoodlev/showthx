@@ -95,6 +95,24 @@ ${childName} (via ShowThx)
     // Logo URL - stored in Supabase storage assets bucket (public)
     const logoUrl = "https://lufpjgmvkccrmefdykki.supabase.co/storage/v1/object/public/assets/splash-icon.png";
 
+    // Convert custom message to HTML (escape HTML entities and convert newlines to <br>)
+    const escapeHtml = (str: string) => str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    // If user provided custom emailBody, use it; otherwise use default message
+    const customMessageHtml = emailBody
+      ? escapeHtml(
+          emailBody
+            .replace(/\[name\]/gi, names[0] || recipientName || "Friend")
+            .replace(/\[child_name\]/gi, childName)
+            .replace(/\[gift_name\]/gi, giftName)
+        ).replace(/\n/g, '<br>')
+      : `${childName} has recorded a special thank you video for you!`;
+
     // Build HTML email with video thumbnail and play button
     const htmlBody = `
 <!DOCTYPE html>
@@ -120,7 +138,7 @@ ${childName} (via ShowThx)
           Hi ${names[0] || recipientName || "there"},
         </p>
         <p style="margin: 0 0 20px; font-size: 16px; color: #555555; line-height: 1.6;">
-          ${childName} has recorded a special thank you video for you!
+          ${customMessageHtml}
         </p>
 
         <!-- Video Preview Box -->

@@ -12,6 +12,9 @@ interface WebhookPayload {
     id: string;
     video_path: string;
     frame_png_path?: string;
+    frame_shape?: string;
+    primary_color?: string;
+    border_width?: number;
     custom_text?: string;
     custom_text_position?: string;
     custom_text_color?: string;
@@ -63,6 +66,9 @@ serve(async (req: Request) => {
             jobId: job.id,
             videoPath: job.video_path,
             framePngPath: job.frame_png_path,
+            frameShape: job.frame_shape,
+            primaryColor: job.primary_color || "#06B6D4",
+            borderWidth: job.border_width || 20,
             customText: job.custom_text,
             customTextPosition: job.custom_text_position || "bottom",
             customTextColor: job.custom_text_color || "#FFFFFF",

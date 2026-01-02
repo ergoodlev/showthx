@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useEdition } from '../context/EditionContext';
+import { useDataSync } from '../context/DataSyncContext';
 import { AppBar } from '../components/AppBar';
 import { EventCard } from '../components/EventCard';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -41,7 +42,19 @@ export const ParentDashboardScreen = ({ navigation }) => {
   const { edition, theme } = useEdition();
   const isKidsEdition = edition === 'kids';
 
-  // State
+  // Get synchronized data from context
+  const {
+    events: contextEvents,
+    children: contextChildren,
+    pendingVideos: contextPendingVideos,
+    approvedVideos: contextApprovedVideos,
+    sentVideos: contextSentVideos,
+    processingJobs: contextProcessingJobs,
+    refreshAll,
+    refreshing: contextRefreshing,
+  } = useDataSync();
+
+  // State - use context data with local fallback for initial load
   const [activeTab, setActiveTab] = useState(TABS.EVENTS);
   const [parentData, setParentData] = useState(null);
   const [events, setEvents] = useState([]);
@@ -53,6 +66,31 @@ export const ParentDashboardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+
+  // Sync context data to local state when it changes (enables realtime updates)
+  useEffect(() => {
+    if (contextEvents?.length > 0) setEvents(contextEvents);
+  }, [contextEvents]);
+
+  useEffect(() => {
+    if (contextChildren?.length > 0) setChildren(contextChildren);
+  }, [contextChildren]);
+
+  useEffect(() => {
+    if (contextPendingVideos) setPendingVideos(contextPendingVideos);
+  }, [contextPendingVideos]);
+
+  useEffect(() => {
+    if (contextApprovedVideos) setApprovedVideos(contextApprovedVideos);
+  }, [contextApprovedVideos]);
+
+  useEffect(() => {
+    if (contextSentVideos) setSentVideos(contextSentVideos);
+  }, [contextSentVideos]);
+
+  useEffect(() => {
+    if (contextProcessingJobs) setProcessingJobs(contextProcessingJobs);
+  }, [contextProcessingJobs]);
 
   // Policy modal state
   const [showPolicyModal, setShowPolicyModal] = useState(false);
@@ -328,6 +366,8 @@ export const ParentDashboardScreen = ({ navigation }) => {
             id,
             name,
             giver_name,
+            gift_emoji,
+            parsed_gift_name,
             guest:guests(
               id,
               name,
@@ -359,6 +399,8 @@ export const ParentDashboardScreen = ({ navigation }) => {
             id,
             name,
             giver_name,
+            gift_emoji,
+            parsed_gift_name,
             guest:guests(
               id,
               name,
@@ -390,6 +432,8 @@ export const ParentDashboardScreen = ({ navigation }) => {
             id,
             name,
             giver_name,
+            gift_emoji,
+            parsed_gift_name,
             guest:guests(
               id,
               name,
@@ -438,7 +482,11 @@ export const ParentDashboardScreen = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadDashboardData();
+    // Refresh both local data and context (for cross-screen sync)
+    await Promise.all([
+      loadDashboardData(),
+      refreshAll(),
+    ]);
     setRefreshing(false);
   };
 
@@ -526,6 +574,56 @@ export const ParentDashboardScreen = ({ navigation }) => {
       giftName: video.gift?.name || 'Gift',
       videoUri: null, // Will be fetched from database
     });
+  };
+
+  // View a sent video in full screen
+  const handleViewSentVideo = async (video) => {
+    try {
+      // Get the video URL from the most recent completed compositing job
+      const { data: job, error } = await supabase
+        .from('video_compositing_jobs')
+        .select('output_path')
+        .eq('video_id', video.id)
+        .in('status', ['completed', 'sent'])
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !job?.output_path) {
+        // Fallback to original video URL
+        if (video.video_url) {
+          navigation?.navigate('VideoPlayback', {
+            videoUri: video.video_url,
+            giftId: video.gift_id,
+            giftName: video.gift?.name || 'Gift',
+            viewOnly: true,
+          });
+        } else {
+          Alert.alert('Video Not Found', 'The video could not be loaded.');
+        }
+        return;
+      }
+
+      // Get signed URL for the composited video
+      const { data: signedData, error: signError } = await supabase.storage
+        .from('videos')
+        .createSignedUrl(job.output_path, 3600); // 1 hour expiry
+
+      if (signError || !signedData?.signedUrl) {
+        Alert.alert('Error', 'Could not load video. Please try again.');
+        return;
+      }
+
+      navigation?.navigate('VideoPlayback', {
+        videoUri: signedData.signedUrl,
+        giftId: video.gift_id,
+        giftName: video.gift?.name || 'Gift',
+        viewOnly: true,
+      });
+    } catch (err) {
+      console.error('Error viewing video:', err);
+      Alert.alert('Error', 'Could not load video. Please try again.');
+    }
   };
 
   const tabHeight = isKidsEdition ? 56 : 48;
@@ -882,7 +980,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
                 color: theme.neutralColors.dark,
               }}
             >
-              {item.kid?.name || 'Unknown'} - {item.gift?.name || 'Unknown Gift'}
+              {item.kid?.name || 'Unknown'} - {item.gift?.gift_emoji ? `${item.gift.gift_emoji} ` : ''}{item.gift?.parsed_gift_name || item.gift?.name || 'Unknown Gift'}
             </Text>
             <Text
               style={{
@@ -905,25 +1003,67 @@ export const ParentDashboardScreen = ({ navigation }) => {
             borderTopWidth: 1,
             flexDirection: 'row',
             alignItems: 'center',
+            justifyContent: isSent ? 'space-between' : 'flex-start',
           }}
         >
-          <Ionicons
-            name={getStatusIcon()}
-            size={16}
-            color={getStatusColor()}
-            style={{ marginRight: 6 }}
-          />
-          <Text
-            style={{
-              fontSize: isKidsEdition ? 12 : 11,
-              fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
-              color: getStatusColor(),
-            }}
-          >
-          {isPending ? 'Awaiting your review' : isApproved ? 'Tap to send to guest' : 'Sent - tap to resend'}
-        </Text>
-      </View>
-    </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons
+              name={getStatusIcon()}
+              size={16}
+              color={getStatusColor()}
+              style={{ marginRight: 6 }}
+            />
+            <Text
+              style={{
+                fontSize: isKidsEdition ? 12 : 11,
+                fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                color: getStatusColor(),
+              }}
+            >
+              {isPending ? 'Awaiting your review' : isApproved ? 'Tap to send to guest' : 'Sent'}
+            </Text>
+          </View>
+          {/* Action buttons for sent videos */}
+          {isSent && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleViewSentVideo(item);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.brandColors.teal + '20',
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: theme.borderRadius.small,
+                }}
+              >
+                <Ionicons name="play-circle" size={16} color={theme.brandColors.teal} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 12, color: theme.brandColors.teal, fontWeight: '600' }}>View</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleSentVideoPress(item);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.brandColors.coral + '20',
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: theme.borderRadius.small,
+                }}
+              >
+                <Ionicons name="send" size={14} color={theme.brandColors.coral} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 12, color: theme.brandColors.coral, fontWeight: '600' }}>Resend</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
     );
   };
 

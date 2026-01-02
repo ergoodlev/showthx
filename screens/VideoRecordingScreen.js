@@ -10,20 +10,27 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
-  Alert
+  Alert,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
+import * as FileSystem from 'expo-file-system';
 import { useEdition } from '../context/EditionContext';
 import { AppBar } from '../components/AppBar';
 import { CustomFrameOverlay } from '../components/CustomFrameOverlay';
+import { supabase } from '../supabaseClient';
 
 export const VideoRecordingScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
   const isKidsEdition = edition === 'kids';
   const giftId = route?.params?.giftId;
   const giftName = route?.params?.giftName;
+  const giverName = route?.params?.giverName;
+  const giftEmoji = route?.params?.giftEmoji || '🎁';
   const frameTemplate = route?.params?.frameTemplate || null;
   const decorations = route?.params?.decorations || null;
 
@@ -35,6 +42,12 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
   const recordingIntervalRef = useRef(null);
+
+  // Pre-recording prompt state (for kids edition)
+  const [showPrePrompt, setShowPrePrompt] = useState(isKidsEdition);
+  const [promptPhase, setPromptPhase] = useState('intro'); // 'intro', 'gift', 'ready'
+  const emojiScale = useRef(new Animated.Value(0)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
 
   // Recording timer
   useEffect(() => {
@@ -53,6 +66,139 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
       }
     };
   }, [isRecording]);
+
+  // Google Cloud TTS helper - falls back to expo-speech if unavailable
+  const speakWithTTS = async (text, options = {}) => {
+    const soundRef = { current: null };
+
+    try {
+      // Try Google Cloud TTS via Edge Function
+      // Voice options: en-US-Neural2-C (female), en-US-Neural2-D (male),
+      //                en-US-Studio-O (female, most natural), en-US-Studio-M (male, most natural)
+      const { data, error } = await supabase.functions.invoke('text-to-speech', {
+        body: {
+          text,
+          voiceName: options.voiceName || 'en-US-Studio-O',  // Studio voices are more natural
+          speakingRate: options.speakingRate || 0.9,
+          pitch: options.pitch || 2.0,
+        },
+      });
+
+      if (error || !data?.audioContent) {
+        throw new Error('TTS API failed');
+      }
+
+      // Play audio directly from base64 data URI (avoids deprecated file system methods)
+      const dataUri = `data:audio/mpeg;base64,${data.audioContent}`;
+
+      // Play the audio
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: dataUri },
+        { shouldPlay: true }
+      );
+      soundRef.current = sound;
+
+      // Wait for playback to finish
+      await new Promise((resolve) => {
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.didJustFinish) {
+            resolve();
+          }
+        });
+      });
+
+      // Cleanup
+      await sound.unloadAsync();
+
+    } catch (err) {
+      console.error('🔊 Google TTS failed, falling back to expo-speech. Error:', err.message, err);
+      // Fallback to expo-speech
+      await new Promise((resolve) => {
+        Speech.speak(text, {
+          language: 'en-US',
+          pitch: 1.15,
+          rate: 0.75,
+          onDone: resolve,
+          onError: resolve,
+        });
+      });
+    }
+
+    return soundRef;
+  };
+
+  // Pre-recording prompt sequence (kids edition only)
+  useEffect(() => {
+    if (!showPrePrompt || !isKidsEdition) return;
+
+    let isCancelled = false;
+
+    const runPromptSequence = async () => {
+      try {
+        // Phase 1: Introduction - "Say thank you to [giver]!"
+        const introText = giverName
+          ? `Say thank you to ${giverName}!`
+          : 'Time to say thank you!';
+
+        if (isCancelled) return;
+        await speakWithTTS(introText);
+
+        // Short pause
+        if (isCancelled) return;
+        await new Promise(resolve => setTimeout(resolve, 600));
+
+        // Phase 2: Gift reveal - show emoji + say gift name + show text (all at once!)
+        if (isCancelled) return;
+        setPromptPhase('gift');
+
+        // Animate emoji and text appearing together
+        Animated.parallel([
+          Animated.spring(emojiScale, {
+            toValue: 1,
+            tension: 50,
+            friction: 5,
+            useNativeDriver: true,
+          }),
+          Animated.timing(textOpacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+
+        // Speak the gift name
+        const displayGiftName = giftName || 'gift';
+        const giftText = `For the ${displayGiftName}!`;
+        if (isCancelled) return;
+        await speakWithTTS(giftText, { pitch: 3.0 });  // More excited
+
+        // Short pause
+        if (isCancelled) return;
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        // Phase 3: Ready prompt
+        if (isCancelled) return;
+        setPromptPhase('ready');
+        await speakWithTTS('Press the button when you are ready!');
+      } catch (err) {
+        console.error('Prompt sequence error:', err);
+      }
+    };
+
+    runPromptSequence();
+
+    // Cleanup on unmount
+    return () => {
+      isCancelled = true;
+      Speech.stop();
+    };
+  }, [showPrePrompt, isKidsEdition, giverName, giftName]);
+
+  // Dismiss prompt and show camera
+  const dismissPrompt = () => {
+    Speech.stop();
+    setShowPrePrompt(false);
+  };
 
   const handleStartRecording = async () => {
     if (!cameraRef.current || !cameraReady) {
@@ -234,6 +380,139 @@ export const VideoRecordingScreen = ({ navigation, route }) => {
             <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 50 }]}>
               <ActivityIndicator size="large" color="#fff" />
               <Text style={{ color: '#fff', marginTop: 10 }}>Starting camera...</Text>
+            </View>
+          )}
+
+          {/* Pre-recording prompt overlay (kids edition) - highest zIndex */}
+          {showPrePrompt && isKidsEdition && (
+            <View style={[StyleSheet.absoluteFill, {
+              zIndex: 100,
+              backgroundColor: 'rgba(0, 0, 0, 0.95)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 30,
+            }]}>
+              {/* Intro phase: "Say thank you to..." */}
+              {promptPhase === 'intro' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{
+                    fontSize: 28,
+                    fontFamily: 'Nunito_Bold',
+                    color: '#fff',
+                    textAlign: 'center',
+                    lineHeight: 40,
+                  }}>
+                    Say thank you to
+                  </Text>
+                  <Text style={{
+                    fontSize: 36,
+                    fontFamily: 'Nunito_Bold',
+                    color: theme.brandColors.coral || '#FF6B6B',
+                    textAlign: 'center',
+                    marginTop: 10,
+                  }}>
+                    {giverName || 'your gift giver'}!
+                  </Text>
+                  <ActivityIndicator size="small" color="#fff" style={{ marginTop: 30 }} />
+                </View>
+              )}
+
+              {/* Gift phase: Large emoji + gift name (synchronized) */}
+              {promptPhase === 'gift' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Animated.Text style={{
+                    fontSize: 120,
+                    transform: [{ scale: emojiScale }],
+                    marginBottom: 20,
+                  }}>
+                    {giftEmoji}
+                  </Animated.Text>
+                  <Animated.Text style={{
+                    fontSize: 32,
+                    fontFamily: 'Nunito_Bold',
+                    color: '#fff',
+                    textAlign: 'center',
+                    opacity: textOpacity,
+                    textTransform: 'uppercase',
+                    letterSpacing: 2,
+                  }}>
+                    {giftName || 'Gift'}
+                  </Animated.Text>
+                </View>
+              )}
+
+              {/* Ready phase: Button to start recording */}
+              {promptPhase === 'ready' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{
+                    fontSize: 80,
+                    marginBottom: 20,
+                  }}>
+                    {giftEmoji}
+                  </Text>
+                  <Text style={{
+                    fontSize: 24,
+                    fontFamily: 'Nunito_Bold',
+                    color: '#fff',
+                    textAlign: 'center',
+                    marginBottom: 10,
+                    textTransform: 'uppercase',
+                  }}>
+                    {giftName || 'Gift'}
+                  </Text>
+                  <Text style={{
+                    fontSize: 16,
+                    fontFamily: 'Nunito_Regular',
+                    color: 'rgba(255,255,255,0.7)',
+                    textAlign: 'center',
+                    marginBottom: 40,
+                  }}>
+                    from {giverName || 'your gift giver'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={dismissPrompt}
+                    style={{
+                      backgroundColor: theme.brandColors.coral || '#FF6B6B',
+                      paddingVertical: 20,
+                      paddingHorizontal: 50,
+                      borderRadius: 30,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 8,
+                      elevation: 5,
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 24,
+                      fontFamily: 'Nunito_Bold',
+                      color: '#fff',
+                      textAlign: 'center',
+                    }}>
+                      I'm Ready! 🎬
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Skip button (always visible) */}
+              <TouchableOpacity
+                onPress={dismissPrompt}
+                style={{
+                  position: 'absolute',
+                  top: 20,
+                  right: 20,
+                  padding: 10,
+                }}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontFamily: 'Nunito_Regular',
+                  color: 'rgba(255,255,255,0.5)',
+                }}>
+                  Skip
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 

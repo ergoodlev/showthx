@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEdition } from '../context/EditionContext';
+import { useDataSync } from '../context/DataSyncContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
@@ -38,6 +39,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 export const SendToGuestsScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
+  const { notifyVideoStatusChanged } = useDataSync();
   const isKidsEdition = edition === 'kids';
   const giftId = route?.params?.giftId;
   const giftName = route?.params?.giftName;
@@ -574,6 +576,9 @@ export const SendToGuestsScreen = ({ navigation, route }) => {
       } else {
         console.log('✅ Video status updated to sent');
       }
+
+      // Notify context to sync data across screens
+      await notifyVideoStatusChanged();
 
       // Navigate to success
       navigation?.navigate('SendSuccess', {

@@ -101,29 +101,32 @@ export const FRAME_STYLE_PRESETS = [
 const buildFramePrompt = (userDescription, colorScheme = 'rainbow') => {
   const colorInfo = FRAME_COLOR_SCHEMES.find(c => c.id === colorScheme);
   const colorText = colorInfo?.hex
-    ? `Primary color: ${colorInfo.name} (${colorInfo.hex}).`
-    : 'Use a colorful rainbow palette.';
+    ? `using ${colorInfo.name} colors (${colorInfo.hex})`
+    : 'using rainbow colors';
 
-  return `Create a decorative video frame border for a children's thank-you video app.
+  // IMPORTANT: We ask for PURE BLACK (#000000) center because:
+  // 1. DALL-E cannot generate true transparency
+  // 2. We process the image server-side to convert black to transparent
+  // 3. Black is easy to detect and replace reliably
+  //
+  // NOTE: DALL-E struggles with "mostly black" images. Using edge-to-edge phone screen works better.
+  return `A modern edge-to-edge smartphone screen that is completely BLACK, with TINY ${userDescription} themed sticker decorations placed only at the very corners and edges, ${colorText}.
 
-Theme: ${userDescription}
+EXTREMELY IMPORTANT - THE BLACK AREA MUST BE HUGE:
+- The black screen takes up 95% of the image - it's a bezel-less, edge-to-edge display
+- Only TINY decorations (small stickers, mini icons) peek in from the corners and edges
+- Think of it like someone put small stickers on the corners of their phone screen
+- The decorations should NOT form a thick border - just scattered tiny elements at the edges
 
-CRITICAL REQUIREMENTS:
-- Image dimensions: 1024x1792 pixels (portrait, 9:16 aspect ratio for vertical phone video)
-- The CENTER 80% of the image MUST be completely EMPTY/TRANSPARENT - this is critical as video will show through
-- Frame decorations should ONLY appear on the outer 10-15% edges (top, bottom, left, right borders)
-- The frame elements should form a BORDER around a large empty rectangular center
+Visual description:
+- A giant solid black rectangle fills almost the entire image (95%)
+- Tiny cute ${userDescription} stickers/icons in the corners (fish, bubbles, stars, etc.)
+- The decorations are SMALL - like 20-30 pixels, barely visible
+- Most of the image is just pure black (#000000)
 
-Design requirements:
-- Kid-friendly, colorful, playful design with rounded shapes
-- ${colorText}
-- High quality, vibrant colors, no text or words
-- Style: Modern vector illustration, flat design with subtle gradients
-- Decorative elements: balloons, stars, hearts, confetti, or theme-appropriate items around the edges ONLY
-- The decorations should frame the empty center like an ornate picture frame
-- Corner decorations are great, but keep the center completely clear
+Style: Flat illustration, ${colorText}, minimalist - the black dominates, decorations are subtle.
 
-Output: A tall portrait frame border (1024x1792) with decorations ONLY on the outer edges and a large empty/transparent center area where video will be overlaid.`;
+DO NOT create an elaborate border. DO NOT make the black area small. The image should be almost entirely black with just tiny decorative touches at the very edges.`;
 };
 
 /**
@@ -430,7 +433,11 @@ export const deleteAIFrame = async (templateId, parentId) => {
  * @returns {boolean}
  */
 export const isAIFrameAvailable = () => {
-  return !!OPENAI_API_KEY;
+  // V1: Disabled AI frames - keeping architecture for future release
+  // DALL-E struggles to create frames with correct 95% transparent center
+  // TODO: Re-enable when we have a better prompt strategy or post-processing
+  return false;
+  // Original: return !!OPENAI_API_KEY;
 };
 
 export default {

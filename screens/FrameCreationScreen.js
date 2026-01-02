@@ -16,6 +16,7 @@ import {
   Dimensions,
   Alert,
   Image,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -182,12 +183,16 @@ const TEXT_POSITIONS = [
   { id: 'bottom', label: 'Bottom', icon: 'arrow-down' },
 ];
 
-const TEXT_COLORS = [
+// Unified preset colors for both text and frame (8 colors each)
+const PRESET_COLORS = [
   { id: '#FFFFFF', label: 'White' },
   { id: '#000000', label: 'Black' },
   { id: '#06b6d4', label: 'Teal' },
-  { id: '#FFD700', label: 'Gold' },
-  { id: '#FF6B6B', label: 'Coral' },
+  { id: '#8B5CF6', label: 'Purple' },
+  { id: '#F59E0B', label: 'Amber' },
+  { id: '#EF4444', label: 'Red' },
+  { id: '#10B981', label: 'Green' },
+  { id: '#EC4899', label: 'Pink' },
 ];
 
 const TEXT_FONTS = [
@@ -197,16 +202,51 @@ const TEXT_FONTS = [
   { id: 'bold', label: 'Bold' },
 ];
 
-const FRAME_COLORS = [
-  { id: '#06b6d4', label: 'Teal' },
-  { id: '#8B5CF6', label: 'Purple' },
-  { id: '#F59E0B', label: 'Amber' },
-  { id: '#EF4444', label: 'Red' },
-  { id: '#10B981', label: 'Green' },
-  { id: '#EC4899', label: 'Pink' },
-  { id: '#FFFFFF', label: 'White' },
-  { id: '#1F2937', label: 'Dark' },
-];
+// Keep FRAME_COLORS as alias for backwards compatibility (same as PRESET_COLORS)
+const FRAME_COLORS = PRESET_COLORS;
+
+// Helper function to convert HSL to Hex
+const hslToHex = (h, s, l) => {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+};
+
+// Helper function to convert Hex to HSL
+const hexToHsl = (hex) => {
+  // Remove # if present
+  hex = hex.replace(/^#/, '');
+
+  // Parse hex values
+  let r = parseInt(hex.substring(0, 2), 16) / 255;
+  let g = parseInt(hex.substring(2, 4), 16) / 255;
+  let b = parseInt(hex.substring(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) * 60; break;
+      case g: h = ((b - r) / d + 2) * 60; break;
+      case b: h = ((r - g) / d + 4) * 60; break;
+    }
+  }
+
+  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+};
 
 export const FrameCreationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
@@ -232,6 +272,11 @@ export const FrameCreationScreen = ({ navigation, route }) => {
   const [aiColorScheme, setAiColorScheme] = useState('rainbow');
   const [generatedFrameUrl, setGeneratedFrameUrl] = useState(null);
   const [generatedFramePath, setGeneratedFramePath] = useState(null);
+
+  // Color picker modal state
+  const [showTextColorPicker, setShowTextColorPicker] = useState(false);
+  const [showFrameColorPicker, setShowFrameColorPicker] = useState(false);
+  const [tempColor, setTempColor] = useState('#FFFFFF');
 
   // Ref for preset frame PNG capture
   const frameCaptureRef = useRef(null);
@@ -927,7 +972,7 @@ export const FrameCreationScreen = ({ navigation, route }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Text Color</Text>
             <View style={styles.colorRow}>
-              {TEXT_COLORS.map((color) => (
+              {PRESET_COLORS.map((color) => (
                 <TouchableOpacity
                   key={color.id}
                   onPress={() => setTextColor(color.id)}
@@ -942,11 +987,25 @@ export const FrameCreationScreen = ({ navigation, route }) => {
                     <Ionicons
                       name="checkmark"
                       size={18}
-                      color={color.id === '#FFFFFF' || color.id === '#FFD700' ? '#000' : '#FFF'}
+                      color={color.id === '#FFFFFF' || color.id === '#F59E0B' ? '#000' : '#FFF'}
                     />
                   )}
                 </TouchableOpacity>
               ))}
+              {/* Custom color button */}
+              <TouchableOpacity
+                onPress={() => {
+                  setTempColor(textColor);
+                  setShowTextColorPicker(true);
+                }}
+                style={[
+                  styles.colorSwatch,
+                  styles.customColorSwatch,
+                  !PRESET_COLORS.find(c => c.id === textColor) && { borderColor: textColor, borderWidth: 3 },
+                ]}
+              >
+                <Ionicons name="color-palette" size={20} color="#6B7280" />
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -956,7 +1015,7 @@ export const FrameCreationScreen = ({ navigation, route }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Frame Color</Text>
             <View style={styles.colorRow}>
-              {FRAME_COLORS.map((color) => (
+              {PRESET_COLORS.map((color) => (
                 <TouchableOpacity
                   key={color.id}
                   onPress={() => setFrameColor(color.id)}
@@ -976,6 +1035,20 @@ export const FrameCreationScreen = ({ navigation, route }) => {
                   )}
                 </TouchableOpacity>
               ))}
+              {/* Custom color button */}
+              <TouchableOpacity
+                onPress={() => {
+                  setTempColor(frameColor);
+                  setShowFrameColorPicker(true);
+                }}
+                style={[
+                  styles.colorSwatch,
+                  styles.customColorSwatch,
+                  !PRESET_COLORS.find(c => c.id === frameColor) && { borderColor: frameColor, borderWidth: 3 },
+                ]}
+              >
+                <Ionicons name="color-palette" size={20} color="#6B7280" />
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -990,6 +1063,216 @@ export const FrameCreationScreen = ({ navigation, route }) => {
           />
         </View>
       </ScrollView>
+
+      {/* Text Color Picker Modal */}
+      <Modal
+        visible={showTextColorPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowTextColorPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.colorPickerModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Choose Text Color</Text>
+              <TouchableOpacity onPress={() => setShowTextColorPicker(false)}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Hue Gradient Bar */}
+            <Text style={styles.colorPickerLabel}>Tap to select a color:</Text>
+            <View style={styles.hueBarContainer}>
+              <LinearGradient
+                colors={['#FF0000', '#FFFF00', '#00FF00', '#00FFFF', '#0000FF', '#FF00FF', '#FF0000']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.hueBar}
+              >
+                {[...Array(14)].map((_, i) => {
+                  const hue = (i / 14) * 360;
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.hueSegment}
+                      onPress={() => setTempColor(hslToHex(hue, 100, 50))}
+                    />
+                  );
+                })}
+              </LinearGradient>
+            </View>
+
+            {/* Lightness Options */}
+            <Text style={[styles.colorPickerLabel, { marginTop: 16 }]}>Adjust brightness:</Text>
+            <View style={styles.lightnessRow}>
+              {[25, 40, 50, 60, 75].map((lightness) => {
+                const baseHue = hexToHsl(tempColor).h;
+                const lightnessColor = hslToHex(baseHue, 100, lightness);
+                return (
+                  <TouchableOpacity
+                    key={lightness}
+                    style={[styles.lightnessSwatch, { backgroundColor: lightnessColor }]}
+                    onPress={() => setTempColor(hslToHex(baseHue, 100, lightness))}
+                  />
+                );
+              })}
+            </View>
+
+            {/* Preset Swatches */}
+            <Text style={[styles.colorPickerLabel, { marginTop: 16 }]}>Presets:</Text>
+            <View style={styles.presetSwatchRow}>
+              {PRESET_COLORS.map((color) => (
+                <TouchableOpacity
+                  key={color.id}
+                  onPress={() => setTempColor(color.id)}
+                  style={[
+                    styles.presetSwatch,
+                    { backgroundColor: color.id },
+                    tempColor === color.id && styles.presetSwatchSelected,
+                    color.id === '#FFFFFF' && styles.whiteSwatch,
+                  ]}
+                >
+                  {tempColor === color.id && (
+                    <Ionicons
+                      name="checkmark"
+                      size={16}
+                      color={color.id === '#FFFFFF' || color.id === '#F59E0B' ? '#000' : '#FFF'}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.colorPreviewRow}>
+              <View style={[styles.colorPreviewSwatch, { backgroundColor: tempColor }]} />
+              <Text style={styles.colorHexText}>{tempColor.toUpperCase()}</Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowTextColorPicker(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={() => {
+                  setTextColor(tempColor);
+                  setShowTextColorPicker(false);
+                }}
+              >
+                <Text style={styles.modalConfirmText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Frame Color Picker Modal */}
+      <Modal
+        visible={showFrameColorPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFrameColorPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.colorPickerModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Choose Frame Color</Text>
+              <TouchableOpacity onPress={() => setShowFrameColorPicker(false)}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Hue Gradient Bar */}
+            <Text style={styles.colorPickerLabel}>Tap to select a color:</Text>
+            <View style={styles.hueBarContainer}>
+              <LinearGradient
+                colors={['#FF0000', '#FFFF00', '#00FF00', '#00FFFF', '#0000FF', '#FF00FF', '#FF0000']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.hueBar}
+              >
+                {[...Array(14)].map((_, i) => {
+                  const hue = (i / 14) * 360;
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.hueSegment}
+                      onPress={() => setTempColor(hslToHex(hue, 100, 50))}
+                    />
+                  );
+                })}
+              </LinearGradient>
+            </View>
+
+            {/* Lightness Options */}
+            <Text style={[styles.colorPickerLabel, { marginTop: 16 }]}>Adjust brightness:</Text>
+            <View style={styles.lightnessRow}>
+              {[25, 40, 50, 60, 75].map((lightness) => {
+                const baseHue = hexToHsl(tempColor).h;
+                const lightnessColor = hslToHex(baseHue, 100, lightness);
+                return (
+                  <TouchableOpacity
+                    key={lightness}
+                    style={[styles.lightnessSwatch, { backgroundColor: lightnessColor }]}
+                    onPress={() => setTempColor(hslToHex(baseHue, 100, lightness))}
+                  />
+                );
+              })}
+            </View>
+
+            {/* Preset Swatches */}
+            <Text style={[styles.colorPickerLabel, { marginTop: 16 }]}>Presets:</Text>
+            <View style={styles.presetSwatchRow}>
+              {PRESET_COLORS.map((presetColor) => (
+                <TouchableOpacity
+                  key={presetColor.id}
+                  onPress={() => setTempColor(presetColor.id)}
+                  style={[
+                    styles.presetSwatch,
+                    { backgroundColor: presetColor.id },
+                    tempColor === presetColor.id && styles.presetSwatchSelected,
+                    presetColor.id === '#FFFFFF' && styles.whiteSwatch,
+                  ]}
+                >
+                  {tempColor === presetColor.id && (
+                    <Ionicons
+                      name="checkmark"
+                      size={16}
+                      color={presetColor.id === '#FFFFFF' || presetColor.id === '#F59E0B' ? '#000' : '#FFF'}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.colorPreviewRow}>
+              <View style={[styles.colorPreviewSwatch, { backgroundColor: tempColor }]} />
+              <Text style={styles.colorHexText}>{tempColor.toUpperCase()}</Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowFrameColorPicker(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={() => {
+                  setFrameColor(tempColor);
+                  setShowFrameColorPicker(false);
+                }}
+              >
+                <Text style={styles.modalConfirmText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <LoadingSpinner visible={loading} message={loadingMessage} fullScreen />
     </SafeAreaView>
@@ -1312,6 +1595,147 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: 'transparent',
     overflow: 'hidden',
+  },
+  // Custom color swatch (with palette icon)
+  customColorSwatch: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+  },
+  // Color picker modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  colorPickerModal: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  colorPicker: {
+    gap: 16,
+  },
+  colorPanel: {
+    height: 180,
+    borderRadius: 12,
+  },
+  hueSlider: {
+    height: 40,
+    borderRadius: 10,
+  },
+  swatches: {
+    marginTop: 8,
+    justifyContent: 'center',
+  },
+  colorPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  colorPreviewSwatch: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  colorHexText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+    fontFamily: 'monospace',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#06b6d4',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  // Custom color picker styles
+  colorPickerLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  hueBarContainer: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  hueBar: {
+    height: 50,
+    flexDirection: 'row',
+    borderRadius: 12,
+  },
+  hueSegment: {
+    flex: 1,
+    height: '100%',
+  },
+  lightnessRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  lightnessSwatch: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+  },
+  presetSwatchRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  presetSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  presetSwatchSelected: {
+    borderWidth: 3,
+    borderColor: '#1F2937',
   },
 });
 

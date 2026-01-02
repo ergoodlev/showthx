@@ -15,8 +15,10 @@ import {
   Animated,
   Dimensions,
   StyleSheet,
+  Image,
 } from 'react-native';
 import { Video } from 'expo-av';
+
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
@@ -114,6 +116,99 @@ const FilterPreviewOverlay = ({ filterId }) => {
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
         </View>
       );
+    // Creative filters
+    case 'comic':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 0, 0.1)' }]} />
+          <View style={[StyleSheet.absoluteFill, { borderWidth: 3, borderColor: 'rgba(0,0,0,0.3)' }]} />
+        </View>
+      );
+    case 'cartoon':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 100, 200, 0.15)' }]} />
+        </View>
+      );
+    case 'sketch':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(240, 240, 240, 0.4)' }]} />
+        </View>
+      );
+    case 'noir':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.3)' }]} />
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.4)']}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      );
+    case 'thermal':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <LinearGradient
+            colors={['rgba(0, 0, 255, 0.2)', 'rgba(255, 0, 0, 0.2)']}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      );
+    case 'xray':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(200, 255, 255, 0.25)' }]} />
+        </View>
+      );
+    case 'glitch':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 0, 255, 0.08)' }]} />
+          <View style={{ position: 'absolute', top: '30%', left: 0, right: 0, height: 2, backgroundColor: 'rgba(0, 255, 255, 0.3)' }} />
+        </View>
+      );
+    case 'vhs':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 200, 150, 0.15)' }]} />
+          <View style={{ position: 'absolute', bottom: '20%', left: 0, right: 0, height: 3, backgroundColor: 'rgba(255, 255, 255, 0.2)' }} />
+        </View>
+      );
+    case 'sunset':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <LinearGradient
+            colors={['rgba(255, 150, 50, 0.15)', 'rgba(255, 100, 100, 0.2)']}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      );
+    case 'neon':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 0, 255, 0.1)' }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 255, 255, 0.1)' }]} />
+        </View>
+      );
+    case 'filmgrain':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(139, 90, 43, 0.1)' }]} />
+        </View>
+      );
+    case 'pixel':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(100, 255, 100, 0.08)' }]} />
+        </View>
+      );
+    case 'blur':
+      return (
+        <View style={[StyleSheet.absoluteFill, filterStyles.overlay]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]} />
+        </View>
+      );
     default:
       return null;
   }
@@ -135,10 +230,15 @@ const styles = StyleSheet.create({
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// Supabase storage URL for Fluent 3D emoji PNGs
+const STICKER_BASE_URL = 'https://lufpjgmvkccrmefdykki.supabase.co/storage/v1/object/public/stickers';
+
 // Tab options
+// V1: Filters tab disabled - keeping architecture for future release
+// TODO: Re-enable filters when FFmpeg filter mapping is fully tested
 const TABS = [
   { id: 'stickers', label: 'Stickers', icon: '✨' },
-  { id: 'filters', label: 'Filters', icon: '🎨' },
+  // { id: 'filters', label: 'Filters', icon: '🎨' }, // V1: Disabled
 ];
 
 export const VideoCustomizationScreen = ({ navigation, route }) => {
@@ -338,9 +438,14 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                 borderRadius: 12,
                 justifyContent: 'center',
                 alignItems: 'center',
+                padding: 8,
               }}
             >
-              <Text style={{ fontSize: 32 }}>{sticker.emoji}</Text>
+              <Image
+                source={{ uri: `${STICKER_BASE_URL}/${sticker.pngFile}` }}
+                style={{ width: 48, height: 48 }}
+                resizeMode="contain"
+              />
             </TouchableOpacity>
           ))}
         </View>
@@ -558,7 +663,7 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
         scrollEnabled={!isDraggingSticker}
         nestedScrollEnabled={false}
       >
-        {/* Video Preview */}
+        {/* Video Preview - large for kids to decorate */}
         <View
           ref={videoContainerRef}
           onStartShouldSetResponder={() => true}
@@ -653,6 +758,12 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
                       autoPlay
                       loop
                       style={{ width: 40, height: 40 }}
+                    />
+                  ) : decoration.pngFile ? (
+                    <Image
+                      source={{ uri: `${STICKER_BASE_URL}/${decoration.pngFile}` }}
+                      style={{ width: 40, height: 40 }}
+                      resizeMode="contain"
                     />
                   ) : (
                     <Text
@@ -751,41 +862,47 @@ export const VideoCustomizationScreen = ({ navigation, route }) => {
         {activeTab === 'filters' && renderFilterPicker()}
       </ScrollView>
 
-      {/* Action Buttons */}
+      {/* Action Buttons - side by side to save space */}
       <View
         style={{
           backgroundColor: theme.neutralColors.white,
-          paddingVertical: theme.spacing.lg,
+          paddingVertical: theme.spacing.sm,
           paddingHorizontal: theme.spacing.md,
           borderTopWidth: 1,
           borderTopColor: theme.neutralColors.lightGray,
+          flexDirection: 'row',
+          gap: theme.spacing.sm,
         }}
       >
-        <ThankCastButton
-          title="Review & Submit"
-          onPress={handleProceed}
-          loading={loading}
-          disabled={loading}
-          style={{ marginBottom: theme.spacing.md }}
-        />
         <TouchableOpacity
           onPress={() => navigation?.goBack()}
           style={{
+            flex: 1,
             paddingVertical: theme.spacing.md,
             justifyContent: 'center',
             alignItems: 'center',
+            backgroundColor: theme.neutralColors.lightGray,
+            borderRadius: 12,
           }}
         >
           <Text
             style={{
-              fontSize: isKidsEdition ? 14 : 12,
-              fontFamily: isKidsEdition ? 'Nunito_SemiBold' : 'Montserrat_SemiBold',
-              color: theme.brandColors.teal,
+              fontSize: isKidsEdition ? 16 : 14,
+              fontFamily: isKidsEdition ? 'Nunito_Bold' : 'Montserrat_SemiBold',
+              color: theme.neutralColors.darkGray,
             }}
           >
-            Back
+            ← Back
           </Text>
         </TouchableOpacity>
+        <View style={{ flex: 2 }}>
+          <ThankCastButton
+            title="Review & Submit →"
+            onPress={handleProceed}
+            loading={loading}
+            disabled={loading}
+          />
+        </View>
       </View>
 
       <LoadingSpinner visible={loading} message="Customizing video..." fullScreen />

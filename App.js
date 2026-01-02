@@ -42,6 +42,7 @@ import { SENTRY_DSN } from './config/sentry';
 
 // Context & Providers
 import { EditionProvider, useEdition } from './context/EditionContext';
+import { DataSyncProvider } from './context/DataSyncContext';
 
 // Navigation
 import RootNavigator from './navigation/RootNavigator';
@@ -195,38 +196,40 @@ export default Sentry.wrap(function App() {
   return (
     <SafeAreaProvider>
       <EditionProvider>
-        <Sentry.ErrorBoundary
-          fallback={({ error, componentStack, resetError }) => (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>
-                Oops! Something went wrong
-              </Text>
-              <Text style={{ fontSize: 14, color: '#666', marginBottom: 20, textAlign: 'center' }}>
-                We've been notified and will fix this soon.
-              </Text>
-              <TouchableOpacity
-                onPress={resetError}
-                style={{
-                  backgroundColor: '#FF6B6B',
-                  paddingVertical: 12,
-                  paddingHorizontal: 24,
-                  borderRadius: 8,
-                }}
-              >
-                <Text style={{ color: '#FFF', fontWeight: '600' }}>Try Again</Text>
-              </TouchableOpacity>
-              {__DEV__ && (
-                <View style={{ marginTop: 20, padding: 10, backgroundColor: '#f5f5f5', borderRadius: 8 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#DC2626' }}>
-                    {error.toString()}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-        >
-          <AppContent />
-        </Sentry.ErrorBoundary>
+        <DataSyncProvider>
+          <Sentry.ErrorBoundary
+            fallback={({ error, componentStack, resetError }) => (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>
+                  Oops! Something went wrong
+                </Text>
+                <Text style={{ fontSize: 14, color: '#666', marginBottom: 20, textAlign: 'center' }}>
+                  We've been notified and will fix this soon.
+                </Text>
+                <TouchableOpacity
+                  onPress={resetError}
+                  style={{
+                    backgroundColor: '#FF6B6B',
+                    paddingVertical: 12,
+                    paddingHorizontal: 24,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: '#FFF', fontWeight: '600' }}>Try Again</Text>
+                </TouchableOpacity>
+                {__DEV__ && (
+                  <View style={{ marginTop: 20, padding: 10, backgroundColor: '#f5f5f5', borderRadius: 8 }}>
+                    <Text style={{ fontSize: 12, fontFamily: 'monospace', color: '#DC2626' }}>
+                      {error.toString()}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          >
+            <AppContent />
+          </Sentry.ErrorBoundary>
+        </DataSyncProvider>
       </EditionProvider>
     </SafeAreaProvider>
   );

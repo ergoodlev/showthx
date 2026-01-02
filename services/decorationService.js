@@ -7,605 +7,108 @@
  * Emoji stickers are rendered via drawtext filter as fallback
  */
 
-// Sticker categories with PNG and emoji options
-// pngPath: null means PNG not yet available, will use emoji
-// When PNG assets are added, update pngPath to require() the asset
+// Sticker categories - Microsoft Fluent Emoji 3D
+// All stickers use Fluent 3D PNGs from Supabase storage for consistent look
+// PNG files are named: fluent-{id}.png
 
 export const STICKER_CATEGORIES = {
   party: {
     name: 'Party',
     icon: '🎉',
     stickers: [
-      {
-        id: 'balloon',
-        name: 'Balloon',
-        emoji: '🎈',
-        pngPath: null, // TODO: require('../assets/stickers/party/balloon.png')
-        color: '#FF6B9D',
-      },
-      {
-        id: 'confetti',
-        name: 'Confetti',
-        emoji: '🎊',
-        pngPath: null,
-        color: '#FF69B4',
-      },
-      {
-        id: 'gift',
-        name: 'Gift',
-        emoji: '🎁',
-        pngPath: null,
-        color: '#FF6347',
-      },
-      {
-        id: 'cake',
-        name: 'Cake',
-        emoji: '🎂',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'party-popper',
-        name: 'Party Popper',
-        emoji: '🎉',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'fireworks',
-        name: 'Fireworks',
-        emoji: '🎆',
-        pngPath: null,
-        color: '#FFD93D',
-      },
-      {
-        id: 'crown',
-        name: 'Crown',
-        emoji: '👑',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'disco-ball',
-        name: 'Disco Ball',
-        emoji: '🪩',
-        pngPath: null,
-        color: '#C0C0C0',
-      },
-      {
-        id: 'sparkler',
-        name: 'Sparkler',
-        emoji: '🎇',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'pinata',
-        name: 'Piñata',
-        emoji: '🪅',
-        pngPath: null,
-        color: '#FF69B4',
-      },
+      { id: 'balloon', name: 'Balloon', emoji: '🎈', pngFile: 'fluent-balloon.png', color: '#FF6B9D' },
+      { id: 'confetti', name: 'Confetti', emoji: '🎊', pngFile: 'fluent-confetti.png', color: '#FF69B4' },
+      { id: 'gift', name: 'Gift', emoji: '🎁', pngFile: 'fluent-gift.png', color: '#FF6347' },
+      { id: 'cake', name: 'Cake', emoji: '🎂', pngFile: 'fluent-cake.png', color: '#FFB6C1' },
+      { id: 'party-popper', name: 'Party Popper', emoji: '🎉', pngFile: 'fluent-party-popper.png', color: '#FFD700' },
+      { id: 'cupcake', name: 'Cupcake', emoji: '🧁', pngFile: 'fluent-cupcake.png', color: '#FF9EC4' },
+      { id: 'candy', name: 'Candy', emoji: '🍬', pngFile: 'fluent-candy.png', color: '#FF6B6B' },
+      { id: 'lollipop', name: 'Lollipop', emoji: '🍭', pngFile: 'fluent-lollipop.png', color: '#FF69B4' },
+      { id: 'ribbon', name: 'Ribbon', emoji: '🎀', pngFile: 'fluent-ribbon.png', color: '#FF1493' },
     ],
   },
-  emotions: {
-    name: 'Emotions',
+  faces: {
+    name: 'Faces',
     icon: '😊',
     stickers: [
-      {
-        id: 'smile',
-        name: 'Smile',
-        emoji: '😊',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'love',
-        name: 'Love',
-        emoji: '😍',
-        pngPath: null,
-        color: '#FF6B6B',
-      },
-      {
-        id: 'excited',
-        name: 'Excited',
-        emoji: '🤩',
-        pngPath: null,
-        color: '#FFD93D',
-      },
-      {
-        id: 'grateful',
-        name: 'Grateful',
-        emoji: '🥹',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'cool',
-        name: 'Cool',
-        emoji: '😎',
-        pngPath: null,
-        color: '#06B6D4',
-      },
-      {
-        id: 'laugh',
-        name: 'Laugh',
-        emoji: '😂',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'wink',
-        name: 'Wink',
-        emoji: '😉',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'starstruck',
-        name: 'Starstruck',
-        emoji: '🤩',
-        pngPath: null,
-        color: '#FFD93D',
-      },
-      {
-        id: 'party-face',
-        name: 'Party Face',
-        emoji: '🥳',
-        pngPath: null,
-        color: '#FF69B4',
-      },
-      {
-        id: 'pleading',
-        name: 'Pleading',
-        emoji: '🥺',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'hug',
-        name: 'Hug',
-        emoji: '🤗',
-        pngPath: null,
-        color: '#FFD700',
-      },
+      { id: 'smile', name: 'Smile', emoji: '😊', pngFile: 'fluent-smile.png', color: '#FFD700' },
+      { id: 'heart-eyes', name: 'Heart Eyes', emoji: '😍', pngFile: 'fluent-heart-eyes.png', color: '#FF6B6B' },
+      { id: 'star-eyes', name: 'Star Struck', emoji: '🤩', pngFile: 'fluent-star-eyes.png', color: '#FFD700' },
+      { id: 'grin', name: 'Grin', emoji: '😀', pngFile: 'fluent-grin.png', color: '#FFD700' },
+      { id: 'joy', name: 'Joy', emoji: '😂', pngFile: 'fluent-joy.png', color: '#FFD700' },
+      { id: 'blush', name: 'Blush', emoji: '☺️', pngFile: 'fluent-blush.png', color: '#FFB6C1' },
+      { id: 'wink', name: 'Wink', emoji: '😉', pngFile: 'fluent-wink.png', color: '#FFD700' },
+      { id: 'hug', name: 'Hug', emoji: '🤗', pngFile: 'fluent-hug.png', color: '#FFD700' },
+    ],
+  },
+  hearts: {
+    name: 'Hearts',
+    icon: '❤️',
+    stickers: [
+      { id: 'red-heart', name: 'Red Heart', emoji: '❤️', pngFile: 'fluent-red-heart.png', color: '#FF0000' },
+      { id: 'sparkling-heart', name: 'Sparkling', emoji: '💖', pngFile: 'fluent-sparkling-heart.png', color: '#FF69B4' },
+      { id: 'heart-ribbon', name: 'With Ribbon', emoji: '💝', pngFile: 'fluent-heart-ribbon.png', color: '#FF1493' },
+      { id: 'growing-heart', name: 'Growing', emoji: '💗', pngFile: 'fluent-growing-heart.png', color: '#FF69B4' },
+      { id: 'two-hearts', name: 'Two Hearts', emoji: '💕', pngFile: 'fluent-two-hearts.png', color: '#FF69B4' },
+      { id: 'heart-decoration', name: 'Decoration', emoji: '💟', pngFile: 'fluent-heart-decoration.png', color: '#FF69B4' },
+      { id: 'pink-heart', name: 'Pink Heart', emoji: '🩷', pngFile: 'fluent-pink-heart.png', color: '#FFB6C1' },
+      { id: 'orange-heart', name: 'Orange Heart', emoji: '🧡', pngFile: 'fluent-orange-heart.png', color: '#FF8C00' },
+    ],
+  },
+  stars: {
+    name: 'Stars',
+    icon: '⭐',
+    stickers: [
+      { id: 'glowing-star', name: 'Glowing Star', emoji: '🌟', pngFile: 'fluent-glowing-star.png', color: '#FFD700' },
+      { id: 'star', name: 'Star', emoji: '⭐', pngFile: 'fluent-star.png', color: '#FFD700' },
+      { id: 'sparkles', name: 'Sparkles', emoji: '✨', pngFile: 'fluent-sparkles.png', color: '#FFD93D' },
+      { id: 'dizzy', name: 'Dizzy', emoji: '💫', pngFile: 'fluent-dizzy.png', color: '#FFD700' },
+      { id: 'collision', name: 'Boom!', emoji: '💥', pngFile: 'fluent-collision.png', color: '#FF4500' },
+      { id: 'fire', name: 'Fire', emoji: '🔥', pngFile: 'fluent-fire.png', color: '#FF4500' },
     ],
   },
   nature: {
     name: 'Nature',
-    icon: '🌸',
+    icon: '🌈',
     stickers: [
-      {
-        id: 'flower',
-        name: 'Flower',
-        emoji: '🌸',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'rainbow',
-        name: 'Rainbow',
-        emoji: '🌈',
-        pngPath: null,
-        color: '#FF69B4',
-      },
-      {
-        id: 'sun',
-        name: 'Sun',
-        emoji: '☀️',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'cloud',
-        name: 'Cloud',
-        emoji: '☁️',
-        pngPath: null,
-        color: '#87CEEB',
-      },
-      {
-        id: 'butterfly',
-        name: 'Butterfly',
-        emoji: '🦋',
-        pngPath: null,
-        color: '#9B59B6',
-      },
-      {
-        id: 'star',
-        name: 'Star',
-        emoji: '⭐',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'moon',
-        name: 'Moon',
-        emoji: '🌙',
-        pngPath: null,
-        color: '#FFD93D',
-      },
-      {
-        id: 'leaf',
-        name: 'Leaf',
-        emoji: '🍃',
-        pngPath: null,
-        color: '#2ECC71',
-      },
-      {
-        id: 'cherry-blossom',
-        name: 'Cherry Blossom',
-        emoji: '🌸',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'tulip',
-        name: 'Tulip',
-        emoji: '🌷',
-        pngPath: null,
-        color: '#FF69B4',
-      },
-      {
-        id: 'mushroom',
-        name: 'Mushroom',
-        emoji: '🍄',
-        pngPath: null,
-        color: '#FF6347',
-      },
+      { id: 'rainbow', name: 'Rainbow', emoji: '🌈', pngFile: 'fluent-rainbow.png', color: '#FF69B4' },
+      { id: 'sun', name: 'Sun', emoji: '🌞', pngFile: 'fluent-sun.png', color: '#FFD700' },
+      { id: 'sunflower', name: 'Sunflower', emoji: '🌻', pngFile: 'fluent-sunflower.png', color: '#FFD700' },
+      { id: 'tulip', name: 'Tulip', emoji: '🌷', pngFile: 'fluent-tulip.png', color: '#FF69B4' },
+      { id: 'four-leaf-clover', name: 'Clover', emoji: '🍀', pngFile: 'fluent-four-leaf-clover.png', color: '#32CD32' },
+      { id: 'butterfly', name: 'Butterfly', emoji: '🦋', pngFile: 'fluent-butterfly.png', color: '#87CEEB' },
+      { id: 'unicorn', name: 'Unicorn', emoji: '🦄', pngFile: 'fluent-unicorn.png', color: '#FF69B4' },
+      { id: 'crown', name: 'Crown', emoji: '👑', pngFile: 'fluent-crown.png', color: '#FFD700' },
     ],
   },
   animals: {
     name: 'Animals',
-    icon: '🐱',
+    icon: '🐶',
     stickers: [
-      {
-        id: 'cat',
-        name: 'Cat',
-        emoji: '🐱',
-        pngPath: null,
-        color: '#FFA500',
-      },
-      {
-        id: 'dog',
-        name: 'Dog',
-        emoji: '🐶',
-        pngPath: null,
-        color: '#8B4513',
-      },
-      {
-        id: 'bunny',
-        name: 'Bunny',
-        emoji: '🐰',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'bear',
-        name: 'Bear',
-        emoji: '🐻',
-        pngPath: null,
-        color: '#8B4513',
-      },
-      {
-        id: 'unicorn',
-        name: 'Unicorn',
-        emoji: '🦄',
-        pngPath: null,
-        color: '#FF69B4',
-      },
-      {
-        id: 'dinosaur',
-        name: 'Dinosaur',
-        emoji: '🦕',
-        pngPath: null,
-        color: '#2ECC71',
-      },
-      {
-        id: 'penguin',
-        name: 'Penguin',
-        emoji: '🐧',
-        pngPath: null,
-        color: '#2C3E50',
-      },
-      {
-        id: 'fox',
-        name: 'Fox',
-        emoji: '🦊',
-        pngPath: null,
-        color: '#E67E22',
-      },
-      {
-        id: 'panda',
-        name: 'Panda',
-        emoji: '🐼',
-        pngPath: null,
-        color: '#2C3E50',
-      },
-      {
-        id: 'koala',
-        name: 'Koala',
-        emoji: '🐨',
-        pngPath: null,
-        color: '#95A5A6',
-      },
-      {
-        id: 'elephant',
-        name: 'Elephant',
-        emoji: '🐘',
-        pngPath: null,
-        color: '#7F8C8D',
-      },
-    ],
-  },
-  food: {
-    name: 'Food',
-    icon: '🍕',
-    stickers: [
-      {
-        id: 'cupcake',
-        name: 'Cupcake',
-        emoji: '🧁',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'ice-cream',
-        name: 'Ice Cream',
-        emoji: '🍦',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'candy',
-        name: 'Candy',
-        emoji: '🍬',
-        pngPath: null,
-        color: '#FF69B4',
-      },
-      {
-        id: 'pizza',
-        name: 'Pizza',
-        emoji: '🍕',
-        pngPath: null,
-        color: '#FF6347',
-      },
-      {
-        id: 'donut',
-        name: 'Donut',
-        emoji: '🍩',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'cookie',
-        name: 'Cookie',
-        emoji: '🍪',
-        pngPath: null,
-        color: '#D2691E',
-      },
-      {
-        id: 'watermelon',
-        name: 'Watermelon',
-        emoji: '🍉',
-        pngPath: null,
-        color: '#FF6347',
-      },
-      {
-        id: 'strawberry',
-        name: 'Strawberry',
-        emoji: '🍓',
-        pngPath: null,
-        color: '#FF6B6B',
-      },
-      {
-        id: 'popcorn',
-        name: 'Popcorn',
-        emoji: '🍿',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'chocolate',
-        name: 'Chocolate',
-        emoji: '🍫',
-        pngPath: null,
-        color: '#8B4513',
-      },
-      {
-        id: 'banana',
-        name: 'Banana',
-        emoji: '🍌',
-        pngPath: null,
-        color: '#FFD700',
-      },
-    ],
-  },
-  sports: {
-    name: 'Sports',
-    icon: '⚽',
-    stickers: [
-      {
-        id: 'soccer',
-        name: 'Soccer',
-        emoji: '⚽',
-        pngPath: null,
-        color: '#2ECC71',
-      },
-      {
-        id: 'basketball',
-        name: 'Basketball',
-        emoji: '🏀',
-        pngPath: null,
-        color: '#FF6347',
-      },
-      {
-        id: 'trophy',
-        name: 'Trophy',
-        emoji: '🏆',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'medal',
-        name: 'Medal',
-        emoji: '🥇',
-        pngPath: null,
-        color: '#FFD700',
-      },
-      {
-        id: 'skateboard',
-        name: 'Skateboard',
-        emoji: '🛹',
-        pngPath: null,
-        color: '#9B59B6',
-      },
-      {
-        id: 'baseball',
-        name: 'Baseball',
-        emoji: '⚾',
-        pngPath: null,
-        color: '#FFFFFF',
-      },
-      {
-        id: 'tennis',
-        name: 'Tennis',
-        emoji: '🎾',
-        pngPath: null,
-        color: '#C4FF61',
-      },
-      {
-        id: 'football',
-        name: 'Football',
-        emoji: '🏈',
-        pngPath: null,
-        color: '#8B4513',
-      },
-      {
-        id: 'swimming',
-        name: 'Swimming',
-        emoji: '🏊',
-        pngPath: null,
-        color: '#06B6D4',
-      },
-      {
-        id: 'bike',
-        name: 'Bike',
-        emoji: '🚴',
-        pngPath: null,
-        color: '#2ECC71',
-      },
-    ],
-  },
-  seasonal: {
-    name: 'Seasonal',
-    icon: '❄️',
-    stickers: [
-      {
-        id: 'heart',
-        name: 'Heart',
-        emoji: '❤️',
-        pngPath: null,
-        color: '#FF6B6B',
-      },
-      {
-        id: 'sparkle',
-        name: 'Sparkle',
-        emoji: '✨',
-        pngPath: null,
-        color: '#FFD93D',
-      },
-      {
-        id: 'snowflake',
-        name: 'Snowflake',
-        emoji: '❄️',
-        pngPath: null,
-        color: '#87CEEB',
-      },
-      {
-        id: 'pumpkin',
-        name: 'Pumpkin',
-        emoji: '🎃',
-        pngPath: null,
-        color: '#FF6347',
-      },
-      {
-        id: 'christmas-tree',
-        name: 'Christmas Tree',
-        emoji: '🎄',
-        pngPath: null,
-        color: '#2ECC71',
-      },
-      {
-        id: 'clover',
-        name: 'Clover',
-        emoji: '☘️',
-        pngPath: null,
-        color: '#2ECC71',
-      },
-      {
-        id: 'ghost',
-        name: 'Ghost',
-        emoji: '👻',
-        pngPath: null,
-        color: '#FFFFFF',
-      },
-      {
-        id: 'santa',
-        name: 'Santa',
-        emoji: '🎅',
-        pngPath: null,
-        color: '#FF6347',
-      },
-      {
-        id: 'egg',
-        name: 'Easter Egg',
-        emoji: '🥚',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'bunny-face',
-        name: 'Bunny Face',
-        emoji: '🐰',
-        pngPath: null,
-        color: '#FFB6C1',
-      },
-      {
-        id: 'firework',
-        name: 'Firework',
-        emoji: '🎆',
-        pngPath: null,
-        color: '#FFD93D',
-      },
+      { id: 'cat-heart', name: 'Cat Love', emoji: '😻', pngFile: 'fluent-cat-heart.png', color: '#FFA500' },
+      { id: 'dog', name: 'Dog', emoji: '🐶', pngFile: 'fluent-dog.png', color: '#D2691E' },
+      { id: 'bear', name: 'Bear', emoji: '🐻', pngFile: 'fluent-bear.png', color: '#8B4513' },
+      { id: 'bunny', name: 'Bunny', emoji: '🐰', pngFile: 'fluent-bunny.png', color: '#FFB6C1' },
+      { id: 'panda', name: 'Panda', emoji: '🐼', pngFile: 'fluent-panda.png', color: '#000000' },
     ],
   },
 };
 
-// Legacy DECORATIONS array for backwards compatibility
-// Maps to the new STICKER_CATEGORIES structure
-export const DECORATIONS = [
-  // Shapes (from nature & seasonal)
-  { id: 'star', name: 'Star', emoji: '⭐', lottieSource: null, category: 'shapes', color: '#FFD700', description: 'Golden star' },
-  { id: 'heart', name: 'Heart', emoji: '❤️', lottieSource: null, category: 'shapes', color: '#FF6B6B', description: 'Red heart' },
-  { id: 'sparkle', name: 'Sparkle', emoji: '✨', lottieSource: null, category: 'shapes', color: '#FFD93D', description: 'Sparkles' },
-  // Party
-  { id: 'balloon', name: 'Balloon', emoji: '🎈', lottieSource: null, category: 'party', color: '#FF6B9D', description: 'Party balloon' },
-  { id: 'confetti', name: 'Confetti', emoji: '🎊', lottieSource: null, category: 'party', color: '#FF69B4', description: 'Confetti popper' },
-  { id: 'gift', name: 'Gift', emoji: '🎁', lottieSource: null, category: 'party', color: '#FF6347', description: 'Gift box' },
-  // Faces (from emotions)
-  { id: 'smile', name: 'Smile', emoji: '😊', lottieSource: null, category: 'faces', color: '#FFD700', description: 'Smiley face' },
-  // Nature
-  { id: 'rainbow', name: 'Rainbow', emoji: '🌈', lottieSource: null, category: 'nature', color: '#FF69B4', description: 'Rainbow' },
-  { id: 'flower', name: 'Flower', emoji: '🌸', lottieSource: null, category: 'nature', color: '#FFB6C1', description: 'Pretty flower' },
-  { id: 'sun', name: 'Sun', emoji: '☀️', lottieSource: null, category: 'nature', color: '#FFD700', description: 'Sunny day' },
-];
+// Legacy DECORATIONS array - auto-generated from STICKER_CATEGORIES
+export const DECORATIONS = Object.entries(STICKER_CATEGORIES).flatMap(([categoryId, category]) =>
+  category.stickers.map(sticker => ({
+    ...sticker,
+    category: categoryId,
+    description: sticker.name,
+  }))
+);
 
 // Legacy categories for backwards compatibility
 export const DECORATION_CATEGORIES = [
   { id: 'all', label: 'All', icon: 'apps' },
-  { id: 'shapes', label: 'Shapes', icon: 'star' },
   { id: 'party', label: 'Party', icon: 'balloon' },
   { id: 'faces', label: 'Faces', icon: 'happy' },
+  { id: 'shapes', label: 'Hearts', icon: 'heart' },
   { id: 'nature', label: 'Nature', icon: 'sunny' },
 ];
 
@@ -685,8 +188,7 @@ export const createPlacedSticker = (stickerId, x = 50, y = 50, scale = 1.0) => {
       stickerId,
       decorationId: stickerId, // Legacy compatibility
       emoji: decoration.emoji,
-      pngPath: null,
-      lottieSource: decoration.lottieSource,
+      pngFile: decoration.pngFile || null,
       x,
       y,
       scale,
@@ -699,8 +201,7 @@ export const createPlacedSticker = (stickerId, x = 50, y = 50, scale = 1.0) => {
     stickerId,
     decorationId: stickerId, // Legacy compatibility
     emoji: sticker.emoji,
-    pngPath: sticker.pngPath,
-    lottieSource: null,
+    pngFile: sticker.pngFile || null,
     x,
     y,
     scale,
@@ -740,18 +241,18 @@ export const validateScale = (scale) => {
  */
 export const hasPngVersion = (stickerId) => {
   const sticker = getStickerById(stickerId);
-  return sticker?.pngPath != null;
+  return sticker?.pngFile != null;
 };
 
 /**
- * Get sticker for compositing (returns PNG path or emoji)
+ * Get sticker for compositing (returns emoji - server looks up PNG by emoji)
  * @param {object} placedSticker - Placed sticker object
  * @returns {object} Sticker data for compositing
  */
 export const getStickerForCompositing = (placedSticker) => {
   return {
-    pngPath: placedSticker.pngPath,
     emoji: placedSticker.emoji,
+    pngFile: placedSticker.pngFile,
     x: placedSticker.x,
     y: placedSticker.y,
     scale: placedSticker.scale,

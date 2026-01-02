@@ -18,6 +18,7 @@ import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { useEdition } from '../context/EditionContext';
+import { useDataSync } from '../context/DataSyncContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
@@ -128,6 +129,7 @@ const filterStyles = StyleSheet.create({
 
 export const VideoConfirmationScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
+  const { notifyVideoSubmitted } = useDataSync();
   const isKidsEdition = edition === 'kids';
   const videoUri = route?.params?.videoUri;
   const giftId = route?.params?.giftId;
@@ -440,6 +442,9 @@ export const VideoConfirmationScreen = ({ navigation, route }) => {
 
       // Create videoData object for navigation
       const videoData = { id: videoId };
+
+      // Notify context to sync data across screens
+      await notifyVideoSubmitted();
 
       // Navigate to success screen
       navigation?.navigate('VideoSuccess', {

@@ -19,6 +19,7 @@ import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { useEdition } from '../context/EditionContext';
+import { useDataSync } from '../context/DataSyncContext';
 import { AppBar } from '../components/AppBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ThankCastButton } from '../components/ThankCastButton';
@@ -125,6 +126,7 @@ const filterStyles = StyleSheet.create({
 
 export const ParentVideoReviewScreen = ({ navigation, route }) => {
   const { edition, theme } = useEdition();
+  const { notifyVideoStatusChanged, notifyVideoDeleted } = useDataSync();
   const isKidsEdition = edition === 'kids';
   const videoId = route?.params?.videoId;
   const giftId = route?.params?.giftId;
@@ -462,6 +464,9 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
       console.log('✅ Gift status updated:', giftUpdateData);
       console.log('✅ Video approved, navigating to share screen');
 
+      // Notify context to sync data across screens
+      await notifyVideoStatusChanged();
+
       // Navigate to send screen
       navigation?.navigate('SendToGuests', {
         giftId: fetchedGiftId,
@@ -547,6 +552,10 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
               }
 
               console.log('✅ Video deleted successfully');
+
+              // Notify context to sync data across screens
+              await notifyVideoDeleted();
+
               Alert.alert('Video Deleted', 'The video has been permanently deleted.');
               navigation?.goBack();
             } catch (error) {
@@ -629,6 +638,9 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
         console.log('✅ Gift status updated:', giftData);
       }
 
+      // Notify context to sync data across screens
+      await notifyVideoStatusChanged();
+
       // Show confirmation and go back
       Alert.alert('Feedback Sent', 'Your feedback has been sent to the child. They can re-record the video now.');
       navigation?.goBack();
@@ -678,6 +690,10 @@ export const ParentVideoReviewScreen = ({ navigation, route }) => {
               onPlaybackStatusUpdate={(status) => {
                 if (status.isLoaded) {
                   setIsPlaying(status.isPlaying);
+                  // If video finished, reset position to start for next play
+                  if (status.didJustFinish) {
+                    videoRef.current?.setPositionAsync(0);
+                  }
                 }
               }}
               onError={(error) => {
