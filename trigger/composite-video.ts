@@ -842,6 +842,18 @@ export const compositeVideoTask = task({
           const videoUrl = signedUrlData.signedUrl;
           logger.info("Generated signed URL for video", { expiresIn: "7 days" });
 
+          // Fetch tracking token from videos table for view tracking
+          let trackingToken: string | undefined;
+          if (jobData.video_id) {
+            const { data: videoData } = await supabase
+              .from("videos")
+              .select("tracking_token")
+              .eq("id", jobData.video_id)
+              .single();
+            trackingToken = videoData?.tracking_token;
+            logger.info("Fetched tracking token for video", { hasToken: !!trackingToken });
+          }
+
           // Call the send-video-email Edge Function
           const response = await fetch(
             `${process.env.SUPABASE_URL}/functions/v1/send-video-email`,
@@ -861,6 +873,7 @@ export const compositeVideoTask = task({
                 childName: jobData.child_name,
                 giftName: jobData.gift_name,
                 eventName: jobData.event_name,
+                trackingToken: trackingToken, // Pass tracking token for view tracking
               }),
             }
           );

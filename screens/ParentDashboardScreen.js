@@ -415,7 +415,7 @@ export const ParentDashboardScreen = ({ navigation }) => {
       if (approvedError) throw approvedError;
       // Note: We'll filter out videos with active jobs after loading jobList below
 
-      // Load sent videos (can be resent)
+      // Load sent videos (can be resent) with view tracking status
       const { data: sentList, error: sentError } = await supabase
         .from('videos')
         .select(`
@@ -424,6 +424,10 @@ export const ParentDashboardScreen = ({ navigation }) => {
           created_at,
           child_id,
           gift_id,
+          video_views(
+            viewed,
+            first_viewed_at
+          ),
           kid:children!videos_child_id_fkey(
             id,
             name
@@ -1022,6 +1026,26 @@ export const ParentDashboardScreen = ({ navigation }) => {
             >
               {isPending ? 'Awaiting your review' : isApproved ? 'Tap to send to guest' : 'Sent'}
             </Text>
+            {/* View status indicator for sent videos */}
+            {isSent && item.video_views?.[0] && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 12 }}>
+                <Ionicons
+                  name={item.video_views[0].viewed ? 'eye' : 'eye-off-outline'}
+                  size={14}
+                  color={item.video_views[0].viewed ? theme.brandColors.teal : theme.neutralColors.mediumGray}
+                  style={{ marginRight: 4 }}
+                />
+                <Text
+                  style={{
+                    fontSize: isKidsEdition ? 11 : 10,
+                    fontFamily: isKidsEdition ? 'Nunito_Regular' : 'Montserrat_Regular',
+                    color: item.video_views[0].viewed ? theme.brandColors.teal : theme.neutralColors.mediumGray,
+                  }}
+                >
+                  {item.video_views[0].viewed ? 'Viewed' : 'Not viewed'}
+                </Text>
+              </View>
+            )}
           </View>
           {/* Action buttons for sent videos */}
           {isSent && (

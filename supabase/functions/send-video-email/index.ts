@@ -7,6 +7,8 @@ const SENDGRID_API_KEY = Deno.env.get("SENDGRID_API_KEY");
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") || "hello@showthx.com";
 const FROM_NAME = Deno.env.get("FROM_NAME") || "ShowThx";
 
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://lufpjgmvkccrmefdykki.supabase.co";
+
 interface EmailPayload {
   jobId: string;
   videoUrl: string;
@@ -17,6 +19,7 @@ interface EmailPayload {
   childName?: string;
   giftName?: string;
   eventName?: string;
+  trackingToken?: string; // Optional - if provided, uses tracking URL instead of direct videoUrl
 }
 
 serve(async (req: Request) => {
@@ -46,7 +49,7 @@ serve(async (req: Request) => {
     });
 
     const {
-      videoUrl,
+      videoUrl: directVideoUrl,
       recipientEmail,
       recipientName = "Friend",
       emailSubject,
@@ -54,7 +57,13 @@ serve(async (req: Request) => {
       childName = "Your friend",
       giftName = "gift",
       eventName,
+      trackingToken,
     } = payload;
+
+    // Use tracking URL if token provided, otherwise fall back to direct URL
+    const videoUrl = trackingToken
+      ? `${SUPABASE_URL}/functions/v1/track-video-view/${trackingToken}`
+      : directVideoUrl;
 
     // Parse multiple recipients if comma-separated
     const emails = recipientEmail.split(",").map(e => e.trim()).filter(Boolean);
